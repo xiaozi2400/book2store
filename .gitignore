@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Test
+pytest_cache/
+.coverage
+
+# Temporary files
+*.tmp
+*.temp
+
+# File processing
+test*
+*.pdf
+*.epub
+file/
