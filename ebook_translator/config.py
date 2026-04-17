@@ -1,9 +1,10 @@
 # 配置文件
+import os
 
 # DeepSeek API 配置
-# 请访问 https://deepseek.com 注册账号并获取 API 密钥
-# 然后将 API 密钥替换到下面的字符串中
-DEEPSEEK_API_KEY = "your_api_key_here"  # 请替换为实际的 API 密钥
+# 从环境变量读取 API 密钥
+# 请设置环境变量 DEEPSEEK_API_KEY 为您的 API 密钥
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 # 翻译配置

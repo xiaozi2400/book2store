@@ -2,6 +2,15 @@ import os
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
+import re
+
+def normalize_text(text):
+    """标准化文本：去除多余空格，保留换行"""
+    if not text:
+        return ""
+    # 替换多个连续空格为单个空格
+    text = ' '.join(text.split())
+    return text.strip()
 
 class EPUBParser:
     """EPUB 解析器"""
@@ -11,6 +20,8 @@ class EPUBParser:
         self.epub_path = epub_path
         self.book = None
         self.content_items = []
+        # 添加 path 属性，以便 EPUBGenerator 可以访问原始 EPUB 文件的路径
+        self.path = epub_path
     
     def parse(self):
         """解析 EPUB 文件"""
@@ -34,15 +45,24 @@ class EPUBParser:
             content = item.get_content().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(content, 'lxml')
             paragraphs = []
+            extracted_texts = set()
             
-            # 查找所有段落
-            for p in soup.find_all('p'):
-                text = p.get_text(strip=True)
-                if text:
-                    paragraphs.append({
-                        'text': text,
-                        'html': str(p)
-                    })
+            # 只提取优先级标签，避免嵌套重复
+            priority_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'div', 'dt', 'dd']
+            
+            for tag_name in priority_tags:
+                for tag in soup.find_all(tag_name):
+                    text = tag.get_text(strip=True)
+                    text = normalize_text(text)
+                    # 过滤掉太短的文本
+                    if text and len(text) > 1 and text not in extracted_texts:
+                        extracted_texts.add(text)
+                        paragraphs.append({
+                            'text': text,
+                            'html': str(tag),
+                            'tag': tag_name,
+                            'normalized_text': text
+                        })
             
             return paragraphs
         except Exception as e:
