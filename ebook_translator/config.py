@@ -48,8 +48,9 @@ PDF_CONFIG = {
     # 排版设置（电脑阅读优化）
     'typography': {
         'line_height': 1.8,         # 行距倍数（1.8倍行距更舒适）
-        'minimum_line_height': 130,  # 最小行高百分比
-        'paragraph_indent': 1.5,    # 首行缩进（1.5倍字号）
+        'minimum_line_height': 150,  # 最小行高百分比（从130%增加到150%）
+        'paragraph_indent': 2.0,    # 首行缩进（2倍字号，标准中文缩进）
+        'paragraph_spacing': 1.5,   # 段间距（1.5倍字号，增加段落区分度）
         'justify': True,            # 两端对齐（提高可读性）
         'hyphenate': True,          # 连字符断字
         'hyphenate_chinese': True,  # 中文断字

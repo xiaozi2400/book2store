@@ -546,18 +546,40 @@ div {
                 css_path = os.path.join(css_dir, 'chinese_style.css')
                 
                 chinese_css = """
-/* 纯中文段落首行缩进 */
+/* 纯中文段落样式 - 优化阅读体验 */
 p {
     text-indent: 2em !important;
     margin-top: 0 !important;
-    margin-bottom: 1em !important;
+    margin-bottom: 1.5em !important;  /* 增加段间距，从1em增加到1.5em */
     text-align: justify !important;
-    line-height: 1.8 !important;
+    line-height: 1.8 !important;      /* 行间距1.8倍 */
 }
 
 div {
     text-indent: 2em !important;
+    margin-bottom: 1.5em !important;  /* 增加段间距 */
+    line-height: 1.8 !important;
+}
+
+/* 章节标题样式 */
+h1, h2, h3, h4, h5, h6 {
+    margin-top: 1.5em !important;
     margin-bottom: 1em !important;
+    line-height: 1.4 !important;
+}
+
+/* 列表项样式 */
+li {
+    margin-bottom: 0.8em !important;
+    line-height: 1.8 !important;
+}
+
+/* 引用块样式 */
+blockquote {
+    margin-top: 1.5em !important;
+    margin-bottom: 1.5em !important;
+    padding-left: 1.5em !important;
+    border-left: 3px solid #ccc !important;
     line-height: 1.8 !important;
 }
 """
