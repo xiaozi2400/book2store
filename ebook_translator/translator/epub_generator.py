@@ -4,12 +4,24 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 import shutil
 import tempfile
+import zipfile
 
 def normalize_text(text):
-    """标准化文本：去除多余空格"""
+    """标准化文本：去除多余空格，统一标点符号"""
     if not text:
         return ""
-    return ' '.join(text.split()).strip()
+    # 去除多余空格
+    text = ' '.join(text.split()).strip()
+    # 统一引号：将智能引号转换为普通引号
+    text = text.replace('\u2018', "'").replace('\u2019', "'")  # 左右单引号
+    text = text.replace('\u201c', '"').replace('\u201d', '"')  # 左右双引号
+    text = text.replace('\u201a', ",").replace('\u201e', ",,")  # 低单双引号
+    text = text.replace('\u2032', "'").replace('\u2033', '"')  # 撇号和双撇号
+    # 统一破折号
+    text = text.replace('\u2014', '--').replace('\u2013', '-')
+    # 统一省略号
+    text = text.replace('\u2026', '...')
+    return text
 
 # 专业电子书翻译 CSS 样式
 BILINGUAL_CSS = """
@@ -181,7 +193,7 @@ p {
 
 /* 标题样式 */
 h1, h2, h3, h4, h5, h6 {
-    font-family: "SimHei", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: "SimHei", "PingFang Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
     font-weight: bold;
     text-align: center;
     line-height: 1.4;
@@ -295,241 +307,126 @@ a:hover {
 """
 
 class EPUBGenerator:
-    """EPUB 生成器"""
+    """EPUB 生成器 - 支持新ID映射"""
 
     def __init__(self, original_book):
         """初始化生成器"""
         self.original_book = original_book
 
+    def _create_translation_map(self, translated_paragraphs):
+        """创建翻译映射 - 使用ID作为键"""
+        translation_map = {}
+        
+        for para in translated_paragraphs:
+            para_id = para.get('id')
+            if para_id and para.get('translated'):
+                translation_map[para_id] = {
+                    'original': para['original'],
+                    'translated': para['translated'],
+                    'html': para.get('html', ''),
+                    'is_duplicate': para.get('is_duplicate', False)
+                }
+        
+        return translation_map
+
     def _process_html_content(self, content, translation_map, mode):
-        """统一处理HTML内容"""
+        """统一处理HTML内容 - 新ID映射版本"""
         soup = BeautifulSoup(content, 'lxml')
         
-        # 定义需要处理的标签，按优先级排序（先处理内层标签）
+        # 定义需要处理的标签（添加 figcaption, td, th 以支持图片说明和表格）
+        # 注意：先处理块级标签，再处理内联标签，避免重复处理
         tags_to_process = [
-            'a', 'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span',  # 内联标签
-            'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div'  # 块级标签
+            'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
+            'figcaption', 'td', 'th', 'caption',
+            'a', 'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span'
         ]
         
-        processed_tags = set()
+        processed_count = 0
         
-        # 多遍处理，确保嵌套标签都被处理
-        for _ in range(3):  # 最多3遍
-            for tag_name in tags_to_process:
-                for tag in soup.find_all(tag_name):
-                    if id(tag) in processed_tags:
-                        continue
-                    
-                    # 跳过已翻译的标签
-                    if tag.find(class_='translated') or 'translated' in tag.get('class', []):
-                        processed_tags.add(id(tag))
-                        continue
-                    
-                    # 获取纯文本内容
-                    text = tag.get_text(strip=True)
-                    normalized_text = normalize_text(text)
-                    
-                    if not normalized_text or len(normalized_text) <= 1:
-                        processed_tags.add(id(tag))
-                        continue
-                    
-                    # 查找翻译
-                    translation = translation_map.get(normalized_text)
-                    if not translation:
-                        continue
-                    
-                    # 应用翻译
-                    if mode == 'bilingual':
-                        # 保留原始属性（如链接href）
-                        original_attrs = dict(tag.attrs)
-                        original_text = text
-                        
-                        tag.clear()
-                        tag.append(original_text)
-                        tag.append(soup.new_tag('br'))
-                        translated_span = soup.new_tag('span')
-                        translated_span['class'] = 'translated'
-                        translated_span.string = translation
-                        tag.append(translated_span)
-                        
-                        # 恢复原始属性（除了class）
-                        for attr, value in original_attrs.items():
-                            if attr != 'class':
-                                tag[attr] = value
-                    else:
-                        # 纯中文模式：保留属性，替换文本
-                        original_attrs = {k: v for k, v in tag.attrs.items() if k != 'class'}
-                        tag.string = translation
-                        for attr, value in original_attrs.items():
-                            tag[attr] = value
-                    
-                    processed_tags.add(id(tag))
-        
-        # 清理分隔符
-        for text_node in soup.find_all(text=True):
-            if '===DEEPSEEK_BATCH_SEPARATOR===' in text_node:
-                text_node.replace_with(text_node.replace('===DEEPSEEK_BATCH_SEPARATOR===', ''))
-        
-        return soup.prettify().encode('utf-8')
-
-    def _process_toc_content(self, content, translation_map, mode):
-        """处理目录内容，保留链接结构"""
-        soup = BeautifulSoup(content, 'lxml')
-
-        all_tags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'span', 'div', 'a', 'sup', 'sub', 'em', 'i', 'b', 'strong']
-        processed_tags = set()
-
-        # 第一遍：处理所有标签，从最内层开始
-        for tag_name in reversed(all_tags):
+        # 处理所有标签
+        for tag_name in tags_to_process:
             for tag in soup.find_all(tag_name):
-                if id(tag) in processed_tags:
-                    continue
-                    
+                # 跳过已处理的标签
                 if tag.find(class_='translated'):
-                    processed_tags.add(id(tag))
                     continue
                 
-                # 检查是否有子标签需要优先处理
-                has_unprocessed_child = False
-                for child in tag.find_all(True):
-                    if child.name in all_tags and id(child) not in processed_tags:
-                        has_unprocessed_child = True
+                # 获取文本
+                text = tag.get_text(strip=True)
+                normalized_text = normalize_text(text)
+                
+                if not normalized_text or len(normalized_text) <= 1:
+                    continue
+                
+                # 在翻译映射中查找匹配
+                # 由于我们没有段落ID，需要通过文本内容反向查找
+                # 这里使用文本匹配作为回退方案
+                translation = None
+                for para_id, para_data in translation_map.items():
+                    if normalize_text(para_data['original']) == normalized_text:
+                        translation = para_data['translated']
                         break
                 
-                if has_unprocessed_child:
+                if not translation:
                     continue
                 
-                text = tag.get_text(strip=True)
-                normalized_text = normalize_text(text)
+                # 应用翻译
+                if mode == 'bilingual':
+                    original_attrs = {k: v for k, v in tag.attrs.items() if k != 'class'}
+                    original_text = text
+                    
+                    tag.clear()
+                    tag.append(original_text)
+                    tag.append(soup.new_tag('br'))
+                    translated_span = soup.new_tag('span')
+                    translated_span['class'] = 'translated'
+                    translated_span.string = translation
+                    tag.append(translated_span)
+                    
+                    for attr, value in original_attrs.items():
+                        tag[attr] = value
+                else:
+                    original_attrs = {k: v for k, v in tag.attrs.items() if k != 'class'}
+                    tag.string = translation
+                    for attr, value in original_attrs.items():
+                        tag[attr] = value
                 
-                if normalized_text and normalized_text in translation_map:
-                    translation = translation_map[normalized_text]
-                    
-                    if mode == 'bilingual':
-                        # 对于链接标签，保留链接但添加翻译
-                        if tag.name == 'a':
-                            href = tag.get('href', '')
-                            tag.clear()
-                            tag.append(text)
-                            tag.append(soup.new_tag('br'))
-                            translated_span = soup.new_tag('span')
-                            translated_span['class'] = 'translated'
-                            translated_span.string = translation
-                            tag.append(translated_span)
-                            if href:
-                                tag['href'] = href
-                        else:
-                            original_text = text
-                            tag.clear()
-                            tag.append(original_text)
-                            tag.append(soup.new_tag('br'))
-                            translated_span = soup.new_tag('span')
-                            translated_span['class'] = 'translated'
-                            translated_span.string = translation
-                            tag.append(translated_span)
-                    else:
-                        # 纯中文模式：替换文本但保留链接属性
-                        if tag.name == 'a':
-                            href = tag.get('href', '')
-                            tag.string = translation
-                            if href:
-                                tag['href'] = href
-                        else:
-                            tag.string = translation
-                    
-                    processed_tags.add(id(tag))
+                processed_count += 1
         
-        # 第二遍：处理剩余的标签
-        for tag_name in all_tags:
-            for tag in soup.find_all(tag_name):
-                if id(tag) in processed_tags:
-                    continue
-                    
-                if tag.find(class_='translated'):
-                    processed_tags.add(id(tag))
-                    continue
-                
-                text = tag.get_text(strip=True)
-                normalized_text = normalize_text(text)
-                
-                if normalized_text and normalized_text in translation_map:
-                    translation = translation_map[normalized_text]
-                    
-                    if mode == 'bilingual':
-                        if tag.name == 'a':
-                            href = tag.get('href', '')
-                            tag.clear()
-                            tag.append(text)
-                            tag.append(soup.new_tag('br'))
-                            translated_span = soup.new_tag('span')
-                            translated_span['class'] = 'translated'
-                            translated_span.string = translation
-                            tag.append(translated_span)
-                            if href:
-                                tag['href'] = href
-                        else:
-                            original_text = text
-                            tag.clear()
-                            tag.append(original_text)
-                            tag.append(soup.new_tag('br'))
-                            translated_span = soup.new_tag('span')
-                            translated_span['class'] = 'translated'
-                            translated_span.string = translation
-                            tag.append(translated_span)
-                    else:
-                        if tag.name == 'a':
-                            href = tag.get('href', '')
-                            tag.string = translation
-                            if href:
-                                tag['href'] = href
-                        else:
-                            tag.string = translation
-                    processed_tags.add(id(tag))
-
-        for text_node in soup.find_all(text=True):
-            if '===DEEPSEEK_BATCH_SEPARATOR===' in text_node:
-                text_node.replace_with(text_node.replace('===DEEPSEEK_BATCH_SEPARATOR===', ''))
-
-        return soup.prettify().encode('utf-8')
+        return str(soup).encode('utf-8')
 
     def generate_bilingual_epub(self, translated_paragraphs, output_path):
         """生成中英对照 EPUB"""
         try:
-            # 创建临时目录
             with tempfile.TemporaryDirectory() as temp_dir:
-                # 提取原始 EPUB 到临时目录
-                import zipfile
+                # 提取原始 EPUB
                 with zipfile.ZipFile(self.original_book.epub_path, 'r') as zip_ref:
                     zip_ref.extractall(temp_dir)
 
-                # 创建翻译映射 - 使用标准化文本作为键
-                translation_map = {}
-                for para in translated_paragraphs:
-                    if para['original'] and para['translated']:
-                        # 使用标准化文本作为键
-                        normalized_key = normalize_text(para['original'])
-                        translation_map[normalized_key] = para['translated']
+                # 创建翻译映射
+                translation_map = self._create_translation_map(translated_paragraphs)
+                print(f"翻译映射包含 {len(translation_map)} 个段落")
 
-                # 处理所有 HTML 文件，包括目录文件
+                # 处理所有 HTML/XHTML 文件（包括导航文件）
                 for root, dirs, files in os.walk(temp_dir):
                     for file in files:
-                        if file.endswith('.html') or file.endswith('.xhtml'):
+                        if file.endswith('.html') or file.endswith('.xhtml') or 'nav' in file.lower():
                             file_path = os.path.join(root, file)
-                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                content = f.read()
-                            
-                            # 处理内容，保留链接结构
-                            processed_content = self._process_html_content(content, translation_map, 'bilingual')
-                            
-                            # 写回文件
-                            with open(file_path, 'wb') as f:
-                                f.write(processed_content)
+                            try:
+                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                    content = f.read()
+                                
+                                processed_content = self._process_html_content(content, translation_map, 'bilingual')
+                                
+                                with open(file_path, 'wb') as f:
+                                    f.write(processed_content)
+                            except Exception as e:
+                                print(f"处理文件 {file} 时出错: {e}")
 
-                # 添加自定义 CSS 文件 - 只添加翻译相关的小样式，不覆盖原有样式
+                # 添加 CSS
                 css_dir = os.path.join(temp_dir, 'styles')
-                if not os.path.exists(css_dir):
-                    os.makedirs(css_dir)
+                os.makedirs(css_dir, exist_ok=True)
                 css_path = os.path.join(css_dir, 'translation.css')
+                
                 bilingual_css = """
 /* 中英对照样式 */
 p {
@@ -560,43 +457,46 @@ div {
                 opf_files = [f for f in os.listdir(temp_dir) if f.endswith('.opf')]
                 if opf_files:
                     opf_path = os.path.join(temp_dir, opf_files[0])
-                    with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                    
-                    # 更新标题
-                    soup = BeautifulSoup(content, 'lxml')
-                    title_elem = soup.find('dc:title')
-                    if title_elem:
-                        title_elem.string = f"中英双语-{title_elem.string}"
-                    
-                    # 添加 CSS 引用到所有 HTML 文件（如果还没有的话）
-                    for root, dirs, files in os.walk(temp_dir):
-                        for file in files:
-                            if file.endswith('.html') or file.endswith('.xhtml'):
-                                file_path = os.path.join(root, file)
-                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                    html_content = f.read()
-                                
-                                html_soup = BeautifulSoup(html_content, 'lxml')
-                                head = html_soup.find('head')
-                                if head:
-                                    # 检查是否已有翻译 CSS 引用
-                                    css_link = html_soup.find('link', href='styles/translation.css')
-                                    if not css_link:
-                                        new_link = html_soup.new_tag('link')
-                                        new_link['rel'] = 'stylesheet'
-                                        new_link['type'] = 'text/css'
-                                        new_link['href'] = 'styles/translation.css'
-                                        head.append(new_link)
-                                
-                                with open(file_path, 'w', encoding='utf-8') as f:
-                                    f.write(str(html_soup))
-                    
-                    # 写回 OPF 文件
-                    with open(opf_path, 'w', encoding='utf-8') as f:
-                        f.write(soup.prettify())
+                    try:
+                        with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                        
+                        soup = BeautifulSoup(content, 'lxml-xml')
+                        title_elem = soup.find('dc:title')
+                        if title_elem:
+                            title_elem.string = f"中英双语-{title_elem.string}"
+                        
+                        # 添加 CSS 引用
+                        for root, dirs, files in os.walk(temp_dir):
+                            for file in files:
+                                if file.endswith('.html') or file.endswith('.xhtml'):
+                                    file_path = os.path.join(root, file)
+                                    try:
+                                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                            html_content = f.read()
+                                        
+                                        html_soup = BeautifulSoup(html_content, 'lxml')
+                                        head = html_soup.find('head')
+                                        if head:
+                                            css_link = html_soup.find('link', href='styles/translation.css')
+                                            if not css_link:
+                                                new_link = html_soup.new_tag('link')
+                                                new_link['rel'] = 'stylesheet'
+                                                new_link['type'] = 'text/css'
+                                                new_link['href'] = 'styles/translation.css'
+                                                head.append(new_link)
+                                        
+                                        with open(file_path, 'w', encoding='utf-8') as f:
+                                            f.write(str(html_soup))
+                                    except Exception as e:
+                                        print(f"添加CSS到 {file} 时出错: {e}")
+                        
+                        with open(opf_path, 'w', encoding='utf-8') as f:
+                            f.write(str(soup))
+                    except Exception as e:
+                        print(f"更新 OPF 时出错: {e}")
 
-                # 重新打包为 EPUB
+                # 重新打包
                 with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
                     for root, dirs, files in os.walk(temp_dir):
                         for file in files:
@@ -616,42 +516,37 @@ div {
     def generate_chinese_epub(self, translated_paragraphs, output_path):
         """生成纯中文 EPUB"""
         try:
-            # 创建临时目录
             with tempfile.TemporaryDirectory() as temp_dir:
-                # 提取原始 EPUB 到临时目录
-                import zipfile
+                # 提取原始 EPUB
                 with zipfile.ZipFile(self.original_book.epub_path, 'r') as zip_ref:
                     zip_ref.extractall(temp_dir)
 
-                # 创建翻译映射 - 使用标准化文本作为键
-                translation_map = {}
-                for para in translated_paragraphs:
-                    if para['original'] and para['translated']:
-                        # 使用标准化文本作为键
-                        normalized_key = normalize_text(para['original'])
-                        translation_map[normalized_key] = para['translated']
+                # 创建翻译映射
+                translation_map = self._create_translation_map(translated_paragraphs)
 
-                # 处理所有 HTML 文件，包括目录文件
+                # 处理所有 HTML/XHTML 文件（包括导航文件）
                 for root, dirs, files in os.walk(temp_dir):
                     for file in files:
-                        if file.endswith('.html') or file.endswith('.xhtml'):
+                        if file.endswith('.html') or file.endswith('.xhtml') or 'nav' in file.lower():
                             file_path = os.path.join(root, file)
-                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                content = f.read()
-                            
-                            # 处理内容，保留链接结构
-                            processed_content = self._process_html_content(content, translation_map, 'chinese')
-                            
-                            # 写回文件
-                            with open(file_path, 'wb') as f:
-                                f.write(processed_content)
+                            try:
+                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                    content = f.read()
+                                
+                                processed_content = self._process_html_content(content, translation_map, 'chinese')
+                                
+                                with open(file_path, 'wb') as f:
+                                    f.write(processed_content)
+                            except Exception as e:
+                                print(f"处理文件 {file} 时出错: {e}")
 
+                # 添加 CSS
                 css_dir = os.path.join(temp_dir, 'styles')
-                if not os.path.exists(css_dir):
-                    os.makedirs(css_dir)
+                os.makedirs(css_dir, exist_ok=True)
                 css_path = os.path.join(css_dir, 'chinese_style.css')
+                
                 chinese_css = """
-/* 纯中文段落首行缩进 - 使用 !important 确保优先级 */
+/* 纯中文段落首行缩进 */
 p {
     text-indent: 2em !important;
     margin-top: 0 !important;
@@ -673,42 +568,46 @@ div {
                 opf_files = [f for f in os.listdir(temp_dir) if f.endswith('.opf')]
                 if opf_files:
                     opf_path = os.path.join(temp_dir, opf_files[0])
-                    with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                    
-                    # 更新标题
-                    soup = BeautifulSoup(content, 'lxml')
-                    title_elem = soup.find('dc:title')
-                    if title_elem:
-                        title_elem.string = f"中文版本-{title_elem.string}"
-                    
-                    # 添加 CSS 引用到所有 HTML 文件
-                    for root, dirs, files in os.walk(temp_dir):
-                        for file in files:
-                            if file.endswith('.html') or file.endswith('.xhtml'):
-                                file_path = os.path.join(root, file)
-                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                    html_content = f.read()
-                                
-                                html_soup = BeautifulSoup(html_content, 'lxml')
-                                head = html_soup.find('head')
-                                if head:
-                                    css_link = html_soup.find('link', href='styles/chinese_style.css')
-                                    if not css_link:
-                                        new_link = html_soup.new_tag('link')
-                                        new_link['rel'] = 'stylesheet'
-                                        new_link['type'] = 'text/css'
-                                        new_link['href'] = 'styles/chinese_style.css'
-                                        head.append(new_link)
-                                
-                                with open(file_path, 'w', encoding='utf-8') as f:
-                                    f.write(str(html_soup))
-                    
-                    # 写回 OPF 文件
-                    with open(opf_path, 'w', encoding='utf-8') as f:
-                        f.write(soup.prettify())
+                    try:
+                        with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                        
+                        soup = BeautifulSoup(content, 'lxml-xml')
+                        title_elem = soup.find('dc:title')
+                        if title_elem:
+                            title_elem.string = f"中文版本-{title_elem.string}"
+                        
+                        # 添加 CSS 引用
+                        for root, dirs, files in os.walk(temp_dir):
+                            for file in files:
+                                if file.endswith('.html') or file.endswith('.xhtml'):
+                                    file_path = os.path.join(root, file)
+                                    try:
+                                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                            html_content = f.read()
+                                        
+                                        html_soup = BeautifulSoup(html_content, 'lxml')
+                                        head = html_soup.find('head')
+                                        if head:
+                                            css_link = html_soup.find('link', href='styles/chinese_style.css')
+                                            if not css_link:
+                                                new_link = html_soup.new_tag('link')
+                                                new_link['rel'] = 'stylesheet'
+                                                new_link['type'] = 'text/css'
+                                                new_link['href'] = 'styles/chinese_style.css'
+                                                head.append(new_link)
+                                        
+                                        with open(file_path, 'w', encoding='utf-8') as f:
+                                            f.write(str(html_soup))
+                                    except Exception as e:
+                                        print(f"添加CSS到 {file} 时出错: {e}")
+                        
+                        with open(opf_path, 'w', encoding='utf-8') as f:
+                            f.write(str(soup))
+                    except Exception as e:
+                        print(f"更新 OPF 时出错: {e}")
 
-                # 重新打包为 EPUB
+                # 重新打包
                 with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
                     for root, dirs, files in os.walk(temp_dir):
                         for file in files:
