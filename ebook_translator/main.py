@@ -206,11 +206,6 @@ def main():
     # 生成 EPUB 文件
     phase_start = time.time()
     print("\n[4/4] 正在生成 EPUB 文件...")
-    print(f"\n当前排版配置:")
-    print(f"  - 行间距: {PDF_CONFIG['typography']['line_height']}倍")
-    print(f"  - 段间距: {PDF_CONFIG['typography']['paragraph_spacing']}em")
-    print(f"  - 字体大小: {PDF_CONFIG['font']['default_size']}pt")
-    print(f"  - 页面边距: {PDF_CONFIG['page']['margin_left']}pt")
     generator = EPUBGenerator(parser, PDF_CONFIG)
     
     # 生成中英对照 EPUB
