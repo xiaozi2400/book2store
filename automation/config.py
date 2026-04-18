@@ -75,6 +75,13 @@ class Config:
                 "file_error": "skip",
                 "parse_error": "skip",
                 "publish_error": "manual"
+            },
+            "summarizer": {
+                "core_insight_length": "300-500",
+                "chapter_summary_length": "150-200",
+                "max_quotes": 15,
+                "max_content_length": 10000,
+                "prompt": "你是一位专业的书籍摘要专家..."
             }
         }
 
@@ -142,6 +149,10 @@ class Config:
             if sku.get("name") == sku_name:
                 return sku.get("price", 0)
         return 0
+
+    def summarizer_config(self) -> Dict:
+        """精简版生成配置"""
+        return self.get("summarizer", {})
 
     def get_sku_includes(self, sku_name: str) -> List[str]:
         """获取SKU包含内容"""

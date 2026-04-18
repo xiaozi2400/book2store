@@ -240,7 +240,16 @@ def main():
         if converter.convert_to_pdf(chinese_epub, chinese_pdf, is_bilingual=False):
             print(f"✓ 中文 PDF 生成成功")
         else:
-            print("✗ 中文 PDF 生成失败")
+            print(f"✗ 中文 PDF 生成失败")
+    
+    # 保存完整中文内容供精简版使用
+    chinese_text_file = os.path.join(args.output_dir, f"中文内容-{name_without_ext}.txt")
+    print(f"\n保存完整中文内容...")
+    with open(chinese_text_file, "w", encoding="utf-8") as f:
+        for para in all_translated:
+            if para.get('translated'):
+                f.write(para['translated'] + "\n\n")
+    print(f"✓ 中文内容已保存: {chinese_text_file}")
     
     phase_times["转换 PDF"] = time.time() - phase_start
     
