@@ -5,6 +5,7 @@ from translator.epub_parser import EPUBParser
 from translator.epub_generator import EPUBGenerator
 from translator.pdf_converter import PDFConverter
 from translator.cache import CacheManager
+from config import PDF_CONFIG
 import os
 
 def generate_chinese_pdf():
@@ -14,6 +15,11 @@ def generate_chinese_pdf():
     output_dir = '.\\output_test'
     
     print('=== 生成中文版本EPUB和PDF ===\n')
+    print(f'当前配置:')
+    print(f'  - 行间距: {PDF_CONFIG["typography"]["line_height"]}倍')
+    print(f'  - 段间距: {PDF_CONFIG["typography"]["paragraph_spacing"]}em')
+    print(f'  - 字体大小: {PDF_CONFIG["font"]["default_size"]}pt')
+    print(f'  - 页面边距: {PDF_CONFIG["page"]["margin_left"]}pt\n')
     
     # 1. 解析EPUB
     print('1. 解析EPUB...')
@@ -48,7 +54,7 @@ def generate_chinese_pdf():
     
     # 3. 生成中文版本EPUB
     print('3. 生成中文版本EPUB...')
-    generator = EPUBGenerator(parser)
+    generator = EPUBGenerator(parser, PDF_CONFIG)
     
     os.makedirs(output_dir, exist_ok=True)
     epub_output_path = os.path.join(output_dir, '中文版本-The Million-Dollar, One-Person Business-A Make Great Money.epub')
@@ -71,9 +77,12 @@ def generate_chinese_pdf():
     if success:
         print(f'   ✓ PDF已生成: {pdf_output_path}')
         print('\n=== 完成 ===')
-        print(f'行间距: 1.8倍')
-        print(f'段间距: 1.5em（增加）')
-        print(f'首行缩进: 2em（标准中文缩进）')
+        print(f'应用配置:')
+        print(f'  - 行间距: {PDF_CONFIG["typography"]["line_height"]}倍')
+        print(f'  - 段间距: {PDF_CONFIG["typography"]["paragraph_spacing"]}em')
+        print(f'  - 首行缩进: {PDF_CONFIG["typography"]["paragraph_indent"]}em')
+        print(f'  - 字体大小: {PDF_CONFIG["font"]["default_size"]}pt')
+        print(f'  - 页面边距: {PDF_CONFIG["page"]["margin_left"]}pt')
     else:
         print('   ✗ PDF转换失败')
 

@@ -309,9 +309,15 @@ a:hover {
 class EPUBGenerator:
     """EPUB 生成器 - 支持新ID映射"""
 
-    def __init__(self, original_book):
-        """初始化生成器"""
+    def __init__(self, original_book, config=None):
+        """初始化生成器
+        
+        Args:
+            original_book: 原始EPUB书籍对象
+            config: PDF配置字典，用于读取CSS样式设置
+        """
         self.original_book = original_book
+        self.config = config or {}
 
     def _create_translation_map(self, translated_paragraphs):
         """创建翻译映射 - 使用ID作为键"""
