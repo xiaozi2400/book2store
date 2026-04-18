@@ -88,15 +88,13 @@ class PDFConverter:
         cmd.append("--pdf-page-numbers")
         
         # ==================== 目录与书签 ====================
-        # 添加目录页
+        # 添加目录页，并使用XPath表达式明确指定章节标题
         cmd.extend([
             "--pdf-add-toc",
-        ])
-        
-        # 保留EPUB中的内部链接（目录跳转关键）
-        cmd.extend([
-            "--preserve-cover-aspect-ratio",
-            "--pdf-mark-links",  # 标记链接
+            "--duplicate-links-in-toc",
+            "--level1-toc", "//h:h1",  # 从h1标签构建一级目录
+            "--level2-toc", "//h:h2",  # 从h2标签构建二级目录
+            "--level3-toc", "//h:h3",  # 从h3标签构建三级目录
         ])
         
         # ==================== 高级选项 ====================
