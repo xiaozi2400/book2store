@@ -1,0 +1,52 @@
+# 电子书自动化处理系统配置文件
+
+# 路径配置
+paths:
+  input_dir: "E:\\ebooks\\input"
+  output_dir: "./output"
+  data_dir: "./data"
+  log_dir: "./logs"
+
+# SKU配置
+sku:
+  - name: "纯英文原版"
+    price: 3.99
+    includes:
+      - "english_pdf"
+  - name: "完整套装"
+    price: 8.99
+    includes:
+      - "english_pdf"
+      - "chinese_pdf"
+      - "bilingual_pdf"
+      - "summary_pdf"
+
+# AI配置
+ai:
+  provider: "deepseek"
+  model: "deepseek-chat"
+  max_tokens: 4096
+  temperature: 0.7
+  retry_times: 3
+  retry_delay: 5
+
+# 图片配置
+image:
+  max_width: 1200
+  max_height: 1600
+  quality: 85
+  format: "jpg"
+
+# 闲管家配置
+xianyu:
+  login_method: "qr_code"
+  base_url: "https://www.xianyu.com"
+  timeout: 30
+  auto_retry: true
+
+# 错误处理配置
+error_handling:
+  api_error: "retry"
+  file_error: "skip"
+  parse_error: "skip"
+  publish_error: "manual"
