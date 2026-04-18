@@ -8,6 +8,7 @@ from translator.deepseek_api import DeepSeekTranslator
 from translator.cache import CacheManager
 from translator.epub_generator import EPUBGenerator
 from translator.pdf_converter import PDFConverter
+from config import PDF_CONFIG
 
 # 全局变量，用于标记是否收到中断信号
 interrupted = False
@@ -24,16 +25,18 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 def main():
-    """主函数"""
+    """主函数 - 智能分层翻译版本"""
     # 注册信号处理
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
     # 解析命令行参数
-    parser = argparse.ArgumentParser(description='电子书翻译和转换脚本')
+    parser = argparse.ArgumentParser(description='电子书翻译和转换脚本 - 智能分层版本')
     parser.add_argument('input_epub', help='输入的 EPUB 文件路径')
     parser.add_argument('--output-dir', '-o', default='.', help='输出目录')
     parser.add_argument('--api-key', '-k', help='DeepSeek API 密钥')
+    parser.add_argument('--skip-cache', action='store_true', help='跳过缓存')
+    parser.add_argument('--test-mode', action='store_true', help='测试模式（只处理前50个段落）')
     
     args = parser.parse_args()
     
@@ -46,15 +49,17 @@ def main():
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
     
-    # 初始化模块
-    parser = EPUBParser(args.input_epub)
-    
     # 如果提供了命令行 API 密钥，则使用它
     if args.api_key:
-        # 动态修改 config 模块中的 API 密钥
         import config
         config.DEEPSEEK_API_KEY = args.api_key
     
+    # 初始化模块
+    print("=" * 60)
+    print("电子书智能翻译工具 - 方案C（智能平衡）")
+    print("=" * 60)
+    
+    parser = EPUBParser(args.input_epub)
     translator = DeepSeekTranslator()
     cache = CacheManager()
     converter = PDFConverter()
@@ -65,7 +70,7 @@ def main():
     
     # 解析 EPUB
     phase_start = time.time()
-    print("正在解析 EPUB 文件...")
+    print("\n[1/4] 正在解析 EPUB 文件...")
     if not parser.parse():
         print("解析 EPUB 文件失败")
         sys.exit(1)
@@ -73,7 +78,7 @@ def main():
     
     # 提取段落
     phase_start = time.time()
-    print("正在提取段落...")
+    print("\n[2/4] 正在提取段落（智能分层）...")
     all_paragraphs = []
     content_items = parser.get_content_items()
     
@@ -85,67 +90,95 @@ def main():
         print("未提取到段落")
         sys.exit(1)
     
+    # 打印提取报告
+    parser.print_extraction_report()
+    
+    # 测试模式：只处理前50个段落
+    if args.test_mode:
+        print(f"\n测试模式：只处理前 50 个段落")
+        all_paragraphs = all_paragraphs[:50]
+    
     print(f"共提取到 {len(all_paragraphs)} 个段落")
     phase_times["提取段落"] = time.time() - phase_start
     
+    # 检查是否收到中断信号
+    if interrupted:
+        print("处理被中断")
+        sys.exit(1)
+    
     # 翻译段落
     phase_start = time.time()
-    print("正在翻译段落...")
-    translated_paragraphs = []
-    cache_misses = []
-    cache_hits_count = 0
+    print("\n[3/4] 正在翻译段落（智能分层翻译）...")
     
-    # 先检查缓存
-    for i, paragraph in enumerate(all_paragraphs):
-        # 检查是否收到中断信号
-        if interrupted:
-            print("处理被中断")
-            sys.exit(1)
+    # 使用缓存（如果未跳过）
+    paragraphs_to_translate = []
+    cached_results = []
+    
+    if not args.skip_cache:
+        print("检查缓存...")
+        for para in all_paragraphs:
+            # 检查是否收到中断信号
+            if interrupted:
+                print("处理被中断")
+                sys.exit(1)
+            
+            # 重复段落直接使用缓存逻辑
+            if para.get('is_duplicate'):
+                # 找到原文的翻译
+                original_id = para.get('original_id')
+                if original_id:
+                    # 标记为重复，稍后处理
+                    para['_needs_original_translation'] = original_id
+                paragraphs_to_translate.append(para)
+                continue
+            
+            # 检查缓存
+            cached = cache.get(para['text'])
+            if cached and cached.strip():
+                cached_results.append({
+                    'id': para['id'],
+                    'original': para['text'],
+                    'translated': cached,
+                    'html': para['html'],
+                    'tier': para.get('tier', 'unknown'),
+                    'is_from_cache': True
+                })
+            else:
+                paragraphs_to_translate.append(para)
         
-        cached_translation = cache.get(paragraph['text'])
-        # 只有缓存存在且不为空时才使用缓存
-        if cached_translation and cached_translation.strip():
-            print(f"段落 {i+1}/{len(all_paragraphs)} (缓存命中)")
-            translated_paragraphs.append({
-                'original': paragraph['text'],
-                'translated': cached_translation,
-                'html': paragraph['html']
-            })
-            cache_hits_count += 1
-        else:
-            # 缓存为空或不存在，需要重新翻译
-            if cached_translation is not None and not cached_translation.strip():
-                print(f"段落 {i+1}/{len(all_paragraphs)} (缓存为空，需要重新翻译)")
-            cache_misses.append(paragraph)
-    
-    # 更新缓存命中统计
-    translator.stats["cache_hits"] = cache_hits_count
-    
-    # 使用优化的翻译方法处理未缓存的段落
-    if cache_misses:
-        print(f"需要翻译 {len(cache_misses)} 个段落 (缓存未命中)")
-        translated_count = 0
-        failed_count = 0
-        try:
-            # 使用同步但更高效的方式：小批量、高并发
-            # 减小批量大小（每批3个），增加并发数（10个线程）
-            optimized_results = translator.translate_optimized(cache_misses, batch_size=3, max_workers=10)
-            # 保存到缓存
-            for result in optimized_results:
-                if result['translated'] and result['translated'].strip():
-                    cache.set(result['original'], result['translated'])
-                    translated_count += 1
-                else:
-                    failed_count += 1
-                    print(f"警告：段落翻译失败: {result['original'][:50]}...")
-            # 添加到结果
-            translated_paragraphs.extend(optimized_results)
-            print(f"翻译完成：成功 {translated_count} 个，失败 {failed_count} 个")
-        except Exception as e:
-            print(f"翻译过程出错: {e}")
-            print("继续执行，使用已翻译的段落")
+        print(f"缓存命中: {len(cached_results)} 个段落")
+        print(f"需要翻译: {len(paragraphs_to_translate)} 个段落")
     else:
-        print("所有段落都命中缓存，无需翻译")
+        paragraphs_to_translate = all_paragraphs
+        print("跳过缓存，全部重新翻译")
+    
+    # 智能分层翻译
+    translated_results = []
+    if paragraphs_to_translate:
+        translated_results = translator.translate_smart(paragraphs_to_translate)
+        
+        # 保存到缓存
+        if not args.skip_cache:
+            for result in translated_results:
+                if result.get('translated') and not result.get('is_duplicate'):
+                    cache.set(result['original'], result['translated'])
+        
+        # 处理重复段落（复用翻译结果）
+        translation_map = {r['id']: r for r in translated_results if not r.get('is_duplicate')}
+        
+        for result in translated_results:
+            if result.get('_needs_original_translation'):
+                original_id = result['_needs_original_translation']
+                if original_id in translation_map:
+                    result['translated'] = translation_map[original_id]['translated']
+                    result['is_duplicate'] = True
+    
+    # 合并结果
+    all_translated = cached_results + translated_results
+    
+    # 打印翻译报告
+    translator.print_translation_report()
+    
     phase_times["翻译段落"] = time.time() - phase_start
     
     # 检查是否收到中断信号
@@ -164,7 +197,7 @@ def main():
     chinese_pdf = os.path.join(args.output_dir, f"中文版本-{name_without_ext}.pdf")
     
     # 打印输出路径
-    print(f"输出目录：{args.output_dir}")
+    print(f"\n输出目录：{args.output_dir}")
     print(f"双语 EPUB：{bilingual_epub}")
     print(f"中文 EPUB：{chinese_epub}")
     print(f"双语 PDF：{bilingual_pdf}")
@@ -172,76 +205,93 @@ def main():
     
     # 生成 EPUB 文件
     phase_start = time.time()
-    print("正在生成 EPUB 文件...")
-    generator = EPUBGenerator(parser)
+    print("\n[4/4] 正在生成 EPUB 文件...")
+    print(f"\n当前排版配置:")
+    print(f"  - 行间距: {PDF_CONFIG['typography']['line_height']}倍")
+    print(f"  - 段间距: {PDF_CONFIG['typography']['paragraph_spacing']}em")
+    print(f"  - 字体大小: {PDF_CONFIG['font']['default_size']}pt")
+    print(f"  - 页面边距: {PDF_CONFIG['page']['margin_left']}pt")
+    generator = EPUBGenerator(parser, PDF_CONFIG)
     
     # 生成中英对照 EPUB
-    print(f"正在生成中英对照 EPUB：{bilingual_epub}")
-    if not generator.generate_bilingual_epub(translated_paragraphs, bilingual_epub):
-        print("生成中英对照 EPUB 失败")
+    print(f"\n生成中英对照 EPUB...")
+    if generator.generate_bilingual_epub(all_translated, bilingual_epub):
+        print(f"✓ 中英对照 EPUB 生成成功")
     else:
-        print(f"生成中英对照 EPUB 成功：{bilingual_epub}")
+        print("✗ 中英对照 EPUB 生成失败")
     
     # 生成纯中文 EPUB
-    print(f"正在生成纯中文 EPUB：{chinese_epub}")
-    if not generator.generate_chinese_epub(translated_paragraphs, chinese_epub):
-        print("生成纯中文 EPUB 失败")
+    print(f"\n生成纯中文 EPUB...")
+    if generator.generate_chinese_epub(all_translated, chinese_epub):
+        print(f"✓ 纯中文 EPUB 生成成功")
     else:
-        print(f"生成纯中文 EPUB 成功：{chinese_epub}")
+        print("✗ 纯中文 EPUB 生成失败")
+    
     phase_times["生成 EPUB"] = time.time() - phase_start
     
     # 转换为 PDF
     phase_start = time.time()
-    print("正在转换为 PDF...")
+    print("\n[额外] 正在转换为 PDF...")
     
     if os.path.exists(bilingual_epub):
-        print(f"正在转换双语 EPUB：{bilingual_epub}")
-        success = converter.convert_to_pdf(bilingual_epub, bilingual_pdf, is_bilingual=True)
-        if success:
-            print(f"双语 PDF 生成成功：{bilingual_pdf}")
+        print(f"转换双语 EPUB...")
+        if converter.convert_to_pdf(bilingual_epub, bilingual_pdf, is_bilingual=True):
+            print(f"✓ 双语 PDF 生成成功")
         else:
-            print("双语 PDF 生成失败")
-    else:
-        print(f"双语 EPUB 文件不存在：{bilingual_epub}")
-
+            print("✗ 双语 PDF 生成失败")
+    
     if os.path.exists(chinese_epub):
-        print(f"正在转换中文 EPUB：{chinese_epub}")
-        success = converter.convert_to_pdf(chinese_epub, chinese_pdf, is_bilingual=False)
-        if success:
-            print(f"中文 PDF 生成成功：{chinese_pdf}")
+        print(f"转换中文 EPUB...")
+        if converter.convert_to_pdf(chinese_epub, chinese_pdf, is_bilingual=False):
+            print(f"✓ 中文 PDF 生成成功")
         else:
-            print("中文 PDF 生成失败")
-    else:
-        print(f"中文 EPUB 文件不存在：{chinese_epub}")
+            print("✗ 中文 PDF 生成失败")
+    
     phase_times["转换 PDF"] = time.time() - phase_start
     
     # 总耗时
     total_time = time.time() - start_time
     
     # 显示统计信息
-    print("\n=== 翻译统计信息 ===")
+    print("\n" + "=" * 60)
+    print("翻译统计信息")
+    print("=" * 60)
     stats = translator.get_stats()
     print(f"总段落数: {len(all_paragraphs)}")
-    print(f"缓存命中: {stats['cache_hits']} ({stats['cache_hits']/len(all_paragraphs)*100:.1f}%)")
+    print(f"缓存命中: {len(cached_results)} ({len(cached_results)/len(all_paragraphs)*100:.1f}%)")
     print(f"API 调用次数: {stats['api_calls']}")
     print(f"翻译段落数: {stats['translated_paragraphs']}")
     print(f"总 Token 消耗: {stats['total_tokens']}")
-    print(f"平均每段落 Token: {stats['total_tokens']/max(stats['translated_paragraphs'], 1):.1f}")
-    print("====================")
+    if stats['translated_paragraphs'] > 0:
+        print(f"平均每段落 Token: {stats['total_tokens']/stats['translated_paragraphs']:.1f}")
+    print(f"重试次数: {stats['retried']}")
+    print(f"失败次数: {stats['failed']}")
     
     # 显示时间统计
-    print("\n=== 时间统计 ===")
+    print("\n" + "=" * 60)
+    print("时间统计")
+    print("=" * 60)
     for phase, duration in phase_times.items():
         print(f"{phase}: {duration:.2f} 秒")
     print(f"总耗时: {total_time:.2f} 秒")
-    print("====================")
     
-    print("\n处理完成！")
+    # 成本估算
+    if stats['total_tokens'] > 0:
+        cost = stats['total_tokens'] / 1000000  # DeepSeek 约 1元/百万token
+        print(f"\n估算成本: {cost:.4f} 元")
+    
+    print("=" * 60)
+    print("处理完成！")
+    print("=" * 60)
     print(f"生成的文件：")
-    print(f"  - 中英双语 EPUB: {bilingual_epub}")
-    print(f"  - 纯中文 EPUB: {chinese_epub}")
-    print(f"  - 中英双语 PDF: {bilingual_pdf}")
-    print(f"  - 纯中文 PDF: {chinese_pdf}")
+    if os.path.exists(bilingual_epub):
+        print(f"  ✓ 中英双语 EPUB: {bilingual_epub}")
+    if os.path.exists(chinese_epub):
+        print(f"  ✓ 纯中文 EPUB: {chinese_epub}")
+    if os.path.exists(bilingual_pdf):
+        print(f"  ✓ 中英双语 PDF: {bilingual_pdf}")
+    if os.path.exists(chinese_pdf):
+        print(f"  ✓ 中文 PDF: {chinese_pdf}")
 
 if __name__ == "__main__":
     main()

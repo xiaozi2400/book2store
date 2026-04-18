@@ -1,35 +1,35 @@
 {
-  "_comment": "PDF排版配置文件 - 修改后无需重启程序即可生效",
+  "_comment": "PDF排版配置文件 - 测试版本：宽松排版",
   
   "page": {
-    "_comment": "页面设置",
+    "_comment": "页面设置 - 增加边距",
     "paper_size": "letter",
-    "margin_top": 29,
-    "margin_bottom": 29,
-    "margin_left": 29,
-    "margin_right": 29,
+    "margin_top": 50,
+    "margin_bottom": 50,
+    "margin_left": 50,
+    "margin_right": 50,
     "background_color": "#f8f8f8"
   },
   
   "font": {
-    "_comment": "字体配置",
+    "_comment": "字体配置 - 增大字体",
     "serif": "Source Han Serif SC,Noto Serif CJK SC,SimSun,STSong,serif",
     "sans": "Source Han Sans SC,Noto Sans CJK SC,SimHei,STHeiti,sans-serif",
     "mono": "Source Han Mono SC,Noto Sans Mono CJK SC,Consolas,Microsoft YaHei Mono,monospace",
-    "default_size": 18,
-    "mono_size": 14,
-    "bilingual_default_size": 18,
-    "bilingual_mono_size": 14,
-    "title_size": 24,
-    "heading_size": 20
+    "default_size": 20,
+    "mono_size": 16,
+    "bilingual_default_size": 20,
+    "bilingual_mono_size": 16,
+    "title_size": 28,
+    "heading_size": 24
   },
   
   "typography": {
-    "_comment": "排版设置 - 主要调整这些参数来改变阅读体验",
-    "line_height": 1.8,
-    "minimum_line_height": 150,
-    "paragraph_indent": 2.0,
-    "paragraph_spacing": 1.5,
+    "_comment": "排版设置 - 宽松行距和段间距",
+    "line_height": 2.2,
+    "minimum_line_height": 180,
+    "paragraph_indent": 2.5,
+    "paragraph_spacing": 2.5,
     "justify": true,
     "hyphenate": true,
     "hyphenate_chinese": true
@@ -74,15 +74,15 @@
   },
   
   "css": {
-    "_comment": "EPUB CSS样式 - 控制段落间距等视觉效果",
-    "paragraph_margin_bottom": "1.5em",
-    "paragraph_line_height": "1.8",
-    "paragraph_text_indent": "2em",
-    "heading_margin_top": "1.5em",
-    "heading_margin_bottom": "1em",
-    "list_item_margin_bottom": "0.8em",
-    "blockquote_margin": "1.5em",
-    "blockquote_padding_left": "1.5em",
-    "blockquote_border_left": "3px solid #ccc"
+    "_comment": "EPUB CSS样式 - 宽松排版",
+    "paragraph_margin_bottom": "2.5em",
+    "paragraph_line_height": "2.2",
+    "paragraph_text_indent": "2.5em",
+    "heading_margin_top": "2.0em",
+    "heading_margin_bottom": "1.5em",
+    "list_item_margin_bottom": "1.2em",
+    "blockquote_margin": "2.0em",
+    "blockquote_padding_left": "2.0em",
+    "blockquote_border_left": "4px solid #999"
   }
 }
