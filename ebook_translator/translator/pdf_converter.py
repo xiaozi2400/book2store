@@ -1,14 +1,16 @@
 import os
 import subprocess
-from config import CALIBRE_PATH
+import tempfile
+from config import CALIBRE_PATH, PDF_CONFIG
 
 class PDFConverter:
-    """PDF 转换器"""
+    """专业级 PDF 转换器 - 针对电脑阅读优化（大字体+窄边距）"""
 
     def __init__(self):
         """初始化转换器"""
         self.ebook_convert_path = self._find_ebook_convert()
-
+        self.config = PDF_CONFIG
+        
     def _find_ebook_convert(self):
         """查找 ebook-convert 工具"""
         if CALIBRE_PATH:
@@ -34,8 +36,88 @@ class PDFConverter:
 
         return None
 
+    def _build_professional_cmd(self, epub_path, pdf_path, is_bilingual=False):
+        """构建专业级排版的转换命令（针对电脑阅读优化，兼容Calibre 8.x）"""
+        # 从配置获取设置
+        page_cfg = self.config['page']
+        font_cfg = self.config['font']
+        typo_cfg = self.config['typography']
+        hf_cfg = self.config['header_footer']
+        
+        # 基础配置
+        cmd = [
+            self.ebook_convert_path,
+            epub_path,
+            pdf_path,
+        ]
+        
+        # ==================== 页面设置（电脑阅读优化 - 窄边距）====================
+        cmd.extend([
+            "--paper-size", page_cfg['paper_size'],
+            "--margin-top", str(page_cfg['margin_top']),
+            "--margin-bottom", str(page_cfg['margin_bottom']),
+            "--margin-left", str(page_cfg['margin_left']),
+            "--margin-right", str(page_cfg['margin_right']),
+        ])
+        
+        # ==================== 字体配置（电脑阅读优化 - 大字体）====================
+        # 根据是否双语选择字号
+        if is_bilingual:
+            default_size = font_cfg['bilingual_default_size']
+            mono_size = font_cfg['bilingual_mono_size']
+        else:
+            default_size = font_cfg['default_size']
+            mono_size = font_cfg['mono_size']
+        
+        cmd.extend([
+            "--pdf-default-font-size", str(default_size),
+            "--pdf-mono-font-size", str(mono_size),
+            "--pdf-serif-family", font_cfg['serif'],
+            "--pdf-sans-family", font_cfg['sans'],
+            "--pdf-mono-family", font_cfg['mono'],
+        ])
+        
+        # ==================== 排版设置（电脑阅读优化 - 舒适行距）====================
+        # 设置最小行高（确保足够的行间距）
+        cmd.extend([
+            "--minimum-line-height", str(typo_cfg['minimum_line_height']),
+        ])
+        
+        # ==================== 页眉页脚（简洁设计）====================
+        # 使用默认的页码功能（不使用自定义模板，避免变量替换问题）
+        cmd.append("--pdf-page-numbers")
+        
+        # ==================== 目录与书签 ====================
+        # 添加目录页
+        cmd.extend([
+            "--pdf-add-toc",
+        ])
+        
+        # 保留EPUB中的内部链接（目录跳转关键）
+        cmd.extend([
+            "--preserve-cover-aspect-ratio",
+            "--pdf-mark-links",  # 标记链接
+        ])
+        
+        # ==================== 高级选项 ====================
+        cmd.append("--pdf-page-numbers")
+        
+        return cmd
+
+    def _build_ps_command(self, epub_path, pdf_path, is_bilingual=False):
+        """构建 PowerShell 命令（管理员权限）"""
+        cmd_list = self._build_professional_cmd(epub_path, pdf_path, is_bilingual)
+        # 将命令列表转换为 PowerShell 字符串
+        escaped_args = []
+        for arg in cmd_list:
+            if ' ' in arg or '"' in arg:
+                escaped_args.append(f"'{arg}'")
+            else:
+                escaped_args.append(arg)
+        return "& " + " ".join(escaped_args)
+
     def convert_to_pdf(self, epub_path, pdf_path, is_bilingual=False):
-        """将 EPUB 转换为 PDF
+        """将 EPUB 转换为 PDF（专业级排版）
         
         Args:
             epub_path: EPUB 文件路径
@@ -62,47 +144,10 @@ class PDFConverter:
         try:
             print(f"正在转换 {epub_path} 到 {pdf_path}")
 
-            # 根据是否为双语版本选择不同的配置
-            if is_bilingual:
-                # 中英双语 PDF 配置 - 字号放大
-                cmd = [
-                    self.ebook_convert_path,
-                    epub_path,
-                    pdf_path,
-                    "--pdf-page-numbers",
-                    "--pdf-footer-template", "",
-                    "--pdf-header-template", "",
-                    "--pdf-default-font-size", "18",
-                    "--pdf-mono-font-size", "16",
-                    "--pdf-serif-family", "SimSun",
-                    "--pdf-sans-family", "SimHei",
-                    "--pdf-mono-family", "Consolas",
-                    "--paper-size", "a4",
-                    "--margin-top", "36",
-                    "--margin-bottom", "36",
-                    "--margin-left", "16",
-                    "--margin-right", "16"
-                ]
-            else:
-                # 纯中文 PDF 配置 - 字号放大
-                cmd = [
-                    self.ebook_convert_path,
-                    epub_path,
-                    pdf_path,
-                    "--pdf-page-numbers",
-                    "--pdf-footer-template", "",
-                    "--pdf-header-template", "",
-                    "--pdf-default-font-size", "16",
-                    "--pdf-mono-font-size", "14",
-                    "--pdf-serif-family", "SimSun",
-                    "--pdf-sans-family", "SimHei",
-                    "--pdf-mono-family", "Consolas",
-                    "--paper-size", "a4",
-                    "--margin-top", "36",
-                    "--margin-bottom", "36",
-                    "--margin-left", "16",
-                    "--margin-right", "16"
-                ]
+            # 构建专业级转换命令
+            cmd = self._build_professional_cmd(epub_path, pdf_path, is_bilingual)
+            
+            print(f"执行命令: {' '.join(cmd[:12])}...")
 
             # 执行命令
             result = subprocess.run(
@@ -115,12 +160,14 @@ class PDFConverter:
             if result.returncode == 0:
                 if os.path.exists(pdf_path):
                     print(f"PDF 转换成功: {pdf_path}")
+                    # 添加书签增强
+                    self._enhance_pdf_with_bookmarks(pdf_path)
                     return True
                 else:
                     print(f"PDF 转换命令成功，但文件未生成: {pdf_path}")
             else:
                 print(f"PDF 转换失败: {result.stderr}")
-                
+            
             # 尝试以管理员身份运行
             print("\n尝试以管理员身份运行...")
             
@@ -128,7 +175,6 @@ class PDFConverter:
             ps_cmd = self._build_ps_command(epub_path, pdf_path, is_bilingual)
             
             # 保存为临时脚本文件
-            import tempfile
             with tempfile.NamedTemporaryFile(suffix='.ps1', delete=False, mode='w', encoding='utf-8') as f:
                 f.write(ps_cmd)
                 temp_script = f.name
@@ -146,6 +192,8 @@ class PDFConverter:
                 
                 if os.path.exists(pdf_path):
                     print(f"PDF 转换成功: {pdf_path}")
+                    # 添加书签增强
+                    self._enhance_pdf_with_bookmarks(pdf_path)
                     return True
                 else:
                     print(f"以管理员身份运行后文件仍未生成: {pdf_path}")
@@ -168,9 +216,52 @@ class PDFConverter:
             print("\n建议：请手动使用 Calibre 转换 EPUB 到 PDF")
             return False
 
-    def _build_ps_command(self, epub_path, pdf_path, is_bilingual):
-        """构建 PowerShell 命令"""
-        if is_bilingual:
-            return f"""& '{self.ebook_convert_path}' '{epub_path}' '{pdf_path}' --pdf-page-numbers --pdf-footer-template '' --pdf-header-template '' --pdf-default-font-size 18 --pdf-mono-font-size 16 --pdf-serif-family SimSun --pdf-sans-family SimHei --pdf-mono-family Consolas --paper-size a4 --margin-top 36 --margin-bottom 36 --margin-left 16 --margin-right 16"""
-        else:
-            return f"""& '{self.ebook_convert_path}' '{epub_path}' '{pdf_path}' --pdf-page-numbers --pdf-footer-template '' --pdf-header-template '' --pdf-default-font-size 16 --pdf-mono-font-size 14 --pdf-serif-family SimSun --pdf-sans-family SimHei --pdf-mono-family Consolas --paper-size a4 --margin-top 36 --margin-bottom 36 --margin-left 16 --margin-right 16"""
+    def _enhance_pdf_with_bookmarks(self, pdf_path):
+        """增强PDF书签（尝试使用PyPDF2）"""
+        try:
+            from PyPDF2 import PdfReader, PdfWriter
+            
+            reader = PdfReader(pdf_path)
+            writer = PdfWriter()
+            
+            # 复制所有页面
+            for page in reader.pages:
+                writer.add_page(page)
+            
+            # 检查是否已有书签
+            try:
+                root_obj = reader.trailer.get('/Root')
+                if hasattr(root_obj, 'get') and root_obj.get('/Outlines') is not None:
+                    print("PDF已包含书签")
+                    return
+            except Exception:
+                pass
+            
+            # 如果没有书签，尝试从内容生成简单书签
+            print("尝试添加书签...")
+            page_count = len(reader.pages)
+            
+            # 添加基本书签结构
+            if page_count > 1:
+                writer.add_outline_item("封面", 0)
+                if page_count > 2:
+                    writer.add_outline_item("目录", 1)
+                    writer.add_outline_item("正文", 2)
+                else:
+                    writer.add_outline_item("正文", 1)
+            
+            # 写回PDF
+            with open(pdf_path, 'wb') as f:
+                writer.write(f)
+            print("书签添加完成")
+            
+        except ImportError:
+            print("PyPDF2 未安装，跳过书签增强")
+        except Exception as e:
+            print(f"书签增强失败: {e}")
+
+    def optimize_for_screen_reading(self, epub_path, pdf_path, is_bilingual=False):
+        """专门针对屏幕阅读优化的转换方法"""
+        print("\n=== 屏幕阅读优化模式 ===")
+        print("使用优化配置：大字体(18pt)、窄边距(10mm)、舒适行距")
+        return self.convert_to_pdf(epub_path, pdf_path, is_bilingual)

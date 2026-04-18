@@ -3,57 +3,56 @@ import sys
 import requests
 import time
 import re
-import asyncio
-import aiohttp
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from config import (
+    DEEPSEEK_API_KEY, DEEPSEEK_API_URL, 
+    TRANSLATION_MODEL, MAX_TOKENS, TEMPERATURE,
+    TIER_CONFIG, TRANSLATION_OPTIMIZATION
+)
 
 class DeepSeekTranslator:
-    """DeepSeek API 翻译器"""
+    """DeepSeek API 翻译器 - 智能分层版本"""
     
     def __init__(self):
         """初始化翻译器"""
-        # 动态导入配置，确保获取最新的 API 密钥
-        from config import DEEPSEEK_API_KEY, DEEPSEEK_API_URL, TRANSLATION_MODEL, MAX_TOKENS, TEMPERATURE
-        
         self.api_key = DEEPSEEK_API_KEY
         self.api_url = DEEPSEEK_API_URL
         self.model = TRANSLATION_MODEL
         self.max_tokens = MAX_TOKENS
         self.temperature = TEMPERATURE
         
-        # 检查 API 密钥是否设置
         if not self.api_key:
             print("错误：未设置 DeepSeek API 密钥")
-            print("请设置环境变量 DEEPSEEK_API_KEY 或使用 --api-key 参数")
         
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
         
-        # 添加会话保持
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         
-        # 监控统计
         self.stats = {
             "api_calls": 0,
             "total_tokens": 0,
             "cache_hits": 0,
-            "translated_paragraphs": 0
+            "translated_paragraphs": 0,
+            "retried": 0,
+            "failed": 0,
+            "by_tier": {"tier1_short_repeatable": 0, "tier2_normal": 0, "tier3_long_complex": 0}
         }
+        
+        self.opt_config = TRANSLATION_OPTIMIZATION
     
     def translate(self, text, max_retries=3, max_tokens=None):
-        """翻译文本"""
+        """翻译单个文本"""
         if not text:
             return ""
         
-        # 使用动态的 max_tokens 或默认的 self.max_tokens
         effective_max_tokens = max_tokens if max_tokens else self.max_tokens
-        
         retry_count = 0
+        
         while retry_count < max_retries:
-            # 检查是否收到中断信号
             if getattr(sys, 'interrupted', False) or (os.environ.get('INTERRUPTED') == '1'):
                 print("翻译被中断")
                 return ""
@@ -75,484 +74,331 @@ class DeepSeekTranslator:
                     "temperature": self.temperature
                 }
                 
-                # 使用会话发送请求，增加超时时间
-                # 批量翻译可能需要更长时间，使用更长的超时
-                response = self.session.post(self.api_url, json=payload, timeout=120)  # 增加到 120 秒
+                response = self.session.post(self.api_url, json=payload, timeout=120)
                 response.raise_for_status()
                 
-                # 增加 API 调用计数
                 self.stats["api_calls"] += 1
-                
                 result = response.json()
                 translated_text = result["choices"][0]["message"]["content"]
                 
-                # 统计 token 消耗
                 if "usage" in result:
                     self.stats["total_tokens"] += result["usage"].get("total_tokens", 0)
                 
                 return translated_text.strip()
                 
-            except requests.exceptions.Timeout as e:
-                print(f"API 请求超时: {e}")
-                retry_count += 1
-                if retry_count < max_retries:
-                    wait_time = min(2 ** retry_count, 30)  # 最大等待30秒
-                    print(f"请求超时，等待 {wait_time} 秒后重试... ({retry_count}/{max_retries})")
-                    time.sleep(wait_time)
-                else:
-                    print("达到最大重试次数，翻译失败")
-                    return ""
-            except requests.exceptions.ConnectionError as e:
-                print(f"API 连接错误: {e}")
+            except requests.exceptions.Timeout:
                 retry_count += 1
                 if retry_count < max_retries:
                     wait_time = min(2 ** retry_count, 30)
-                    print(f"连接错误，等待 {wait_time} 秒后重试... ({retry_count}/{max_retries})")
                     time.sleep(wait_time)
-                else:
-                    print("达到最大重试次数，翻译失败")
-                    return ""
-            except requests.exceptions.RequestException as e:
-                print(f"API 请求出错: {e}")
-                retry_count += 1
-                if retry_count < max_retries:
-                    wait_time = min(2 ** retry_count, 30)
-                    print(f"请求错误，等待 {wait_time} 秒后重试... ({retry_count}/{max_retries})")
-                    time.sleep(wait_time)
-                else:
-                    print("达到最大重试次数，翻译失败")
-                    return ""
             except Exception as e:
-                print(f"翻译过程出错: {e}")
                 retry_count += 1
                 if retry_count < max_retries:
                     wait_time = min(2 ** retry_count, 30)
-                    print(f"发生错误，等待 {wait_time} 秒后重试... ({retry_count}/{max_retries})")
                     time.sleep(wait_time)
-                else:
-                    print("达到最大重试次数，翻译失败")
-                    return ""
+        
+        return ""
     
-    def translate_batch(self, paragraphs):
-        """批量翻译多个段落"""
+    def translate_batch(self, paragraphs, tier):
+        """批量翻译 - 简化可靠版本"""
         if not paragraphs:
             return []
         
-        print(f"开始批量翻译 {len(paragraphs)} 个段落")
+        tier_config = TIER_CONFIG.get(tier, {})
+        if not tier_config.get('batch_translate', True):
+            # 该层不批量翻译，转为单条
+            return self._translate_individually(paragraphs)
         
-        # 使用更独特的分割符，避免在翻译结果中出现
-        separator = "\n===DEEPSEEK_BATCH_SEPARATOR===-" 
+        print(f"批量翻译 {len(paragraphs)} 个 {tier} 段落")
         
-        # 构建批量翻译请求
-        batch_texts = []
+        # 构建批量请求
+        numbered_texts = []
         for i, para in enumerate(paragraphs):
-            # 为每个段落添加编号，确保分割准确
-            batch_texts.append(f"[段落 {i+1}]\n{para['text']}")
+            numbered_texts.append(f"[{i+1}] {para['text']}")
         
-        combined_text = separator.join(batch_texts)
+        combined = "\n\n".join(numbered_texts)
         
-        # 根据段落数量动态调整 max_tokens
-        # 每个中文段落大约需要英文段落的 1.5-2 倍 token
-        estimated_tokens = len(combined_text) * 2
-        dynamic_max_tokens = max(self.max_tokens, min(estimated_tokens, 4000))
+        # 估算所需 tokens
+        estimated_tokens = len(combined) * 2 + 500  # 文本 + 系统提示
+        dynamic_max_tokens = min(estimated_tokens, 4000)
         
-        # 构建更明确的翻译提示
-        prompt = f"""请将以下英文段落翻译成中文，保持段落顺序和编号：
+        prompt = f"""请将以下编号段落翻译成中文，保持编号格式：
 
-{combined_text}
+{combined}
 
-翻译要求：
-1. 保持每个段落的独立性
-2. 保留段落编号 [段落 X]
-3. 不要添加额外的解释或说明
-4. 保持翻译准确、流畅"""
+要求：
+1. 保留每段开头的编号 [数字]
+2. 只返回翻译结果，不要解释
+3. 保持段落顺序"""
         
-        # 翻译组合文本，使用动态的 max_tokens
-        translated_combined = self.translate(prompt, max_retries=5)
+        translated = self.translate(prompt, max_retries=5, max_tokens=dynamic_max_tokens)
         
-        translated_results = []
-        if translated_combined:
-            print(f"批量翻译成功，结果长度: {len(translated_combined)} 字符")
-            
-            # 尝试多种方式分割翻译结果
-            # 方式1：按段落编号分割（支持多种格式）
-            translated_parts = re.split(r'\[段落\s*\d+\]\s*\n?', translated_combined)
-            translated_parts = [part.strip().replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip() for part in translated_parts if part.strip()]
-            
-            # 方式2：如果方式1失败，尝试按原始分隔符分割
-            if len(translated_parts) != len(paragraphs):
-                print(f"方式1分割失败，尝试方式2...")
-                translated_parts = translated_combined.split('===DEEPSEEK_BATCH_SEPARATOR===-')
-                translated_parts = [part.strip() for part in translated_parts if part.strip()]
-                # 移除段落编号
-                translated_parts = [re.sub(r'^\[段落\s*\d+\]\s*\n?', '', part).strip() for part in translated_parts]
-            
-            # 方式3：如果还是失败，尝试按换行分割（每行一个段落）
-            if len(translated_parts) != len(paragraphs) and len(paragraphs) <= 5:
-                print(f"方式2分割失败，尝试方式3...")
-                # 清理后按空行分割
-                cleaned = re.sub(r'\[段落\s*\d+\]', '', translated_combined)
-                cleaned = cleaned.replace('===DEEPSEEK_BATCH_SEPARATOR===-', '\n')
-                translated_parts = [p.strip() for p in cleaned.split('\n\n') if p.strip()]
-            
-            # 确保分割结果数量正确
-            if len(translated_parts) == len(paragraphs):
-                print(f"分割成功，得到 {len(translated_parts)} 个段落")
-                for para, translated_part in zip(paragraphs, translated_parts):
-                    translated_results.append({
-                        'original': para['text'],
-                        'translated': translated_part,
-                        'html': para['html']
-                    })
-            else:
-                # 如果分割失败，回退到单独翻译
-                print(f"批量翻译分割失败，回退到单独翻译 (期望 {len(paragraphs)} 个段落，实际 {len(translated_parts)} 个)")
-                for para in paragraphs:
-                    translated = self.translate(para['text'])
-                    # 清理分隔符
-                    if translated:
-                        translated = translated.replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip()
-                    translated_results.append({
-                        'original': para['text'],
-                        'translated': translated,
-                        'html': para['html']
-                    })
-        else:
-            # 如果批量翻译失败，回退到单独翻译
-            print("批量翻译失败：未收到翻译结果")
-            for para in paragraphs:
-                translated = self.translate(para['text'])
-                # 清理分隔符
-                if translated:
-                    translated = translated.replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip()
-                translated_results.append({
-                    'original': para['text'],
-                    'translated': translated,
-                    'html': para['html']
-                })
+        if not translated:
+            print(f"批量翻译失败，转为单条翻译")
+            return self._translate_individually(paragraphs)
         
-        # 增加翻译段落计数
-        self.stats["translated_paragraphs"] += len(translated_results)
+        # 解析结果
+        results = self._parse_batch_result(translated, paragraphs)
         
-        return translated_results
+        if len(results) != len(paragraphs):
+            print(f"批量解析失败（期望{len(paragraphs)}，实际{len(results)}），转为单条")
+            return self._translate_individually(paragraphs)
+        
+        return results
     
-    def translate_optimized(self, paragraphs, batch_size=3, max_workers=3):
-        """优化的翻译方法：批量 + 并发"""
-        if not paragraphs:
-            return []
+    def _parse_batch_result(self, translated, original_paragraphs):
+        """解析批量翻译结果"""
+        results = []
         
-        # 先按 batch_size 分组
-        batches = []
-        for i in range(0, len(paragraphs), batch_size):
-            batch = paragraphs[i:i+batch_size]
-            batches.append(batch)
+        # 尝试按编号分割
+        pattern = r'\[(\d+)\]\s*'
+        parts = re.split(pattern, translated)
         
-        # 并发处理每个批次
-        translated_results = []
-        executor = ThreadPoolExecutor(max_workers=min(max_workers, len(batches)))
-        
-        # 进度统计
-        total_batches = len(batches)
-        completed_batches = 0
-        total_paragraphs = len(paragraphs)
-        completed_paragraphs = 0
-        
-        try:
-            future_to_batch = {}
-            for batch in batches:
-                # 检查是否收到中断信号
-                if getattr(sys, 'interrupted', False) or (os.environ.get('INTERRUPTED') == '1'):
-                    print("翻译被中断")
-                    break
-                
-                future = executor.submit(self.translate_batch, batch)
-                future_to_batch[future] = batch
-            
-            # 处理完成的任务，捕获超时异常
-            try:
-                for future in as_completed(future_to_batch, timeout=600):  # 增加超时时间到 10 分钟
-                    # 检查是否收到中断信号
-                    if getattr(sys, 'interrupted', False) or (os.environ.get('INTERRUPTED') == '1'):
-                        print("翻译被中断")
-                        break
-                    
+        # parts 格式: ['', '1', '翻译1', '2', '翻译2', ...]
+        if len(parts) > 1:
+            translations = {}
+            for i in range(1, len(parts), 2):
+                if i < len(parts):
                     try:
-                        batch_results = future.result(timeout=120)  # 增加每个任务的超时时间
-                        translated_results.extend(batch_results)
-                        completed_batches += 1
-                        completed_paragraphs += len(batch_results)
-                        # 展示进度
-                        progress = (completed_paragraphs / total_paragraphs) * 100
-                        print(f"翻译进度: {completed_paragraphs}/{total_paragraphs} 段落 ({progress:.1f}%)")
-                    except Exception as e:
-                        print(f"批量并发翻译出错: {e}")
-                        # 出错时回退到单独翻译
-                        batch = future_to_batch[future]
-                        for para in batch:
-                            translated = self.translate(para['text'])
-                            translated_results.append({
-                                'original': para['text'],
-                                'translated': translated,
-                                'html': para['html']
-                            })
-                        completed_batches += 1
-                        completed_paragraphs += len(batch)
-                        # 展示进度
-                        progress = (completed_paragraphs / total_paragraphs) * 100
-                        print(f"翻译进度: {completed_paragraphs}/{total_paragraphs} 段落 ({progress:.1f}%)")
-            except TimeoutError:
-                print("翻译超时，已完成部分段落的翻译")
-                # 处理已完成的任务
-                for future in future_to_batch:
-                    if future.done():
-                        try:
-                            batch_results = future.result()
-                            translated_results.extend(batch_results)
-                            completed_paragraphs += len(batch_results)
-                        except Exception as e:
-                            print(f"处理已完成任务时出错: {e}")
-                # 展示最终进度
-                progress = (completed_paragraphs / total_paragraphs) * 100
-                print(f"翻译进度: {completed_paragraphs}/{total_paragraphs} 段落 ({progress:.1f}%)")
+                        idx = int(parts[i]) - 1
+                        text = parts[i+1].strip() if i+1 < len(parts) else ""
+                        translations[idx] = text
+                    except:
+                        pass
             
-        finally:
-            # 无论如何都关闭 executor
-            print("正在关闭线程池...")
-            executor.shutdown(wait=True)  # 等待所有任务完成
-    
-        # 保持结果顺序
-        result_map = {r['original']: r for r in translated_results}
-        ordered_results = []
-        for para in paragraphs:
-            if para['text'] in result_map:
-                result = result_map[para['text']]
-                # 如果翻译为空，尝试单独翻译
-                if not result['translated']:
-                    print(f"警告：段落翻译为空，尝试单独翻译: {para['text'][:50]}...")
-                    translated = self.translate(para['text'])
-                    if translated:
-                        translated = translated.replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip()
-                    result = {
-                        'original': para['text'],
-                        'translated': translated,
-                        'html': para['html']
-                    }
-                ordered_results.append(result)
-            else:
-                # 如果段落没有翻译结果，尝试单独翻译
-                print(f"警告：段落没有翻译结果，尝试单独翻译: {para['text'][:50]}...")
-                translated = self.translate(para['text'])
-                if translated:
-                    translated = translated.replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip()
-                ordered_results.append({
+            for i, para in enumerate(original_paragraphs):
+                translated_text = translations.get(i, "")
+                results.append({
+                    'id': para['id'],
                     'original': para['text'],
-                    'translated': translated,
-                    'html': para['html']
+                    'translated': translated_text,
+                    'html': para['html'],
+                    'tier': para.get('tier', 'unknown')
                 })
         
-        return ordered_results
+        return results
     
-    async def translate_async(self, text, max_retries=3, max_tokens=None):
-        """异步翻译文本"""
-        if not text:
-            return ""
-        
-        effective_max_tokens = max_tokens if max_tokens else self.max_tokens
-        
-        retry_count = 0
-        while retry_count < max_retries:
-            if getattr(sys, 'interrupted', False) or (os.environ.get('INTERRUPTED') == '1'):
-                print("翻译被中断")
-                return ""
-            
-            try:
-                payload = {
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "你是一个专业的翻译助手，将英文文本翻译成中文。保持翻译准确、流畅，符合中文表达习惯。"
-                        },
-                        {
-                            "role": "user",
-                            "content": f"请将以下英文文本翻译成中文：\n{text}"
-                        }
-                    ],
-                    "max_tokens": effective_max_tokens,
-                    "temperature": self.temperature
-                }
-                
-                timeout = aiohttp.ClientTimeout(total=180, connect=60, sock_read=150)
-                connector = aiohttp.TCPConnector(limit=3, ttl_dns_cache=300, force_close=False)
-                async with aiohttp.ClientSession(headers=self.headers, timeout=timeout, connector=connector) as session:
-                    async with session.post(self.api_url, json=payload) as response:
-                        response.raise_for_status()
-                        self.stats["api_calls"] += 1
-                        result = await response.json()
-                        translated_text = result["choices"][0]["message"]["content"]
-                        
-                        if "usage" in result:
-                            self.stats["total_tokens"] += result["usage"].get("total_tokens", 0)
-                        
-                        return translated_text.strip()
-                        
-            except asyncio.TimeoutError:
-                print(f"异步API请求超时 (重试 {retry_count + 1}/{max_retries})")
-                retry_count += 1
-                if retry_count < max_retries:
-                    await asyncio.sleep(3 ** retry_count)  # 更长的等待时间
-                else:
-                    return ""
-            except aiohttp.ClientError as e:
-                print(f"异步API客户端错误: {e} (重试 {retry_count + 1}/{max_retries})")
-                retry_count += 1
-                if retry_count < max_retries:
-                    await asyncio.sleep(3 ** retry_count)
-                else:
-                    return ""
-            except Exception as e:
-                print(f"异步API请求出错: {type(e).__name__}: {e} (重试 {retry_count + 1}/{max_retries})")
-                retry_count += 1
-                if retry_count < max_retries:
-                    await asyncio.sleep(3 ** retry_count)
-                else:
-                    return ""
+    def _translate_individually(self, paragraphs):
+        """单独翻译每个段落"""
+        results = []
+        for para in paragraphs:
+            translated = self.translate(para['text'])
+            results.append({
+                'id': para['id'],
+                'original': para['text'],
+                'translated': translated,
+                'html': para['html'],
+                'tier': para.get('tier', 'unknown')
+            })
+        return results
     
-    async def translate_batch_async(self, paragraphs, max_retries=3):
-        """异步批量翻译多个段落"""
+    def translate_smart(self, paragraphs):
+        """智能分层翻译 - 核心方法"""
         if not paragraphs:
             return []
         
-        print(f"开始异步批量翻译 {len(paragraphs)} 个段落")
+        print(f"\n开始智能分层翻译，共 {len(paragraphs)} 个段落")
         
-        separator = "\n===DEEPSEEK_BATCH_SEPARATOR===-"
+        # 按 tier 分组
+        tier_groups = {
+            'tier1_short_repeatable': [],
+            'tier2_normal': [],
+            'tier3_long_complex': []
+        }
         
-        batch_texts = []
-        for i, para in enumerate(paragraphs):
-            batch_texts.append(f"[段落 {i+1}]\n{para['text']}")
+        duplicates = []  # 需要去重的段落
         
-        combined_text = separator.join(batch_texts)
-        
-        estimated_tokens = len(combined_text) * 2
-        dynamic_max_tokens = max(self.max_tokens, min(estimated_tokens, 4000))
-        
-        prompt = f"""请将以下英文段落翻译成中文，保持段落顺序和编号：
-
-{combined_text}
-
-翻译要求：
-1. 保持每个段落的独立性
-2. 保留段落编号 [段落 X]
-3. 不要添加额外的解释或说明
-4. 保持翻译准确、流畅"""
-        
-        translated_combined = await self.translate_async(prompt, max_retries=max_retries, max_tokens=dynamic_max_tokens)
-        
-        translated_results = []
-        if translated_combined:
-            print(f"异步批量翻译成功，结果长度: {len(translated_combined)} 字符")
-            translated_parts = re.split(r'\[段落 \d+\]\n', translated_combined)
-            # 清理分隔符
-            translated_parts = [part.strip().replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip() for part in translated_parts if part.strip()]
+        for para in paragraphs:
+            tier = para.get('tier', 'tier2_normal')
             
-            if len(translated_parts) == len(paragraphs):
-                for para, translated_part in zip(paragraphs, translated_parts):
-                    translated_results.append({
-                        'original': para['text'],
-                        'translated': translated_part,
-                        'html': para['html']
-                    })
+            if para.get('is_duplicate') and para.get('original_id'):
+                duplicates.append(para)
             else:
-                print(f"异步批量翻译分割失败，回退到单独翻译")
-                tasks = [self.translate_async(para['text'], max_retries=max_retries) for para in paragraphs]
-                translations = await asyncio.gather(*tasks, return_exceptions=True)
-                for para, translation in zip(paragraphs, translations):
-                    if isinstance(translation, Exception):
-                        translation = ""
-                    else:
-                        # 清理分隔符
-                        translation = translation.replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip()
-                    translated_results.append({
-                        'original': para['text'],
-                        'translated': translation,
-                        'html': para['html']
-                    })
-        else:
-            print("异步批量翻译失败，回退到单独翻译")
-            tasks = [self.translate_async(para['text'], max_retries=max_retries) for para in paragraphs]
-            translations = await asyncio.gather(*tasks, return_exceptions=True)
-            for para, translation in zip(paragraphs, translations):
-                if isinstance(translation, Exception):
-                    translation = ""
-                else:
-                    # 清理分隔符
-                    translation = translation.replace('===DEEPSEEK_BATCH_SEPARATOR===', '').strip()
-                translated_results.append({
-                    'original': para['text'],
-                    'translated': translation,
-                    'html': para['html']
-                })
+                tier_groups[tier].append(para)
         
-        self.stats["translated_paragraphs"] += len(translated_results)
-        return translated_results
-    
-    async def translate_all_async(self, paragraphs, batch_size=20, max_concurrent=20):
-        """异步批量翻译所有段落"""
-        if not paragraphs:
-            return []
+        all_results = {}
         
-        batches = []
-        for i in range(0, len(paragraphs), batch_size):
-            batch = paragraphs[i:i+batch_size]
-            batches.append(batch)
+        # 翻译各层
+        batch_config = self.opt_config['batch']
         
-        print(f"开始异步翻译 {len(batches)} 个批次，共 {len(paragraphs)} 个段落")
+        # Tier 1: 短文本，大批量
+        if tier_groups['tier1_short_repeatable']:
+            print(f"\n[Tier 1] 翻译 {len(tier_groups['tier1_short_repeatable'])} 个短文本...")
+            tier1_results = self._translate_tier(
+                tier_groups['tier1_short_repeatable'],
+                'tier1_short_repeatable',
+                batch_config['tier1_batch_size']
+            )
+            all_results.update(tier1_results)
         
-        semaphore = asyncio.Semaphore(max_concurrent)
+        # Tier 2: 普通文本，中批量
+        if tier_groups['tier2_normal']:
+            print(f"\n[Tier 2] 翻译 {len(tier_groups['tier2_normal'])} 个普通文本...")
+            tier2_results = self._translate_tier(
+                tier_groups['tier2_normal'],
+                'tier2_normal',
+                batch_config['tier2_batch_size']
+            )
+            all_results.update(tier2_results)
         
-        async def translate_with_semaphore(batch, batch_idx):
-            async with semaphore:
-                print(f"异步翻译批次 {batch_idx + 1}/{len(batches)}")
-                return await self.translate_batch_async(batch)
+        # Tier 3: 长文本，单独翻译
+        if tier_groups['tier3_long_complex']:
+            print(f"\n[Tier 3] 翻译 {len(tier_groups['tier3_long_complex'])} 个长文本...")
+            tier3_results = self._translate_tier(
+                tier_groups['tier3_long_complex'],
+                'tier3_long_complex',
+                1  # 单独翻译
+            )
+            all_results.update(tier3_results)
         
-        tasks = [translate_with_semaphore(batch, idx) for idx, batch in enumerate(batches)]
+        # 处理重复段落（复用翻译结果）
+        for dup in duplicates:
+            original_id = dup.get('original_id')
+            if original_id in all_results:
+                dup_result = all_results[original_id].copy()
+                dup_result['id'] = dup['id']
+                dup_result['is_duplicate'] = True
+                all_results[dup['id']] = dup_result
+                print(f"  复用翻译: {dup['text'][:30]}...")
         
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        translated_results = []
-        for result in results:
-            if isinstance(result, Exception):
-                print(f"批次翻译出错: {result}")
-                continue
-            translated_results.extend(result)
-        
-        result_map = {r['original']: r for r in translated_results}
+        # 按原始顺序返回
         ordered_results = []
         for para in paragraphs:
-            if para['text'] in result_map:
-                ordered_results.append(result_map[para['text']])
-            else:
-                ordered_results.append({
-                    'original': para['text'],
-                    'translated': "",
-                    'html': para['html']
-                })
+            if para['id'] in all_results:
+                ordered_results.append(all_results[para['id']])
         
+        print(f"\n翻译完成: {len(ordered_results)}/{len(paragraphs)}")
         return ordered_results
     
-    def translate_optimized_async(self, paragraphs, batch_size=20, max_concurrent=20):
-        """优化的异步翻译方法"""
-        return asyncio.run(self.translate_all_async(paragraphs, batch_size, max_concurrent))
+    def _translate_tier(self, paragraphs, tier, batch_size):
+        """翻译指定 tier 的段落"""
+        if not paragraphs:
+            return {}
+        
+        results = {}
+        
+        # 分批处理
+        batches = [paragraphs[i:i+batch_size] for i in range(0, len(paragraphs), batch_size)]
+        
+        max_workers = self.opt_config['batch']['max_workers']
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_batch = {
+                executor.submit(self.translate_batch, batch, tier): batch 
+                for batch in batches
+            }
+            
+            completed = 0
+            for future in as_completed(future_to_batch):
+                batch = future_to_batch[future]
+                try:
+                    batch_results = future.result(timeout=180)
+                    for result in batch_results:
+                        # 质量检查
+                        if self.opt_config['quality_check']['enabled']:
+                            result = self._quality_check(result)
+                        
+                        results[result['id']] = result
+                        self.stats['translated_paragraphs'] += 1
+                        self.stats['by_tier'][tier] += 1
+                    
+                    completed += len(batch)
+                    progress = completed / len(paragraphs) * 100
+                    print(f"  进度: {completed}/{len(paragraphs)} ({progress:.1f}%)")
+                    
+                except Exception as e:
+                    print(f"  批次翻译出错: {e}")
+                    # 失败时单独翻译
+                    for para in batch:
+                        result = self._translate_single_with_retry(para)
+                        results[result['id']] = result
+        
+        return results
+    
+    def _translate_single_with_retry(self, para):
+        """翻译单个段落（带质量检查和重试）"""
+        text = para['text']
+        translated = self.translate(text)
+        
+        result = {
+            'id': para['id'],
+            'original': text,
+            'translated': translated,
+            'html': para['html'],
+            'tier': para.get('tier', 'unknown')
+        }
+        
+        # 质量检查
+        if self.opt_config['quality_check']['enabled']:
+            result = self._quality_check(result)
+        
+        self.stats['translated_paragraphs'] += 1
+        return result
+    
+    def _quality_check(self, result):
+        """质量检查"""
+        original = result['original']
+        translated = result['translated']
+        
+        issues = []
+        
+        # 检查空翻译
+        if not translated or not translated.strip():
+            issues.append("空翻译")
+        
+        # 检查长度异常
+        orig_len = len(original)
+        trans_len = len(translated)
+        
+        if orig_len > 0:
+            ratio = trans_len / orig_len
+            min_ratio = self.opt_config['quality_check']['min_translation_ratio']
+            max_ratio = self.opt_config['quality_check']['max_translation_ratio']
+            
+            if ratio < min_ratio:
+                issues.append(f"翻译过短 ({ratio:.2f})")
+            if ratio > max_ratio:
+                issues.append(f"翻译过长 ({ratio:.2f})")
+        
+        # 检查分隔符残留
+        if '===' in translated or '[段落' in translated:
+            issues.append("分隔符残留")
+        
+        # 有问题则重试
+        if issues and self.opt_config['quality_check']['retry_empty']:
+            print(f"  质量问题 ({', '.join(issues)}): {original[:50]}...")
+            print(f"  尝试重译...")
+            
+            self.stats['retried'] += 1
+            retry_result = self.translate(original, max_retries=2)
+            
+            if retry_result and len(retry_result) > len(translated) * 0.5:
+                result['translated'] = retry_result
+                print(f"  重译成功")
+            else:
+                print(f"  重译失败，保留原结果")
+                self.stats['failed'] += 1
+        
+        return result
     
     def get_stats(self):
-        """获取翻译统计信息"""
+        """获取统计信息"""
         return self.stats
     
-    def reset_stats(self):
-        """重置统计信息"""
-        self.stats = {
-            "api_calls": 0,
-            "total_tokens": 0,
-            "cache_hits": 0,
-            "translated_paragraphs": 0
-        }
+    def print_translation_report(self):
+        """打印翻译报告"""
+        print("\n=== 翻译统计报告 ===")
+        print(f"API 调用次数: {self.stats['api_calls']}")
+        print(f"总 Token 消耗: {self.stats['total_tokens']}")
+        print(f"翻译段落数: {self.stats['translated_paragraphs']}")
+        print(f"重试次数: {self.stats['retried']}")
+        print(f"失败次数: {self.stats['failed']}")
+        print(f"\n分层统计:")
+        for tier, count in self.stats['by_tier'].items():
+            tier_name = {
+                'tier1_short_repeatable': '短文本(可重复)',
+                'tier2_normal': '普通文本',
+                'tier3_long_complex': '长文本(复杂)'
+            }.get(tier, tier)
+            print(f"  {tier_name}: {count}")
+        print("====================\n")

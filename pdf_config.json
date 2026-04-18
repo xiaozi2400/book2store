@@ -1,88 +1,186 @@
 {
-  "_comment": "PDF排版配置文件 - 测试版本：宽松排版",
-  
+  "_comment": "PDF排版配置文件 - 包含详细中文说明，可根据需要选择不同预设方案",
+
   "page": {
-    "_comment": "页面设置 - 增加边距",
+    "_comment": "页面设置 - 控制纸张大小和页边距",
+
+    "_paper_size_desc": "纸张大小，可选值: letter(信纸), a4(A4纸), a5(A5纸), legal(法律文书)",
     "paper_size": "letter",
+
+    "_margin_top_desc": "上边距，单位: 像素(px)，值越大顶部留白越多",
     "margin_top": 50,
+
+    "_margin_bottom_desc": "下边距，单位: 像素(px)，值越大底部留白越多",
     "margin_bottom": 50,
-    "margin_left": 50,
-    "margin_right": 50,
+
+    "_margin_left_desc": "左边距，单位: 像素(px)，值越大左侧留白越多",
+    "margin_left": 12,
+
+    "_margin_right_desc": "右边距，单位: 像素(px)，值越大右侧留白越多",
+    "margin_right": 12,
+
+    "_background_color_desc": "页面背景颜色，使用十六进制颜色代码，#ffffff为白色，#f8f8f8为浅灰色",
     "background_color": "#f8f8f8"
   },
-  
+
   "font": {
-    "_comment": "字体配置 - 增大字体",
-    "serif": "Source Han Serif SC,Noto Serif CJK SC,SimSun,STSong,serif",
-    "sans": "Source Han Sans SC,Noto Sans CJK SC,SimHei,STHeiti,sans-serif",
-    "mono": "Source Han Mono SC,Noto Sans Mono CJK SC,Consolas,Microsoft YaHei Mono,monospace",
-    "default_size": 20,
+    "_comment": "字体配置 - 控制正文字体、字号和标题字号",
+
+    "_serif_desc": "衬线字体，用于正文显示，SimSun为宋体（常规字重），STKaiti为华文楷体",
+    "serif": "SimSun",
+
+    "_sans_desc": "无衬线字体，用于标题显示，STKaiti为华文楷体（优雅非黑体）",
+    "sans": "STKaiti",
+
+    "_mono_desc": "等宽字体，用于代码块显示，使用系统实际安装的字体",
+    "mono": "JetBrains Mono",
+
+    "_default_size_desc": "默认正文字号，屏幕阅读建议16-18px，当前优化为17px",
+    "default_size": 18,
+
+    "_mono_size_desc": "等宽字体字号，用于代码块，通常比正文字号小2-4px",
     "mono_size": 16,
-    "bilingual_default_size": 20,
+
+    "_bilingual_default_size_desc": "中英双语版本正文字号",
+    "bilingual_default_size": 18,
+
+    "_bilingual_mono_size_desc": "中英双语版本等宽字体字号",
     "bilingual_mono_size": 16,
+
+    "_title_size_desc": "书名/主标题字号，单位: 像素(px)",
     "title_size": 28,
+
+    "_heading_size_desc": "章节标题字号，单位: 像素(px)",
     "heading_size": 24
   },
-  
+
   "typography": {
-    "_comment": "排版设置 - 宽松行距和段间距",
-    "line_height": 2.2,
-    "minimum_line_height": 180,
-    "paragraph_indent": 2.5,
-    "paragraph_spacing": 2.5,
+    "_comment": "排版设置 - 控制行距、段间距和对齐方式",
+
+    "_line_height_desc": "行高倍数，1.0为单倍行距，1.5为1.5倍行距，2.0为双倍行距，建议范围: 1.6-2.5",
+    "line_height": 1.6,
+
+    "_minimum_line_height_desc": "最小行高百分比，180表示最小行高为字号的180%",
+    "minimum_line_height": 150,
+
+    "_paragraph_indent_desc": "段落首行缩进倍数，2.5表示缩进2.5个字符宽度，0表示不缩进",
+    "paragraph_indent": 2,
+
+    "_paragraph_spacing_desc": "段落间距倍数，控制段落之间的空白大小，建议范围: 1.0-3.0",
+    "paragraph_spacing": 3,
+
+    "_justify_desc": "是否启用两端对齐，true为启用，false为左对齐",
     "justify": true,
+
+    "_hyphenate_desc": "是否启用英文自动断字（在单词音节间断行），true为启用",
     "hyphenate": true,
+
+    "_hyphenate_chinese_desc": "是否启用中文自动断行优化，true为启用",
     "hyphenate_chinese": true
   },
-  
+
   "header_footer": {
-    "_comment": "页眉页脚设置",
+    "_comment": "页眉页脚设置 - 控制页面顶部和底部的显示内容",
+
+    "_header_template_desc": "页眉模板，留空表示不显示页眉。可用变量: _TITLE_(书名), _AUTHOR_(作者), _CHAPTER_(章节名)",
     "header_template": "",
+
+    "_footer_template_desc": "页脚模板，可用变量: _PAGENUM_(当前页码), _TOTALPAGES_(总页数), _TITLE_(书名)",
     "footer_template": "<div style=\"text-align:center;font-size:11pt;color:#666;margin-top:8pt;\">第 _PAGENUM_ 页 / 共 _TOTALPAGES_ 页</div>"
   },
-  
+
   "toc": {
-    "_comment": "目录设置",
+    "_comment": "目录设置 - 控制是否生成目录及目录样式",
+
+    "_add_toc_desc": "是否在PDF开头添加目录页，true为添加，false为不添加",
     "add_toc": true,
+
+    "_toc_depth_desc": "目录深度，1只显示章标题，2显示章和节，3显示章、节、小节",
     "toc_depth": 3,
+
+    "_toc_title_desc": "目录页的标题文字",
     "toc_title": "目录",
+
+    "_use_bookmarks_desc": "是否在PDF阅读器中启用书签导航，true为启用",
     "use_bookmarks": true
   },
-  
+
   "image": {
-    "_comment": "图片设置",
+    "_comment": "图片设置 - 控制图片质量和尺寸限制",
+
+    "_dpi_desc": "图片分辨率，单位: DPI(每英寸点数)，值越高图片越清晰但文件越大，建议: 150-300",
     "dpi": 150,
+
+    "_max_width_desc": "图片最大宽度，单位: 像素(px)，超过此宽度的图片会被缩放",
     "max_width": 600,
+
+    "_max_height_desc": "图片最大高度，单位: 像素(px)，超过此高度的图片会被缩放",
     "max_height": 800
   },
-  
+
   "advanced": {
-    "_comment": "高级选项",
+    "_comment": "高级选项 - 控制PDF元数据和特殊功能",
+
+    "_use_xmp_metadata_desc": "是否嵌入XMP元数据，包含书籍的版权、作者等信息，true为嵌入",
     "use_xmp_metadata": true,
+
+    "_mark_links_desc": "是否在PDF中标记超链接，true为标记，false为不标记",
     "mark_links": true,
+
+    "_page_numbers_desc": "是否启用页码，true为启用，false为禁用",
     "page_numbers": true,
+
+    "_disable_resample_desc": "是否禁用图片重采样，true为保持原图质量，false为允许压缩",
     "disable_resample": false,
+
+    "_preserve_cover_aspect_ratio_desc": "是否保持封面图片的原始宽高比，true为保持，false为允许拉伸",
     "preserve_cover_aspect_ratio": true
   },
-  
+
   "reading": {
-    "_comment": "阅读体验优化",
+    "_comment": "阅读体验优化 - 控制页面布局和分页行为",
+
+    "_two_column_desc": "是否使用双栏排版，true为双栏，false为单栏",
     "two_column": false,
+
+    "_page_break_before_h1_desc": "是否在H1标题前强制分页，true为每个章节从新页面开始",
     "page_break_before_h1": true,
+
+    "_keep_with_next_desc": "是否保持标题与后续内容在同一页，避免标题单独出现在页尾",
     "keep_with_next": true,
+
+    "_widow_control_desc": "是否启用孤行控制，避免段落最后一行单独出现在新页",
     "widow_control": true
   },
-  
+
   "css": {
-    "_comment": "EPUB CSS样式 - 宽松排版",
+    "_comment": "EPUB CSS样式 - 控制EPUB生成时的CSS样式，影响最终PDF的排版",
+
+    "_paragraph_margin_bottom_desc": "段落底部外边距，单位: em(相对于当前字体大小)，控制段落间距",
     "paragraph_margin_bottom": "2.5em",
+
+    "_paragraph_line_height_desc": "段落行高，单位: 倍数，控制行与行之间的垂直间距",
     "paragraph_line_height": "2.2",
+
+    "_paragraph_text_indent_desc": "段落首行缩进，单位: em，中文排版通常使用2em表示缩进两个字符",
     "paragraph_text_indent": "2.5em",
+
+    "_heading_margin_top_desc": "标题顶部外边距，单位: em，控制标题上方的空白",
     "heading_margin_top": "2.0em",
+
+    "_heading_margin_bottom_desc": "标题底部外边距，单位: em，控制标题下方的空白",
     "heading_margin_bottom": "1.5em",
+
+    "_list_item_margin_bottom_desc": "列表项底部外边距，单位: em，控制列表项之间的间距",
     "list_item_margin_bottom": "1.2em",
+
+    "_blockquote_margin_desc": "引用块外边距，单位: em，控制引用块与周围内容的间距",
     "blockquote_margin": "2.0em",
+
+    "_blockquote_padding_left_desc": "引用块左内边距，单位: em，控制引用块内部左侧的缩进",
     "blockquote_padding_left": "2.0em",
+
+    "_blockquote_border_left_desc": "引用块左边框样式，格式: 宽度 样式 颜色，用于视觉区分引用内容",
     "blockquote_border_left": "4px solid #999"
   }
 }

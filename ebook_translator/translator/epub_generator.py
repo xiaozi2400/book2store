@@ -27,13 +27,14 @@ def normalize_text(text):
 BILINGUAL_CSS = """
 /* 中英对照专业样式 - 专业中文排版 */
 body {
-    font-family: "SimSun", "Source Han Serif SC", "Noto Serif CJK SC", serif;
+    font-family: "SimSun", "STKaiti", serif;
     font-size: 16px;
     line-height: 1.6;
     text-align: justify;
     hyphens: auto;
     -webkit-hyphens: auto;
     -epub-hyphens: auto;
+    font-variant-numeric: tabular-nums;
 }
 
 /* 段落样式 - 翻译内容与原文换行显示 */
@@ -46,8 +47,8 @@ p {
 
 /* 标题样式 */
 h1, h2, h3, h4, h5, h6 {
-    font-family: "SimHei", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-    font-weight: bold;
+    font-family: "STKaiti", "KaiTi", "SimKai", sans-serif;
+    font-weight: normal;
     text-align: center;
     line-height: 1.5;
     margin-top: 1em;
@@ -174,13 +175,14 @@ a:hover {
 CHINESE_CSS = """
 /* 纯中文专业样式 - 专业中文排版 */
 body {
-    font-family: "SimSun", "Source Han Serif SC", "Noto Serif CJK SC", serif;
+    font-family: "SimSun", "STKaiti", serif;
     font-size: 14px;
     line-height: 1.6;
     text-align: justify;
     hyphens: auto;
     -webkit-hyphens: auto;
     -epub-hyphens: auto;
+    font-variant-numeric: tabular-nums;
 }
 
 /* 段落样式 - 首行缩进两个全角字符 */
@@ -335,17 +337,32 @@ class EPUBGenerator:
         
         return translation_map
 
-    def _process_html_content(self, content, translation_map, mode):
-        """统一处理HTML内容 - 新ID映射版本"""
+    def _process_html_content(self, content, translation_map, mode, is_nav=False):
+        """统一处理HTML内容 - 新ID映射版本
+        
+        Args:
+            content: HTML内容
+            translation_map: 翻译映射
+            mode: 翻译模式 ('bilingual' 或 'chinese')
+            is_nav: 是否为导航文件，导航文件需要保留链接
+        """
         soup = BeautifulSoup(content, 'lxml')
         
         # 定义需要处理的标签（添加 figcaption, td, th 以支持图片说明和表格）
         # 注意：先处理块级标签，再处理内联标签，避免重复处理
-        tags_to_process = [
-            'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
-            'figcaption', 'td', 'th', 'caption',
-            'a', 'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span'
-        ]
+        # 导航文件中跳过 'a' 标签，保留链接
+        if is_nav:
+            tags_to_process = [
+                'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
+                'figcaption', 'td', 'th', 'caption',
+                'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span'
+            ]
+        else:
+            tags_to_process = [
+                'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
+                'figcaption', 'td', 'th', 'caption',
+                'a', 'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span'
+            ]
         
         processed_count = 0
         
@@ -421,7 +438,9 @@ class EPUBGenerator:
                                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                                     content = f.read()
                                 
-                                processed_content = self._process_html_content(content, translation_map, 'bilingual')
+                                # 判断是否为导航文件
+                                is_nav = 'nav' in file.lower()
+                                processed_content = self._process_html_content(content, translation_map, 'bilingual', is_nav)
                                 
                                 with open(file_path, 'wb') as f:
                                     f.write(processed_content)
@@ -539,7 +558,9 @@ div {
                                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                                     content = f.read()
                                 
-                                processed_content = self._process_html_content(content, translation_map, 'chinese')
+                                # 判断是否为导航文件
+                                is_nav = 'nav' in file.lower()
+                                processed_content = self._process_html_content(content, translation_map, 'chinese', is_nav)
                                 
                                 with open(file_path, 'wb') as f:
                                     f.write(processed_content)
