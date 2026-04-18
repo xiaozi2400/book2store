@@ -105,10 +105,11 @@ def list(
 @app.command()
 def process(
     book_id: str = typer.Argument(..., help="书籍ID"),
-    skip_translate: bool = typer.Option(False, help="跳过翻译步骤"),
     skip_publish: bool = typer.Option(False, help="跳过发布步骤")
 ):
     """处理指定书籍"""
+    from automation.translation_processor import translate_book
+
     console.print(f"[bold blue]开始处理书籍: {book_id}[/bold blue]")
 
     db = DatabaseManager()
@@ -137,19 +138,21 @@ def process(
     ) as progress:
         task = progress.add_task("处理中...", total=None)
 
-        if not skip_translate:
-            progress.update(task, description="生成精简版...")
-            generate_summary(book_id, str(input_path))
+        progress.update(task, description="翻译并生成PDF...")
+        translate_book(book_id, str(input_path))
 
-            progress.update(task, description="提取图片...")
-            pdf_path = Path(config.output_dir) / book_id / "核心精简.pdf"
-            extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
+        progress.update(task, description="生成精简版...")
+        generate_summary(book_id, str(input_path))
 
-            progress.update(task, description="生成文案...")
-            generate_copywriting(book_id, {
-                'title': book_obj.title,
-                'author': book_obj.author
-            })
+        progress.update(task, description="提取图片...")
+        pdf_path = Path(config.output_dir) / book_id / "中英双语-{}.pdf".format(Path(input_path).stem)
+        extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
+
+        progress.update(task, description="生成文案...")
+        generate_copywriting(book_id, {
+            'title': book_obj.title,
+            'author': book_obj.author
+        })
 
         if not skip_publish:
             progress.update(task, description="发布到闲鱼...")
