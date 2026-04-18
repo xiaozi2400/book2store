@@ -1,0 +1,88 @@
+{
+  "_comment": "PDF排版配置文件 - 修改后无需重启程序即可生效",
+  
+  "page": {
+    "_comment": "页面设置",
+    "paper_size": "letter",
+    "margin_top": 29,
+    "margin_bottom": 29,
+    "margin_left": 29,
+    "margin_right": 29,
+    "background_color": "#f8f8f8"
+  },
+  
+  "font": {
+    "_comment": "字体配置",
+    "serif": "Source Han Serif SC,Noto Serif CJK SC,SimSun,STSong,serif",
+    "sans": "Source Han Sans SC,Noto Sans CJK SC,SimHei,STHeiti,sans-serif",
+    "mono": "Source Han Mono SC,Noto Sans Mono CJK SC,Consolas,Microsoft YaHei Mono,monospace",
+    "default_size": 18,
+    "mono_size": 14,
+    "bilingual_default_size": 18,
+    "bilingual_mono_size": 14,
+    "title_size": 24,
+    "heading_size": 20
+  },
+  
+  "typography": {
+    "_comment": "排版设置 - 主要调整这些参数来改变阅读体验",
+    "line_height": 1.8,
+    "minimum_line_height": 150,
+    "paragraph_indent": 2.0,
+    "paragraph_spacing": 1.5,
+    "justify": true,
+    "hyphenate": true,
+    "hyphenate_chinese": true
+  },
+  
+  "header_footer": {
+    "_comment": "页眉页脚设置",
+    "header_template": "",
+    "footer_template": "<div style=\"text-align:center;font-size:11pt;color:#666;margin-top:8pt;\">第 _PAGENUM_ 页 / 共 _TOTALPAGES_ 页</div>"
+  },
+  
+  "toc": {
+    "_comment": "目录设置",
+    "add_toc": true,
+    "toc_depth": 3,
+    "toc_title": "目录",
+    "use_bookmarks": true
+  },
+  
+  "image": {
+    "_comment": "图片设置",
+    "dpi": 150,
+    "max_width": 600,
+    "max_height": 800
+  },
+  
+  "advanced": {
+    "_comment": "高级选项",
+    "use_xmp_metadata": true,
+    "mark_links": true,
+    "page_numbers": true,
+    "disable_resample": false,
+    "preserve_cover_aspect_ratio": true
+  },
+  
+  "reading": {
+    "_comment": "阅读体验优化",
+    "two_column": false,
+    "page_break_before_h1": true,
+    "keep_with_next": true,
+    "widow_control": true
+  },
+  
+  "css": {
+    "_comment": "EPUB CSS样式 - 控制段落间距等视觉效果",
+    "paragraph_margin_bottom": "1.5em",
+    "paragraph_line_height": "1.8",
+    "paragraph_text_indent": "2em",
+    "heading_margin_top": "1.5em",
+    "heading_margin_bottom": "1em",
+    "list_item_margin_bottom": "0.8em",
+    "blockquote_margin": "1.5em",
+    "blockquote_padding_left": "1.5em",
+    "blockquote_border_left": "3px solid #ccc"
+  }
+}

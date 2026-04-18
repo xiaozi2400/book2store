@@ -1,5 +1,6 @@
 # 配置文件
 import os
+import json
 
 # DeepSeek API 配置
 # 从环境变量读取 API 密钥
@@ -22,8 +23,21 @@ CHUNK_SIZE = 1000  # 翻译的文本块大小
 # PDF 转换配置
 CALIBRE_PATH = ""  # 如果 ebook-convert 不在 PATH 中，需要指定路径
 
-# 专业PDF排版配置 - 针对电脑阅读优化（大字体+窄边距）
-PDF_CONFIG = {
+# 外部PDF配置文件路径（相对于项目根目录）
+PDF_CONFIG_FILE = "pdf_config.json"
+
+
+def load_pdf_config():
+    """从外部JSON文件加载PDF配置
+    
+    如果外部配置文件存在，则使用外部配置；
+    否则使用默认配置。
+    
+    Returns:
+        dict: PDF配置字典
+    """
+    # 默认PDF排版配置 - 针对电脑阅读优化（大字体+窄边距）
+    default_config = {
     # 页面设置（电脑阅读优化）
     'page': {
         'paper_size': 'letter',     # Letter尺寸更适合电脑屏幕阅读
@@ -87,8 +101,62 @@ PDF_CONFIG = {
         'page_break_before_h1': True,  # H1前分页
         'keep_with_next': True,        # 保持段落连贯性
         'widow_control': True,         # 控制孤行
+    },
+    # CSS样式配置（用于EPUB生成）
+    'css': {
+        'paragraph_margin_bottom': '1.5em',
+        'paragraph_line_height': '1.8',
+        'paragraph_text_indent': '2em',
+        'heading_margin_top': '1.5em',
+        'heading_margin_bottom': '1em',
+        'list_item_margin_bottom': '0.8em',
+        'blockquote_margin': '1.5em',
+        'blockquote_padding_left': '1.5em',
+        'blockquote_border_left': '3px solid #ccc',
     }
-}
+    }
+    
+    # 尝试从外部配置文件加载
+    config_paths = [
+        # 1. 当前工作目录
+        os.path.join(os.getcwd(), PDF_CONFIG_FILE),
+        # 2. 项目根目录（根据此文件位置推算）
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), PDF_CONFIG_FILE),
+        # 3. 上级目录
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', PDF_CONFIG_FILE),
+    ]
+    
+    for config_path in config_paths:
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    external_config = json.load(f)
+                
+                # 递归合并配置
+                def merge_config(default, external):
+                    result = default.copy()
+                    for key, value in external.items():
+                        if key.startswith('_'):  # 跳过注释字段
+                            continue
+                        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                            result[key] = merge_config(result[key], value)
+                        else:
+                            result[key] = value
+                    return result
+                
+                merged_config = merge_config(default_config, external_config)
+                print(f"[配置] 已从 {config_path} 加载PDF排版配置")
+                return merged_config
+            except Exception as e:
+                print(f"[警告] 加载配置文件 {config_path} 失败: {e}")
+                continue
+    
+    print("[配置] 使用默认PDF排版配置")
+    return default_config
+
+
+# 加载PDF配置
+PDF_CONFIG = load_pdf_config()
 
 # 日志配置
 LOG_LEVEL = "INFO"

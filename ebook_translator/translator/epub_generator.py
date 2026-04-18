@@ -545,43 +545,47 @@ div {
                 os.makedirs(css_dir, exist_ok=True)
                 css_path = os.path.join(css_dir, 'chinese_style.css')
                 
-                chinese_css = """
-/* 纯中文段落样式 - 优化阅读体验 */
-p {
-    text-indent: 2em !important;
-    margin-top: 0 !important;
-    margin-bottom: 1.5em !important;  /* 增加段间距，从1em增加到1.5em */
-    text-align: justify !important;
-    line-height: 1.8 !important;      /* 行间距1.8倍 */
-}
+                # 从配置读取CSS样式
+                css_config = self.config.get('css', {})
+                
+                chinese_css = f"""/* 纯中文段落样式 - 优化阅读体验 */
+/* 从配置文件 pdf_config.json 加载 */
 
-div {
-    text-indent: 2em !important;
-    margin-bottom: 1.5em !important;  /* 增加段间距 */
-    line-height: 1.8 !important;
-}
+p {{
+    text-indent: {css_config.get('paragraph_text_indent', '2em')} !important;
+    margin-top: 0 !important;
+    margin-bottom: {css_config.get('paragraph_margin_bottom', '1.5em')} !important;
+    text-align: justify !important;
+    line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
+}}
+
+div {{
+    text-indent: {css_config.get('paragraph_text_indent', '2em')} !important;
+    margin-bottom: {css_config.get('paragraph_margin_bottom', '1.5em')} !important;
+    line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
+}}
 
 /* 章节标题样式 */
-h1, h2, h3, h4, h5, h6 {
-    margin-top: 1.5em !important;
-    margin-bottom: 1em !important;
+h1, h2, h3, h4, h5, h6 {{
+    margin-top: {css_config.get('heading_margin_top', '1.5em')} !important;
+    margin-bottom: {css_config.get('heading_margin_bottom', '1em')} !important;
     line-height: 1.4 !important;
-}
+}}
 
 /* 列表项样式 */
-li {
-    margin-bottom: 0.8em !important;
-    line-height: 1.8 !important;
-}
+li {{
+    margin-bottom: {css_config.get('list_item_margin_bottom', '0.8em')} !important;
+    line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
+}}
 
 /* 引用块样式 */
-blockquote {
-    margin-top: 1.5em !important;
-    margin-bottom: 1.5em !important;
-    padding-left: 1.5em !important;
-    border-left: 3px solid #ccc !important;
-    line-height: 1.8 !important;
-}
+blockquote {{
+    margin-top: {css_config.get('blockquote_margin', '1.5em')} !important;
+    margin-bottom: {css_config.get('blockquote_margin', '1.5em')} !important;
+    padding-left: {css_config.get('blockquote_padding_left', '1.5em')} !important;
+    border-left: {css_config.get('blockquote_border_left', '3px solid #ccc')} !important;
+    line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
+}}
 """
                 with open(css_path, 'w', encoding='utf-8') as f:
                     f.write(chinese_css)
