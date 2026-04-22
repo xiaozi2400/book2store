@@ -322,99 +322,126 @@ class EPUBGenerator:
         self.config = config or {}
 
     def _create_translation_map(self, translated_paragraphs):
-        """创建翻译映射 - 使用ID作为键"""
+        """创建翻译映射 - 使用trans_id作为键"""
         translation_map = {}
-        
+
         for para in translated_paragraphs:
-            para_id = para.get('id')
-            if para_id and para.get('translated'):
-                translation_map[para_id] = {
+            trans_id = para.get('trans_id')
+            if trans_id and para.get('translated'):
+                translation_map[trans_id] = {
                     'original': para['original'],
                     'translated': para['translated'],
                     'html': para.get('html', ''),
                     'is_duplicate': para.get('is_duplicate', False)
                 }
-        
+
         return translation_map
 
     def _process_html_content(self, content, translation_map, mode, is_nav=False):
-        """统一处理HTML内容 - 新ID映射版本
-        
+        """统一处理HTML内容 - 使用data-trans-id精确匹配
+
         Args:
             content: HTML内容
-            translation_map: 翻译映射
+            translation_map: 翻译映射（使用trans_id作为键）
             mode: 翻译模式 ('bilingual' 或 'chinese')
             is_nav: 是否为导航文件，导航文件需要保留链接
         """
+        import hashlib
+        import os
+
         soup = BeautifulSoup(content, 'lxml')
-        
-        # 定义需要处理的标签（添加 figcaption, td, th 以支持图片说明和表格）
-        # 注意：先处理块级标签，再处理内联标签，避免重复处理
-        # 导航文件中跳过 'a' 标签，保留链接
-        if is_nav:
-            tags_to_process = [
-                'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
-                'figcaption', 'td', 'th', 'caption',
-                'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span'
-            ]
-        else:
-            tags_to_process = [
-                'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
-                'figcaption', 'td', 'th', 'caption',
-                'a', 'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span'
-            ]
-        
+
+        # 统计变量
+        total_tags = 0
+        matched_tags = 0
+        unmatched_samples = []
+
+        # 定义需要处理的标签
+        tags_to_process = ['a', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
+                          'figcaption', 'td', 'th', 'caption',
+                          'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span']
+
         processed_count = 0
-        
-        # 处理所有标签
+
+        # 应用翻译
         for tag_name in tags_to_process:
             for tag in soup.find_all(tag_name):
                 # 跳过已处理的标签
                 if tag.find(class_='translated'):
                     continue
-                
+
+                # 跳过包含 <a> 子标签的非 <a> 标签
+                # 这些标签的翻译会由内部的 <a> 标签处理
+                if tag_name != 'a' and tag.find('a'):
+                    continue
+
                 # 获取文本
                 text = tag.get_text(strip=True)
                 normalized_text = normalize_text(text)
-                
                 if not normalized_text or len(normalized_text) <= 1:
                     continue
-                
-                # 在翻译映射中查找匹配
-                # 由于我们没有段落ID，需要通过文本内容反向查找
-                # 这里使用文本匹配作为回退方案
+
+                total_tags += 1
+
+                # 从 translation_map 中查找匹配的翻译
+                # 通过标准化后的文本精确匹配
                 translation = None
-                for para_id, para_data in translation_map.items():
+                matched_trans_id = None
+                for trans_id, para_data in translation_map.items():
                     if normalize_text(para_data['original']) == normalized_text:
                         translation = para_data['translated']
+                        matched_trans_id = trans_id
                         break
-                
+
                 if not translation:
+                    if len(unmatched_samples) < 10:
+                        unmatched_samples.append(text[:100])
                     continue
-                
+
+                matched_tags += 1
+
+                # 保存原文用于显示
+                tag['data-original'] = text
+
                 # 应用翻译
-                if mode == 'bilingual':
-                    original_attrs = {k: v for k, v in tag.attrs.items() if k != 'class'}
-                    original_text = text
-                    
-                    tag.clear()
-                    tag.append(original_text)
-                    tag.append(soup.new_tag('br'))
-                    translated_span = soup.new_tag('span')
-                    translated_span['class'] = 'translated'
-                    translated_span.string = translation
-                    tag.append(translated_span)
-                    
-                    for attr, value in original_attrs.items():
-                        tag[attr] = value
+                if tag.name == 'a' and tag.has_attr('href'):
+                    # <a> 标签：保留 href
+                    if mode == 'bilingual':
+                        # 双语：原文 + 翻译
+                        tag.clear()
+                        tag.append(text)
+                        translated_span = soup.new_tag('span')
+                        translated_span['class'] = 'translated'
+                        translated_span.string = translation
+                        tag.append(translated_span)
+                    else:
+                        # 纯中文：仅翻译
+                        tag.clear()
+                        tag.string = translation
                 else:
-                    original_attrs = {k: v for k, v in tag.attrs.items() if k != 'class'}
-                    tag.string = translation
-                    for attr, value in original_attrs.items():
-                        tag[attr] = value
-                
+                    # 其他标签
+                    if mode == 'bilingual':
+                        # 双语：原文 + <br/> + 翻译
+                        tag.clear()
+                        tag.append(text)
+                        tag.append(soup.new_tag('br'))
+                        translated_span = soup.new_tag('span')
+                        translated_span['class'] = 'translated'
+                        translated_span.string = translation
+                        tag.append(translated_span)
+                    else:
+                        # 纯中文：仅翻译
+                        tag.clear()
+                        tag.string = translation
+
                 processed_count += 1
-        
+
+        print(f"[{mode}] 标签统计: 总数={total_tags}, 匹配={matched_tags}, 未匹配={total_tags - matched_tags}")
+        if unmatched_samples:
+            print(f"[{mode}] 未匹配样本（前5个）:")
+            for i, sample in enumerate(unmatched_samples[:5]):
+                print(f"  {i+1}. {sample[:80]}...")
+
         return str(soup).encode('utf-8')
 
     def generate_bilingual_epub(self, translated_paragraphs, output_path):
@@ -473,6 +500,13 @@ div {
     margin-top: 0.5em !important;
     margin-bottom: 1em !important;
     line-height: 1.8 !important;
+}
+
+.no-jump {
+    display: block;
+    color: #888;
+    cursor: default;
+    margin-top: 0.3em !important;
 }
 """
                 with open(css_path, 'w', encoding='utf-8') as f:

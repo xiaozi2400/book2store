@@ -1,87 +1,83 @@
 """
-翻译处理器 - 复用ebook_translator的翻译和PDF转换功能
+翻译处理器 - 直接复用ebook_translator主程序
 """
 import os
 import sys
+import subprocess
 from pathlib import Path
-from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ebook_translator.translator.deepseek_api import DeepSeekTranslator
-from ebook_translator.translator.epub_parser import EpubParser
-from ebook_translator.translator.epub_generator import EpubGenerator
-from ebook_translator.translator.pdf_converter import PDFConverter
 from .database import DatabaseManager
 from .config import config
 from .utils import logger, ensure_dir
 
 
 class TranslationProcessor:
-    """翻译处理器 - 复用现有ebook_translator"""
+    """翻译处理器 - 直接调用ebook_translator"""
 
     def __init__(self):
         self.db = DatabaseManager()
         self.output_dir = Path(config.output_dir)
-        self.translator = DeepSeekTranslator()
-        self.parser = EpubParser()
-        self.generator = EpubGenerator()
-        self.converter = PDFConverter()
 
     def process(self, book_id: str, epub_path: str) -> bool:
-        """处理书籍：翻译并生成PDF"""
+        """处理书籍：调用ebook_translator进行翻译和PDF转换"""
         logger.info(f"开始翻译处理: {book_id}")
 
         try:
             self.db.update_book_status(book_id, "translating")
             self.db.add_log(book_id, "translating", "start", "开始翻译")
 
-            book_obj = self.db.get_all_books()[0]
             base_name = Path(epub_path).stem
+            book_output_dir = ensure_dir(self.output_dir / base_name)
 
-            book_output_dir = ensure_dir(self.output_dir / book_id)
+            cmd = [
+                sys.executable,
+                os.path.join(os.path.dirname(os.path.dirname(__file__)), "ebook_translator", "main.py"),
+                epub_path,
+                "--output-dir", str(book_output_dir)
+            ]
 
-            english_pdf = book_output_dir / f"英文原版-{base_name}.pdf"
-            bilingual_epub = book_output_dir / f"中英双语-{base_name}.epub"
-            chinese_epub = book_output_dir / f"中文版-{base_name}.epub"
-            bilingual_pdf = book_output_dir / f"中英双语-{base_name}.pdf"
-            chinese_pdf = book_output_dir / f"中文版-{base_name}.pdf"
+            logger.info(f"执行命令: {' '.join(cmd)}")
 
-            logger.info("步骤1: 解析EPUB...")
-            parsed_data = self.parser.parse(epub_path)
-            all_paragraphs = parsed_data.get('paragraphs', [])
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding='utf-8',
+                errors='replace',
+                bufsize=1
+            )
 
-            logger.info(f"步骤2: 翻译 {len(all_paragraphs)} 个段落...")
-            translated_paragraphs = self._translate_paragraphs(all_paragraphs)
+            for line in iter(process.stdout.readline, ''):
+                if line:
+                    print(line.rstrip())
+                if process.poll() is not None:
+                    break
 
-            logger.info("步骤3: 生成中英双语EPUB...")
-            if self.generator.generate_bilingual_epub(translated_paragraphs, str(bilingual_epub)):
-                logger.info(f"双语EPUB生成成功: {bilingual_epub}")
-            else:
-                logger.warning("双语EPUB生成失败")
+            process.wait()
 
-            logger.info("步骤4: 生成纯中文EPUB...")
-            if self.generator.generate_chinese_epub(translated_paragraphs, str(chinese_epub)):
-                logger.info(f"中文EPUB生成成功: {chinese_epub}")
-            else:
-                logger.warning("中文EPUB生成失败")
+            if process.returncode != 0:
+                logger.error(f"翻译失败，返回码: {process.returncode}")
+                self.db.update_book_status(book_id, "failed", f"返回码: {process.returncode}")
+                self.db.add_log(book_id, "translating", "error", f"返回码: {process.returncode}")
+                return False
 
-            logger.info("步骤5: 转换为PDF...")
-            if bilingual_epub.exists():
-                self.converter.convert_to_pdf(str(bilingual_epub), str(bilingual_pdf), is_bilingual=True)
-                logger.info(f"双语PDF生成成功: {bilingual_pdf}")
-
-            if chinese_epub.exists():
-                self.converter.convert_to_pdf(str(chinese_epub), str(chinese_pdf), is_bilingual=False)
-                logger.info(f"中文PDF生成成功: {chinese_pdf}")
+            base_name = Path(epub_path).stem
+            bilingual_epub = book_output_dir / "EPUB" / f"中英双语-{base_name}.epub"
+            chinese_epub = book_output_dir / "EPUB" / f"中文版本-{base_name}.epub"
+            english_epub = book_output_dir / "EPUB" / f"英文原版-{base_name}.epub"
+            bilingual_pdf = book_output_dir / "PDF" / f"中英双语-{base_name}.pdf"
+            chinese_pdf = book_output_dir / "PDF" / f"中文版本-{base_name}.pdf"
+            english_pdf = book_output_dir / "PDF" / f"英文原版-{base_name}.pdf"
 
             self.db.update_book_output(
                 book_id,
-                english_pdf=str(english_pdf),
-                bilingual_epub=str(bilingual_epub),
-                chinese_epub=str(chinese_epub),
-                bilingual_pdf=str(bilingual_pdf),
-                chinese_pdf=str(chinese_pdf)
+                english_pdf=str(english_pdf) if english_pdf.exists() else None,
+                bilingual_epub=str(bilingual_epub) if bilingual_epub.exists() else None,
+                chinese_epub=str(chinese_epub) if chinese_epub.exists() else None,
+                bilingual_pdf=str(bilingual_pdf) if bilingual_pdf.exists() else None,
+                chinese_pdf=str(chinese_pdf) if chinese_pdf.exists() else None
             )
 
             self.db.add_log(book_id, "translating", "success", "翻译完成")
@@ -90,33 +86,11 @@ class TranslationProcessor:
 
         except Exception as e:
             logger.error(f"翻译处理失败: {book_id}, 错误: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             self.db.update_book_status(book_id, "failed", str(e))
             self.db.add_log(book_id, "translating", "error", str(e))
             return False
-
-    def _translate_paragraphs(self, paragraphs: list) -> list:
-        """翻译段落"""
-        translated = []
-
-        for i, para in enumerate(paragraphs):
-            if i % 50 == 0:
-                logger.info(f"翻译进度: {i}/{len(paragraphs)}")
-
-            text = para.get('text', '')
-            if not text or len(text.strip()) < 5:
-                translated.append(para)
-                continue
-
-            try:
-                translated_text = self.translator.translate(text)
-                para['translated'] = translated_text
-            except Exception as e:
-                logger.warning(f"翻译段落 {i} 失败: {e}")
-                para['translated'] = text
-
-            translated.append(para)
-
-        return translated
 
 
 def translate_book(book_id: str, epub_path: str) -> bool:

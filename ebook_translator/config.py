@@ -205,7 +205,7 @@ EXTRACTION_CONFIG = {
     'exclude_patterns': [
         r'nav', r'menu', r'navbar',
         r'header', r'footer',
-        r'sidebar', r'toc', r'index',
+        r'sidebar', r'index',
         r'pagination', r'prev', r'next',
     ],
     # 内容标签（按优先级）
@@ -222,9 +222,9 @@ EXTRACTION_CONFIG = {
 TRANSLATION_OPTIMIZATION = {
     # 批量翻译配置
     'batch': {
-        'tier1_batch_size': 10,        # 短文本批量大小
-        'tier2_batch_size': 5,         # 普通文本批量大小
-        'max_workers': 3,              # 最大并发数（降低避免限流）
+        'tier1_batch_size': 15,        # 短文本批量大小（保守优化）
+        'tier2_batch_size': 8,         # 普通文本批量大小（保守优化）
+        'max_workers': 5,              # 最大并发数（保守优化）
     },
     # 质量检查配置
     'quality_check': {
