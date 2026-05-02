@@ -36,4 +36,16 @@ pytest_cache/
 test*
 *.pdf
 *.epub
-file/
+
+# Database
+data/books.db
+
+# Logs
+logs/
+*.log
+
+# Cache
+translation_cache.json
+
+# Output
+output/
