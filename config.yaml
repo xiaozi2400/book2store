@@ -23,14 +23,157 @@ sku:
 
 # AI配置
 ai:
-  provider: "deepseek"
-  model: "deepseek-chat"
+  provider: "minimax"
+  model: "MiniMax-M2.7"
   max_tokens: 4096
   temperature: 0.7
   retry_times: 3
   retry_delay: 5
 
-# 精简版生成配置
+# MiniMax AI配置
+minimax:
+  enabled: true
+  provider: "minimax"
+  model: "MiniMax-M2.7"  # MiniMax 2.7 模型
+  api_key: ""  # 请设置环境变量 MINIMAX_API_KEY
+  api_url: "https://api.minimax.io/v1/text/chatcompletion_v2"
+  max_tokens: 4096
+  temperature: 0.7
+  retry_times: 3
+
+# 精简版适合度评估配置
+suitability_eval:
+  version: "1.1"
+  # 前置检查：不符合条件的书籍直接跳过
+  precheck:
+    min_pages: 150
+    exclude_types:
+      - "小说"
+      - "诗歌"
+      - "散文"
+      - "回忆录"
+      - "自传"
+      - "故事集"
+      - "文集"
+      - "Novel"
+      - "Poetry"
+      - "Essay"
+      - "Memoir"
+      - "Fiction"
+      - "Anthology"
+      - "Autobiography"
+  # 评估标准
+  criteria:
+    - id: "q1_purpose"
+      question: "读者阅读目的是学会怎么做，而非体验阅读过程"
+      weight: 3
+      keywords_true:
+        - "如何"
+        - "步骤"
+        - "指南"
+        - "手册"
+        - "实战"
+        - "教程"
+        - "入门"
+        - "精通"
+        - "Blueprint"
+        - "Workshop"
+        - "for Dummies"
+        - "Cookbook"
+        - "Handbook"
+        - "Guide"
+        - "How-to"
+        - "Step-by-step"
+        - "101"
+        - "Mastering"
+      keywords_false:
+        - "回忆录"
+        - "自传"
+        - "小说"
+        - "散文"
+        - "诗歌"
+        - "故事集"
+        - "文集"
+        - "Memoir"
+        - "Novel"
+        - "Poetry"
+        - "Fiction"
+        - "Anthology"
+        - "Autobiography"
+    - id: "q2_extractable"
+      question: "核心价值可以提取、概括、结构化而不失真"
+      weight: 3
+      keywords_true:
+        - "框架"
+        - "模型"
+        - "方法论"
+        - "原则"
+        - "模式"
+        - "清单"
+        - "模板"
+        - "策略"
+        - "系统"
+        - "Framework"
+        - "Methodology"
+        - "Principles"
+        - "Patterns"
+        - "Checklist"
+        - "Template"
+        - "Strategy"
+        - "System"
+        - "Process"
+        - "Best Practice"
+      keywords_false:
+        - "纯叙事"
+        - "个人感悟"
+        - "无结构"
+        - "漫谈"
+        - "Narrative Only"
+        - "Personal Reflection"
+        - "Unstructured"
+    - id: "q3_executable"
+      question: "读者读完精简版后能够独立执行核心任务"
+      weight: 4
+      keywords_true:
+        - "代码"
+        - "实现"
+        - "配置"
+        - "部署"
+        - "操作"
+        - "练习"
+        - "实验"
+        - "项目"
+        - "实战"
+        - "动手"
+        - "Code"
+        - "Implementation"
+        - "Configuration"
+        - "Deployment"
+        - "Exercise"
+        - "Lab"
+        - "Project"
+        - "Task"
+        - "Recipe"
+        - "How-to"
+      keywords_false:
+        - "纯理论"
+        - "原理探讨"
+        - "概念介绍"
+        - "思想随笔"
+        - "Theoretical Only"
+        - "Concept Introduction"
+        - "Philosophy"
+  # 决策阈值
+  decision:
+    excellent_threshold: 8
+    good_threshold: 6
+    caution_threshold: 4
+    excellent_label: "非常适合"
+    good_label: "适合"
+    caution_label: "谨慎适合"
+    poor_label: "不适合"
+
+# 图片配置
 summarizer:
   core_insight_length: "300-500"
   chapter_summary_length: "150-200"

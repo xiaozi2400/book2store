@@ -8,8 +8,25 @@ import json
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
+# MiniMax API 配置
+# 请设置环境变量 MINIMAX_API_KEY 为您的 API 密钥
+MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
+MINIMAX_API_URL = "https://api.minimax.io/v1/text/chatcompletion_v2"
+MINIMAX_MODEL = "MiniMax-M2.7"
+
+
+
+# 翻译器选择配置
+# 可选值: "deepseek" 或 "minimax"
+# 也可以通过环境变量 TRANSLATION_PROVIDER 设置
+TRANSLATION_PROVIDER = "deepseek"
+
 # 翻译配置
-TRANSLATION_MODEL = "deepseek-chat"
+# 根据 provider 自动选择模型
+if TRANSLATION_PROVIDER == "minimax":
+    TRANSLATION_MODEL = MINIMAX_MODEL
+else:
+    TRANSLATION_MODEL = "deepseek-chat"
 MAX_TOKENS = 2048
 TEMPERATURE = 0.7
 

@@ -1,14 +1,29 @@
 import os
 import sys
+import io
 import signal
 import time
 import argparse
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 from translator.epub_parser import EPUBParser
-from translator.deepseek_api import DeepSeekTranslator
 from translator.cache import CacheManager
 from translator.epub_generator import EPUBGenerator
 from translator.pdf_converter import PDFConverter
-from config import PDF_CONFIG
+from config import PDF_CONFIG, TRANSLATION_PROVIDER
+
+def get_translator():
+    """根据配置选择翻译器"""
+    if TRANSLATION_PROVIDER == "minimax":
+        from translator.minimax_api import MiniMaxTranslator
+        print(f"[翻译器] 使用 MiniMax ({TRANSLATION_PROVIDER})")
+        return MiniMaxTranslator()
+    else:
+        from translator.deepseek_api import DeepSeekTranslator
+        print(f"[翻译器] 使用 DeepSeek ({TRANSLATION_PROVIDER})")
+        return DeepSeekTranslator()
 
 # 全局变量，用于标记是否收到中断信号
 interrupted = False
@@ -60,7 +75,7 @@ def main():
     print("=" * 60)
     
     parser = EPUBParser(args.input_epub)
-    translator = DeepSeekTranslator()
+    translator = get_translator()
     cache = CacheManager()
     converter = PDFConverter()
     
@@ -137,6 +152,7 @@ def main():
             if cached and cached.strip():
                 cached_results.append({
                     'id': para['id'],
+                    'trans_id': para.get('trans_id'),
                     'original': para['text'],
                     'translated': cached,
                     'html': para['html'],
@@ -189,15 +205,24 @@ def main():
     # 获取文件名
     base_name = os.path.basename(args.input_epub)
     name_without_ext = os.path.splitext(base_name)[0]
-    
+
+    # 创建子目录
+    pdf_dir = os.path.join(args.output_dir, "PDF")
+    epub_dir = os.path.join(args.output_dir, "EPUB")
+    os.makedirs(pdf_dir, exist_ok=True)
+    os.makedirs(epub_dir, exist_ok=True)
+
     # 生成输出文件路径
-    bilingual_epub = os.path.join(args.output_dir, f"中英双语-{base_name}")
-    chinese_epub = os.path.join(args.output_dir, f"中文版本-{base_name}")
-    bilingual_pdf = os.path.join(args.output_dir, f"中英双语-{name_without_ext}.pdf")
-    chinese_pdf = os.path.join(args.output_dir, f"中文版本-{name_without_ext}.pdf")
-    
+    bilingual_epub = os.path.join(epub_dir, f"中英双语-{name_without_ext}.epub")
+    chinese_epub = os.path.join(epub_dir, f"中文版本-{name_without_ext}.epub")
+    bilingual_pdf = os.path.join(pdf_dir, f"中英双语-{name_without_ext}.pdf")
+    chinese_pdf = os.path.join(pdf_dir, f"中文版本-{name_without_ext}.pdf")
+    english_epub = os.path.join(epub_dir, f"英文原版-{name_without_ext}.epub")
+
     # 打印输出路径
     print(f"\n输出目录：{args.output_dir}")
+    print(f"PDF 目录：{pdf_dir}")
+    print(f"EPUB 目录：{epub_dir}")
     print(f"双语 EPUB：{bilingual_epub}")
     print(f"中文 EPUB：{chinese_epub}")
     print(f"双语 PDF：{bilingual_pdf}")
@@ -221,7 +246,16 @@ def main():
         print(f"✓ 纯中文 EPUB 生成成功")
     else:
         print("✗ 纯中文 EPUB 生成失败")
-    
+
+    # 复制英文原版 EPUB
+    print(f"\n复制英文原版 EPUB...")
+    import shutil
+    try:
+        shutil.copy2(args.input_epub, english_epub)
+        print(f"✓ 英文原版 EPUB 生成成功")
+    except Exception as e:
+        print(f"✗ 英文原版 EPUB 生成失败: {e}")
+
     phase_times["生成 EPUB"] = time.time() - phase_start
     
     # 转换为 PDF
@@ -241,18 +275,17 @@ def main():
             print(f"✓ 中文 PDF 生成成功")
         else:
             print(f"✗ 中文 PDF 生成失败")
-    
-    # 保存完整中文内容供精简版使用
-    chinese_text_file = os.path.join(args.output_dir, f"中文内容-{name_without_ext}.txt")
-    print(f"\n保存完整中文内容...")
-    with open(chinese_text_file, "w", encoding="utf-8") as f:
-        for para in all_translated:
-            if para.get('translated'):
-                f.write(para['translated'] + "\n\n")
-    print(f"✓ 中文内容已保存: {chinese_text_file}")
-    
-    phase_times["转换 PDF"] = time.time() - phase_start
-    
+
+    if os.path.exists(english_epub):
+        english_pdf = os.path.join(pdf_dir, f"英文原版-{name_without_ext}.pdf")
+        print(f"转换英文原版 EPUB...")
+        if converter.convert_to_pdf(english_epub, english_pdf, is_bilingual=False):
+            print(f"✓ 英文原版 PDF 生成成功")
+        else:
+            print(f"✗ 英文原版 PDF 生成失败")
+
+    phase_times["PDF 转换"] = time.time() - phase_start
+
     # 总耗时
     total_time = time.time() - start_time
     

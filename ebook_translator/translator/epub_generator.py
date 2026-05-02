@@ -7,20 +7,10 @@ import tempfile
 import zipfile
 
 def normalize_text(text):
-    """标准化文本：去除多余空格，统一标点符号"""
+    """标准化文本：去除多余空格"""
     if not text:
         return ""
-    # 去除多余空格
     text = ' '.join(text.split()).strip()
-    # 统一引号：将智能引号转换为普通引号
-    text = text.replace('\u2018', "'").replace('\u2019', "'")  # 左右单引号
-    text = text.replace('\u201c', '"').replace('\u201d', '"')  # 左右双引号
-    text = text.replace('\u201a', ",").replace('\u201e', ",,")  # 低单双引号
-    text = text.replace('\u2032', "'").replace('\u2033', '"')  # 撇号和双撇号
-    # 统一破折号
-    text = text.replace('\u2014', '--').replace('\u2013', '-')
-    # 统一省略号
-    text = text.replace('\u2026', '...')
     return text
 
 # 专业电子书翻译 CSS 样式
@@ -322,127 +312,211 @@ class EPUBGenerator:
         self.config = config or {}
 
     def _create_translation_map(self, translated_paragraphs):
-        """创建翻译映射 - 使用trans_id作为键"""
+        """创建翻译映射 - 使用标准化原文作为键"""
         translation_map = {}
 
         for para in translated_paragraphs:
-            trans_id = para.get('trans_id')
-            if trans_id and para.get('translated'):
-                translation_map[trans_id] = {
-                    'original': para['original'],
-                    'translated': para['translated'],
+            original = para.get('original')
+            translated = para.get('translated')
+            if original and translated:
+                normalized = normalize_text(original)
+                translation_map[normalized] = {
+                    'original': original,
+                    'translated': translated,
                     'html': para.get('html', ''),
                     'is_duplicate': para.get('is_duplicate', False)
                 }
 
         return translation_map
 
+    def _extract_non_link_text(self, tag):
+        """提取标签中未被处理的纯文本部分"""
+        from bs4 import NavigableString
+        parts = []
+        for child in tag.children:
+            if isinstance(child, NavigableString):
+                t = str(child).strip()
+                if t:
+                    parts.append(t)
+            elif hasattr(child, 'name') and not child.get('data-original'):
+                t = child.get_text(strip=True)
+                if t:
+                    parts.append(t)
+        return ' '.join(parts)
+
+    def _replace_non_link_text(self, tag, translation):
+        """替换标签中非 <a> 标签的文本为翻译内容"""
+        from bs4 import NavigableString
+        
+        # 移除所有非 <a> 标签的 NavigableString
+        to_remove = []
+        for child in tag.children:
+            if isinstance(child, NavigableString):
+                to_remove.append(child)
+        
+        for child in to_remove:
+            child.extract()
+        
+        # 在第一个子元素前插入翻译文本
+        first = next(tag.children, None)
+        if first:
+            first.insert_before(translation)
+        else:
+            tag.string = translation
+
     def _process_html_content(self, content, translation_map, mode, is_nav=False):
-        """统一处理HTML内容 - 使用data-trans-id精确匹配
+        """统一处理HTML内容 - 块级标签优先，避免inline标签干扰
 
         Args:
             content: HTML内容
-            translation_map: 翻译映射（使用trans_id作为键）
+            translation_map: 翻译映射（使用标准化原文作为键）
             mode: 翻译模式 ('bilingual' 或 'chinese')
             is_nav: 是否为导航文件，导航文件需要保留链接
         """
-        import hashlib
-        import os
-
         soup = BeautifulSoup(content, 'lxml')
 
-        # 统计变量
-        total_tags = 0
-        matched_tags = 0
+        total_matched = 0
+        total_checked = 0
         unmatched_samples = []
 
-        # 定义需要处理的标签
-        tags_to_process = ['a', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd', 'div',
-                          'figcaption', 'td', 'th', 'caption',
-                          'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span']
+        # 块级标签（先处理，它们的文本在inline标签未处理前是完整的原文）
+        block_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd',
+                      'figcaption', 'td', 'th', 'caption']
 
-        processed_count = 0
-
-        # 应用翻译
-        for tag_name in tags_to_process:
+        # 处理块级标签
+        for tag_name in block_tags:
             for tag in soup.find_all(tag_name):
-                # 跳过已处理的标签
                 if tag.find(class_='translated'):
                     continue
 
-                # 跳过包含 <a> 子标签的非 <a> 标签
-                # 这些标签的翻译会由内部的 <a> 标签处理
-                if tag_name != 'a' and tag.find('a'):
-                    continue
-
-                # 获取文本
                 text = tag.get_text(strip=True)
                 normalized_text = normalize_text(text)
                 if not normalized_text or len(normalized_text) <= 1:
                     continue
 
-                total_tags += 1
+                total_checked += 1
+                para_data = translation_map.get(normalized_text)
 
-                # 从 translation_map 中查找匹配的翻译
-                # 通过标准化后的文本精确匹配
-                translation = None
-                matched_trans_id = None
-                for trans_id, para_data in translation_map.items():
-                    if normalize_text(para_data['original']) == normalized_text:
-                        translation = para_data['translated']
-                        matched_trans_id = trans_id
-                        break
-
-                if not translation:
+                if not para_data:
                     if len(unmatched_samples) < 10:
                         unmatched_samples.append(text[:100])
                     continue
 
-                matched_tags += 1
+                translation = para_data['translated']
+                total_matched += 1
 
-                # 保存原文用于显示
                 tag['data-original'] = text
 
-                # 应用翻译
-                if tag.name == 'a' and tag.has_attr('href'):
-                    # <a> 标签：保留 href
-                    if mode == 'bilingual':
-                        # 双语：原文 + 翻译
-                        tag.clear()
-                        tag.append(text)
-                        translated_span = soup.new_tag('span')
-                        translated_span['class'] = 'translated'
-                        translated_span.string = translation
-                        tag.append(translated_span)
-                    else:
-                        # 纯中文：仅翻译
-                        tag.clear()
-                        tag.string = translation
+                if mode == 'bilingual':
+                    tag.clear()
+                    tag.append(text)
+                    span = soup.new_tag('span')
+                    span['class'] = 'translated'
+                    span.string = translation
+                    tag.append(' / ')
+                    tag.append(span)
                 else:
-                    # 其他标签
+                    tag.clear()
+                    tag.string = translation
+
+        # 处理 <div> 标签（可能包含子块级元素，更复杂）
+        for tag in soup.find_all('div'):
+            if tag.find(class_='translated'):
+                continue
+
+            text = tag.get_text(strip=True)
+            normalized_text = normalize_text(text)
+            if not normalized_text or len(normalized_text) <= 1:
+                continue
+
+            total_checked += 1
+            para_data = translation_map.get(normalized_text)
+
+            if not para_data:
+                if len(unmatched_samples) < 10:
+                    unmatched_samples.append(text[:100])
+                continue
+
+            translation = para_data['translated']
+            total_matched += 1
+
+            tag['data-original'] = text
+
+            if mode == 'bilingual':
+                tag.clear()
+                tag.append(text)
+                span = soup.new_tag('span')
+                span['class'] = 'translated'
+                span.string = translation
+                tag.append(' / ')
+                tag.append(span)
+            else:
+                tag.clear()
+                tag.string = translation
+
+        # 处理剩余的 inline 标签（不在已处理块级标签内的独立inline标签）
+        inline_tags = ['a', 'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span']
+
+        for tag_name in inline_tags:
+            for tag in soup.find_all(tag_name):
+                if tag.find(class_='translated'):
+                    continue
+
+                # 如果父级标签已经被处理过（有data-original），跳过
+                parent = tag.parent
+                if parent and parent.get('data-original'):
+                    continue
+
+                text = tag.get_text(strip=True)
+                normalized_text = normalize_text(text)
+                if not normalized_text or len(normalized_text) <= 1:
+                    continue
+
+                total_checked += 1
+                para_data = translation_map.get(normalized_text)
+
+                if not para_data:
+                    if len(unmatched_samples) < 10:
+                        unmatched_samples.append(text[:100])
+                    continue
+
+                translation = para_data['translated']
+                total_matched += 1
+
+                tag['data-original'] = text
+
+                if tag.name == 'a' and tag.has_attr('href'):
                     if mode == 'bilingual':
-                        # 双语：原文 + <br/> + 翻译
                         tag.clear()
                         tag.append(text)
-                        tag.append(soup.new_tag('br'))
-                        translated_span = soup.new_tag('span')
-                        translated_span['class'] = 'translated'
-                        translated_span.string = translation
-                        tag.append(translated_span)
+                        span = soup.new_tag('span')
+                        span['class'] = 'translated'
+                        span.string = translation
+                        tag.append(' / ')
+                        tag.append(span)
                     else:
-                        # 纯中文：仅翻译
                         tag.clear()
                         tag.string = translation
+                elif mode == 'bilingual':
+                    tag.clear()
+                    tag.append(text)
+                    span = soup.new_tag('span')
+                    span['class'] = 'translated'
+                    span.string = translation
+                    tag.append(' / ')
+                    tag.append(span)
+                else:
+                    tag.clear()
+                    tag.string = translation
 
-                processed_count += 1
-
-        print(f"[{mode}] 标签统计: 总数={total_tags}, 匹配={matched_tags}, 未匹配={total_tags - matched_tags}")
+        # 统计日志
         if unmatched_samples:
-            print(f"[{mode}] 未匹配样本（前5个）:")
-            for i, sample in enumerate(unmatched_samples[:5]):
-                print(f"  {i+1}. {sample[:80]}...")
+            print(f"[{mode}] Total tags: {total_checked}, Matched: {total_matched}, "
+                  f"Unmatched: {total_checked - total_matched} "
+                  f"({(total_matched / total_checked * 100):.1f}%)")
+            print(f"[{mode}] Unmatched samples: {unmatched_samples[:3]}")
 
-        return str(soup).encode('utf-8')
+        return str(soup)
 
     def generate_bilingual_epub(self, translated_paragraphs, output_path):
         """生成中英对照 EPUB"""
@@ -469,7 +543,7 @@ class EPUBGenerator:
                                 is_nav = 'nav' in file.lower()
                                 processed_content = self._process_html_content(content, translation_map, 'bilingual', is_nav)
                                 
-                                with open(file_path, 'wb') as f:
+                                with open(file_path, 'w', encoding='utf-8') as f:
                                     f.write(processed_content)
                             except Exception as e:
                                 print(f"处理文件 {file} 时出错: {e}")
@@ -596,7 +670,7 @@ div {
                                 is_nav = 'nav' in file.lower()
                                 processed_content = self._process_html_content(content, translation_map, 'chinese', is_nav)
                                 
-                                with open(file_path, 'wb') as f:
+                                with open(file_path, 'w', encoding='utf-8') as f:
                                     f.write(processed_content)
                             except Exception as e:
                                 print(f"处理文件 {file} 时出错: {e}")

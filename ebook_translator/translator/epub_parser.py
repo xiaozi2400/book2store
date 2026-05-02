@@ -143,6 +143,10 @@ class EPUBParser:
                     # 生成唯一 ID
                     para_id = f"{item_id}_{global_idx}"
                     global_idx += 1
+
+                    # 生成翻译用唯一标识（基于文本内容的hash）
+                    import hashlib
+                    trans_id = hashlib.md5(f"{item_id}_{text}".encode('utf-8')).hexdigest()[:12]
                     
                     # Tier 1 去重处理
                     is_duplicate = False
@@ -158,6 +162,7 @@ class EPUBParser:
                     
                     paragraphs.append({
                         'id': para_id,
+                        'trans_id': trans_id,
                         'text': text,
                         'html': str(tag),
                         'tag': tag_name,

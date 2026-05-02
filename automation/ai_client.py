@@ -1,5 +1,5 @@
 """
-AI客户端封装 - 复用现有DeepSeek翻译器
+AI客户端封装 - 支持 DeepSeek 和 MiniMax
 """
 import os
 import sys
@@ -8,15 +8,25 @@ from typing import Optional, Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ebook_translator.translator.deepseek_api import DeepSeekTranslator
+from ebook_translator.translator.minimax_api import MiniMaxTranslator
 from .config import config
 
 
 class AIClient:
     """AI客户端封装"""
 
-    def __init__(self):
-        self.translator = DeepSeekTranslator()
+    def __init__(self, provider: str = None):
         self.ai_config = config.ai_config
+        self.minimax_config = config.minimax_config
+
+        self.provider = provider or self.ai_config.get("provider", "deepseek")
+
+        if self.provider == "minimax" and self.minimax_config.get("enabled"):
+            self.translator = MiniMaxTranslator()
+            print(f"[AI Client] 使用 MiniMax 模型: {self.minimax_config.get('model')}")
+        else:
+            self.translator = DeepSeekTranslator()
+            print(f"[AI Client] 使用 DeepSeek 模型: {self.ai_config.get('model')}")
 
     def translate(self, text: str, max_retries: int = None) -> str:
         """翻译文本"""

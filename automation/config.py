@@ -58,6 +58,16 @@ class Config:
                 "retry_times": 3,
                 "retry_delay": 5
             },
+            "minimax": {
+                "enabled": True,
+                "provider": "minimax",
+                "model": "MiniMax-2.7-Globe",
+                "api_key": "",
+                "api_url": "https://api.minimax.chat/v1/chat/completions",
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "retry_times": 3
+            },
             "image": {
                 "max_width": 1200,
                 "max_height": 1600,
@@ -129,6 +139,11 @@ class Config:
         return self.get("ai", {})
 
     @property
+    def minimax_config(self) -> Dict:
+        """MiniMax AI配置"""
+        return self.get("minimax", {})
+
+    @property
     def image_config(self) -> Dict:
         """图片配置"""
         return self.get("image", {})
@@ -153,6 +168,10 @@ class Config:
     def summarizer_config(self) -> Dict:
         """精简版生成配置"""
         return self.get("summarizer", {})
+
+    def suitability_eval_config(self) -> Dict:
+        """精简版适合度评估配置"""
+        return self.get("suitability_eval", {})
 
     def get_sku_includes(self, sku_name: str) -> List[str]:
         """获取SKU包含内容"""
