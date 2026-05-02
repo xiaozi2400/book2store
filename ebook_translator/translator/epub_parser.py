@@ -124,8 +124,40 @@ class EPUBParser:
                         self.extraction_stats['excluded_tags'] += 1
                         continue
                     
-                    # 排除包含块级子元素的标签（避免重复）
+                    # 排除包含块级子元素的标签（避免重复），但提取其中裸文本节点
                     if has_block_level_children(tag):
+                        from bs4 import NavigableString
+                        for child in tag.children:
+                            if isinstance(child, NavigableString):
+                                child_text = str(child).strip()
+                                child_text = normalize_text(child_text)
+                                if child_text and len(child_text) >= min_length:
+                                    tier = get_text_tier(child_text)
+                                    self.extraction_stats['by_tier'][tier] += 1
+                                    para_id = f"{item_id}_{global_idx}"
+                                    global_idx += 1
+                                    import hashlib
+                                    trans_id = hashlib.md5(f"{item_id}_{child_text}".encode('utf-8')).hexdigest()[:12]
+                                    is_duplicate = False
+                                    original_id = None
+                                    if tier == 'tier1_short_repeatable' and TIER_CONFIG[tier]['deduplicate']:
+                                        if child_text in tier1_texts:
+                                            is_duplicate = True
+                                            original_id = tier1_texts[child_text]
+                                            self.extraction_stats['duplicates'] += 1
+                                        else:
+                                            tier1_texts[child_text] = para_id
+                                    paragraphs.append({
+                                        'id': para_id,
+                                        'trans_id': trans_id,
+                                        'text': child_text,
+                                        'html': child_text,
+                                        'tag': tag_name,
+                                        'tier': tier,
+                                        'is_duplicate': is_duplicate,
+                                        'original_id': original_id,
+                                        'source_file': item.get_name()
+                                    })
                         continue
                     
                     # 获取文本

@@ -7,9 +7,13 @@ import tempfile
 import zipfile
 
 def normalize_text(text):
-    """标准化文本：去除多余空格"""
+    """标准化文本：去除多余空格，统一Unicode特殊字符"""
     if not text:
         return ""
+    text = text.replace('\u2014', '-').replace('\u2013', '-')
+    text = text.replace('\u2018', "'").replace('\u2019', "'")
+    text = text.replace('\u201c', '"').replace('\u201d', '"')
+    text = text.replace('\u2026', '...')
     text = ' '.join(text.split()).strip()
     return text
 
@@ -327,6 +331,21 @@ class EPUBGenerator:
                     'is_duplicate': para.get('is_duplicate', False)
                 }
 
+        admonition_labels = {
+            'Note': '注意', 'NOTE': '注意', 'note': '注意',
+            'Tip': '提示', 'TIP': '提示', 'tip': '提示',
+            'Warning': '警告', 'WARNING': '警告', 'warning': '警告',
+            'Caution': '注意', 'CAUTION': '注意', 'caution': '注意',
+            'Important': '重要', 'IMPORTANT': '重要', 'important': '重要',
+        }
+        for en, zh in admonition_labels.items():
+            normalized = normalize_text(en)
+            if normalized not in translation_map:
+                translation_map[normalized] = {
+                    'original': en, 'translated': zh,
+                    'html': en, 'is_duplicate': False
+                }
+
         return translation_map
 
     def _extract_non_link_text(self, tag):
@@ -379,9 +398,21 @@ class EPUBGenerator:
         total_checked = 0
         unmatched_samples = []
 
-        # 块级标签（先处理，它们的文本在inline标签未处理前是完整的原文）
-        block_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd',
+        # 块级标签（先处理，blockquote最优先避免子元素先被处理）
+        block_tags = ['blockquote', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd',
                       'figcaption', 'td', 'th', 'caption']
+
+        # 回退匹配列表
+        fallback_list = []
+        agg_sigs = {}
+        for k, v in translation_map.items():
+            orig = v.get('original', '')
+            if orig:
+                fallback_list.append((normalize_text(orig)[:80], v))
+                if len(orig) > 50:
+                    sig = ''.join(ch.lower() for ch in orig[:200] if ch.isalnum())
+                    agg_sigs[sig] = v
+        translation_list = fallback_list
 
         # 处理块级标签
         for tag_name in block_tags:
@@ -397,7 +428,43 @@ class EPUBGenerator:
                 total_checked += 1
                 para_data = translation_map.get(normalized_text)
 
+                if not para_data and len(text) > 50:
+                    text_prefix = normalized_text[:80]
+                    for orig_prefix, entry in translation_list:
+                        if text_prefix == orig_prefix:
+                            para_data = entry
+                            break
+                    if not para_data and agg_sigs:
+                        sig = ''.join(ch.lower() for ch in text[:200] if ch.isalnum())
+                        para_data = agg_sigs.get(sig)
+
                 if not para_data:
+                    if tag_name == 'blockquote':
+                        from bs4 import NavigableString
+                        ns_matched = False
+                        for child in list(tag.children):
+                            if isinstance(child, NavigableString):
+                                child_text = str(child).strip()
+                                child_norm = normalize_text(child_text)
+                                if not child_norm or len(child_norm) <= 1:
+                                    continue
+                                child_data = translation_map.get(child_norm)
+                                if not child_data and len(child_text) > 50:
+                                    child_prefix = child_norm[:80]
+                                    for orig_prefix, entry in translation_list:
+                                        if child_prefix == orig_prefix:
+                                            child_data = entry
+                                            break
+                                    if not child_data and agg_sigs:
+                                        sig = ''.join(ch.lower() for ch in child_text[:200] if ch.isalnum())
+                                        child_data = agg_sigs.get(sig)
+                                if child_data:
+                                    child.replace_with(child_data['translated'])
+                                    total_matched += 1
+                                    ns_matched = True
+                        if ns_matched:
+                            tag['data-original'] = text
+                            continue
                     if len(unmatched_samples) < 10:
                         unmatched_samples.append(text[:100])
                     continue
@@ -424,6 +491,9 @@ class EPUBGenerator:
             if tag.find(class_='translated'):
                 continue
 
+            if any(hasattr(c, 'get') and c.get('data-original') for c in tag.children):
+                continue
+
             text = tag.get_text(strip=True)
             normalized_text = normalize_text(text)
             if not normalized_text or len(normalized_text) <= 1:
@@ -431,6 +501,16 @@ class EPUBGenerator:
 
             total_checked += 1
             para_data = translation_map.get(normalized_text)
+
+            if not para_data and len(text) > 50:
+                text_prefix = normalized_text[:80]
+                for orig_prefix, entry in translation_list:
+                    if text_prefix == orig_prefix:
+                        para_data = entry
+                        break
+                if not para_data and agg_sigs:
+                    sig = ''.join(ch.lower() for ch in text[:200] if ch.isalnum())
+                    para_data = agg_sigs.get(sig)
 
             if not para_data:
                 if len(unmatched_samples) < 10:
