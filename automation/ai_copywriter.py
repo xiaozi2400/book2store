@@ -37,9 +37,12 @@ class AICopywriter:
                 }
 
             xianyu_result = self.ai.generate_xianyu_listing(book_info)
+            logger.info(f"闲鱼文案生成结果: {xianyu_result}")
 
             xiaohongshu_result = self.ai.generate_xiaohongshu_note(book_info)
+            logger.info(f"小红书笔记生成结果: {xiaohongshu_result[:100] if xiaohongshu_result else 'None'}...")
 
+            logger.info(f"更新数据库: book_id={book_id}")
             self.db.update_book_output(
                 book_id,
                 xianyu_title=xianyu_result.get('title'),
@@ -47,6 +50,7 @@ class AICopywriter:
                 xianyu_tags=','.join(xianyu_result.get('tags', [])),
                 xiaohongshu_note=xiaohongshu_result
             )
+            logger.info(f"数据库更新完成")
 
             self.db.add_log(book_id, "copywriting", "success", "文案生成完成")
 

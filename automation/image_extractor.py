@@ -26,33 +26,24 @@ class ImageExtractor:
         self.image_config = config.image_config
 
     def extract(self, book_id: str, epub_path: str, pdf_path: str = None) -> bool:
-        """提取封面和目录预览图"""
-        logger.info(f"开始提取图片: {book_id}")
+        """提取封面和目录预览图 - 已禁用图片提取功能"""
+        logger.info(f"图片提取已禁用: {book_id}")
 
         try:
             self.db.update_book_status(book_id, "extracting")
-            self.db.add_log(book_id, "extracting", "start", "开始提取图片")
-
-            book_output_dir = ensure_dir(self.output_dir / book_id)
-
-            cover_path = self._extract_cover(epub_path, book_output_dir)
-
-            toc_preview_path = None
-            if pdf_path and os.path.exists(pdf_path):
-                toc_preview_path = self._extract_toc_preview(pdf_path, book_output_dir)
+            self.db.add_log(book_id, "extracting", "skip", "图片提取已禁用")
 
             self.db.update_book_output(
                 book_id,
-                cover_image=cover_path,
-                toc_preview_image=toc_preview_path
+                cover_image=None,
+                toc_preview_image=None
             )
 
-            self.db.add_log(book_id, "extracting", "success", "图片提取完成")
-            logger.info(f"图片提取完成: {book_id}")
+            logger.info(f"图片提取已跳过: {book_id}")
             return True
 
         except Exception as e:
-            logger.error(f"提取图片失败: {book_id}, 错误: {e}")
+            logger.error(f"图片提取失败: {book_id}, 错误: {e}")
             self.db.add_log(book_id, "extracting", "error", str(e))
             return False
 

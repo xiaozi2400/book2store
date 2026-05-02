@@ -117,13 +117,15 @@ def process(
 
     book_obj = None
     for b in book:
-        if b.id == book_id or b.filename.startswith(book_id):
+        if b.id == book_id or b.id.startswith(book_id) or b.filename.startswith(book_id):
             book_obj = b
             break
 
     if not book_obj:
         console.print(f"[bold red]未找到书籍: {book_id}[/bold red]")
         raise typer.Exit(1)
+
+    db.create_book_output(book_obj.id)
 
     input_path = Path(config.input_dir) / book_obj.filename
 
@@ -145,7 +147,8 @@ def process(
         generate_summary(book_id, str(input_path))
 
         progress.update(task, description="提取图片...")
-        pdf_path = Path(config.output_dir) / book_id / "中英双语-{}.pdf".format(Path(input_path).stem)
+        base_name = Path(input_path).stem
+        pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
         extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
 
         progress.update(task, description="生成文案...")
@@ -224,6 +227,82 @@ def generate_list(
     list_path = publisher.generate_publish_list(book_id)
 
     console.print(f"[bold green]发布清单已生成: {list_path}[/bold green]")
+
+
+@app.command()
+def auto(
+    skip_publish: bool = typer.Option(False, help="跳过发布步骤")
+):
+    """一键处理：扫描输入目录，自动处理所有新书籍"""
+    from automation.directory_scanner import scan_input_directory
+    from automation.translation_processor import translate_book
+    from automation.image_extractor import extract_images
+    from automation.ai_copywriter import generate_copywriting
+    from automation.content_summarizer import generate_summary
+    from automation.xianyu_publisher import publish_to_xianyu
+    import time
+
+    console.print("[bold blue]开始一键处理...[/bold blue]\n")
+
+    books = scan_input_directory()
+
+    if not books:
+        console.print("[yellow]未发现新书籍[/yellow]")
+        return
+
+    console.print(f"[bold]发现 {len(books)} 本新书籍，开始处理...[/bold]\n")
+
+    db = DatabaseManager()
+    success_count = 0
+    fail_count = 0
+
+    for i, book in enumerate(books, 1):
+        title = book.get('title', 'Unknown')
+        filename = book.get('filename', '')
+        console.print(f"\n[bold cyan]处理第 {i}/{len(books)} 本: {title}[/bold cyan]")
+
+        book_id = db.create_book(filename, title, book.get('author', '')).id
+
+        start_time = time.time()
+        db.update_book_status(book_id, "processing")
+
+        try:
+            input_path = Path(config.input_dir) / filename
+            db.create_book_output(book_id)
+
+            console.print(f"[dim]翻译并生成PDF...[/dim]")
+            translate_book(book_id, str(input_path))
+
+            console.print(f"[dim]生成精简版...[/dim]")
+            generate_summary(book_id, str(input_path))
+
+            console.print(f"[dim]提取图片...[/dim]")
+            base_name = Path(input_path).stem
+            pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
+            extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
+
+            console.print(f"[dim]生成文案...[/dim]")
+            book_obj = db.get_book_by_id(book_id)
+            generate_copywriting(book_id, {'title': book_obj.title, 'author': book_obj.author})
+
+            if not skip_publish:
+                console.print(f"[dim]发布到闲鱼...[/dim]")
+                publish_to_xianyu(book_id)
+
+            elapsed = time.time() - start_time
+            db.update_book_status(book_id, "completed")
+            console.print(f"[bold green]✓ {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
+            success_count += 1
+
+        except Exception as e:
+            db.update_book_status(book_id, "failed", str(e))
+            console.print(f"[bold red]✗ {title} 处理失败: {e}[/bold red]")
+            fail_count += 1
+
+    console.print(f"\n[bold]===== 处理完成 =====[/bold]")
+    console.print(f"[green]成功: {success_count}[/green]")
+    if fail_count > 0:
+        console.print(f"[red]失败: {fail_count}[/red]")
 
 
 @app.command()

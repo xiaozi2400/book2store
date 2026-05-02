@@ -1,173 +1,248 @@
-# 图书文件处理脚本
+# 电子书自动化处理与闲鱼发布系统
 
-## 功能介绍
+> 一款面向电子书卖家的端到端自动化处理工具，支持 EPUB 翻译、PDF 生成、精简版生成、文案创作及闲鱼商品发布。
 
-本脚本用于处理图书文件，主要提供以下功能：
+---
 
-1. **文件重命名**：在文件名的第二个"--"处截断，删除后面的部分
-2. **文件分组**：将前缀相同的文件移动到同一个文件夹中
-3. **语言检测**：检测PDF和EPUB文件的语言，为纯英文书添加"英文原版-"前缀，为中英混合书添加"中英对照-"前缀
+## 功能概览
 
-## 安装依赖
+| 模块 | 功能描述 |
+|------|----------|
+| 📚 **EPUB翻译** | 将英文EPUB翻译为中英双语/纯中文PDF，支持缓存 |
+| ✂️ **精简版生成** | AI分析书籍内容，生成100分精简版（含评估机制） |
+| 🖼️ **图片提取** | 自动提取封面图、目录预览图 |
+| ✍️ **AI文案生成** | 自动生成闲鱼商品标题/描述、小红书种草笔记 |
+| 🚀 **闲鱼发布** | 自动创建商品并发布（需配置闲管家） |
 
-脚本需要以下Python库：
+---
 
-```bash
-pip install PyPDF2 ebooklib
-```
+## 快速开始
 
-- `PyPDF2`：用于PDF文件文本提取
-- `ebooklib`：用于EPUB文件文本提取
+### 环境要求
 
-如果未安装相关库，脚本会显示警告并跳过相应文件，不影响其他功能。
+- Python 3.9+
+- Windows 10/11
+- Calibre (用于EPUB转PDF)
 
-## 使用方法
-
-### 基本用法
-
-```bash
-# 默认处理当前目录下的file文件夹
-python process_files.py
-
-# 指定要处理的目录
-python process_files.py /path/to/your/folder
-```
-
-### 操作模式
+### 安装依赖
 
 ```bash
-# 重命名并分组模式（默认）
-python process_files.py --mode=rename
-
-# 语言检测模式
-python process_files.py --mode=lang
-
-# 两者都执行模式
-python process_files.py --mode=both
+cd d:\project\bookfile_bat
+pip install -r requirements-automation.txt
+pip install -r ebook_translator/requirements.txt
 ```
 
-### 高级选项
+### 基础配置
+
+1. 复制并配置 `pdf_config.json`（PDF排版配置）
+2. 在 `config.yaml` 中配置 API Key、闲鱼账号等
+
+### 使用命令
 
 ```bash
-# 调整相似文件判断的页数（仅语言检测模式有效）
-python process_files.py --mode=lang --pages=3
+# 查看所有命令
+python -m automation.main --help
 
-# 干运行模式（预览操作）
-python process_files.py --dry-run
+# 一键处理：扫描输入目录，自动处理所有新书籍（推荐）
+python -m automation.main auto
 
-# 组合使用
-python process_files.py /path/to/folder --mode=both --pages=4 --dry-run
+# 一键处理，跳过发布步骤
+python -m automation.main auto --skip-publish
+
+# 扫描输入目录，发现新书籍
+python -m automation.main scan
+
+# 查看处理状态统计
+python -m automation.main status
+
+# 查看书籍列表
+python -m automation.main list
+
+# 处理指定书籍
+python -m automation.main process <book_id>
+
+# 处理指定书籍，跳过发布
+python -m automation.main process <book_id> --skip-publish
+
+# 导入分享链接（从Excel）
+python -m automation.main import_links <excel_path>
+
+# 发布到闲鱼
+python -m automation.main publish <book_id>
+
+# 生成商品清单
+python -m automation.main generate_list
 ```
 
-## 命令行参数
+---
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `directory` | 要处理的目录 | `file` |
-| `--mode` | 处理模式：`rename`=重命名分组, `lang`=语言检测加前缀, `both`=两者都执行 | `rename` |
-| `--pages` | 检测语言时分析的文本页面数（自动跳过非文本页面） | `2` |
-| `--dry-run` | 干运行模式，只显示将要执行的操作而不实际执行 | `False` |
-
-## 工作原理
-
-### 文件重命名
-
-脚本会在文件名的第二个"--"处截断，删除后面的部分，保留原始扩展名。例如：
+## 项目结构
 
 ```
-原始文件名：Badass habits _ cultivate the awareness, boundaries, and -- Jen Sincero; cloudLibrary -- Penguin Random House LLC.pdf
-重命名后：Badass habits _ cultivate the awareness, boundaries, and -- Jen Sincero; cloudLibrary.pdf
+bookfile_bat/
+├── automation/                 # 自动化处理核心模块
+│   ├── main.py                 # CLI入口
+│   ├── config.py               # 配置加载
+│   ├── database.py             # SQLite数据库管理
+│   ├── ai_client.py            # AI客户端（DeepSeek）
+│   ├── ai_copywriter.py        # 文案生成
+│   ├── content_summarizer.py   # 精简版生成
+│   ├── suitability_evaluator.py # 适合度评估
+│   ├── template_generator.py   # 动态模板生成
+│   ├── translation_processor.py # 翻译处理器
+│   ├── image_extractor.py       # 图片提取
+│   ├── xianyu_publisher.py     # 闲鱼发布
+│   └── 精简版生成提示词.md      # AI精简版提示词
+│
+├── ebook_translator/           # EPUB翻译模块
+│   ├── main.py                 # 翻译主程序
+│   ├── translator/
+│   │   ├── deepseek_api.py     # DeepSeek API调用
+│   │   ├── epub_parser.py      # EPUB解析
+│   │   ├── epub_generator.py   # EPUB生成
+│   │   └── pdf_converter.py    # PDF转换
+│   └── config.py               # 翻译配置
+│
+├── config.yaml                 # 主配置文件
+├── config_template.yaml        # 精简版模板配置
+├── pdf_config.json             # PDF排版配置
+├── PRD.md                      # 产品需求文档
+└── README.md                   # 本文件
 ```
 
-### 文件分组
+---
 
-脚本会根据文件名中第一个"_"前的部分判断文件是否相似，将相似文件移动到同一个文件夹中。例如：
+## 配置说明
 
-- `Big Magic _ Creative Living Beyond Fear -- Elizabeth Gilbert.pdf`
-- `Big magic_ creative living beyond fear -- Elizabeth Gilbert.epub`
+### config.yaml 主要配置项
 
-这两个文件会被移动到同一个文件夹中，因为它们的前缀都是"Big Magic"（忽略大小写）。
+```yaml
+paths:
+  input_dir: "./input"          # 输入目录
+  output_dir: "./output"        # 输出目录
 
-### 语言检测
+ai:
+  api_key: "your-api-key"       # DeepSeek API Key
+  base_url: "https://api.deepseek.com"
 
-脚本会：
-1. 跳过非文本页面（如封面、版权页等）
-2. 提取PDF/EPUB文件的前几页文本
-3. 检测文本中是否包含中文字符
-4. 根据检测结果添加相应前缀：
-   - 纯英文书：添加"英文原版-"前缀
-   - 中英混合书：添加"中英对照-"前缀
+suitability_eval:
+  # 精简版适合度评估规则
+  precheck:
+    min_pages: 50
+    max_pages: 2000
 
-## 示例
+summarizer:
+  # 精简版生成配置
+  core_insight_length: "300-500"
+  chapter_summary_length: "150-200"
 
-### 示例1：处理默认目录
-
-```bash
-python process_files.py --mode=both
+xianyu:
+  # 闲鱼发布配置
+  cookie: "your-xianyu-cookie"
 ```
 
-处理当前目录下`file`文件夹中的所有文件，执行重命名分组和语言检测功能。
+### config_template.yaml 精简版模板
 
-### 示例2：处理指定文件夹
-
-```bash
-python process_files.py d:\books\english --mode=lang
+```yaml
+templates:
+  skill:
+    name: "技能型"
+    template: "..."            # 技能型书籍模板
+  concept:
+    name: "概念型"
+    template: "..."            # 概念型书籍模板
+  # ...
 ```
 
-处理`d:\books\english`目录中的所有文件，仅执行语言检测功能。
+---
 
-### 示例3：干运行模式
+## 核心功能详解
 
-```bash
-python process_files.py --mode=both --dry-run
+### 1. 适合度评估
+
+系统在生成精简版前会自动使用 **AI 评估** 书籍是否适合：
+
+```python
+# 评估逻辑
+suitability_result = evaluator.evaluate(book_info, page_count)
+if suitability_result.passed:
+    # 生成精简版
+else:
+    # 跳过，记录原因
 ```
 
-预览将要执行的操作，不实际修改文件。
+评估方式：
+- **AI 评估**（主）：使用 DeepSeek API 智能判断
+- **规则评估**（备）：关键词匹配规则
+
+AI 评估优势：
+- 理解语义上下文，不依赖关键词精确匹配
+- 自动识别任何书籍类型
+- 返回具体的通过/不适合原因
+
+### 2. 精简版生成
+
+采用动态模板系统，根据书籍类型选择不同策略：
+
+| 书籍类型 | 策略 | 模板 |
+|----------|------|------|
+| 技能型 | 强化操作步骤 | 步骤+练习+检查清单 |
+| 概念型 | 精确定义概念 | 概念+关系+应用场景 |
+| 案例型 | 保留核心案例 | 案例+规律+框架 |
+| 理论型 | 保留理论框架 | 假设+命题+应用 |
+| 叙事型 | 保留故事线 | 经历+洞见+原则 |
+| 混合型 | 识别主导类型 | 综合策略 |
+
+### 3. AI提示词系统
+
+精简版生成使用 `精简版生成提示词.md` 作为系统提示词，包含：
+- 角色定义：[书籍领域]专家 + 书籍精简专家
+- 核心使命：让读者"做到"而非"知道"
+- 六阶段工作流程
+- 质量检验标准
+
+---
+
+## 常见问题
+
+### Q: 翻译失败怎么办？
+A: 检查 `config.yaml` 中的 API Key 是否正确，确保网络能访问 DeepSeek API。
+
+### Q: 适合度评估不通过怎么办？
+A: 该书籍可能被判定为不适合生成精简版（如内容过于简单或复杂）。可以在 `config.yaml` 中调整评估规则。
+
+### Q: 如何跳过某些步骤？
+A: 使用 `--skip-publish` 参数可以跳过发布步骤，其他步骤暂不支持跳过。
+
+### Q: 如何查看详细日志？
+A: 日志文件位于 `logs/automation_YYYYMMDD.log`
+
+---
 
 ## 注意事项
 
-1. **文件命名格式**：脚本假设文件名为"书名 -- 作者 -- 其他信息"的格式，会在第二个"--"处截断。
+1. **API配额**：DeepSeek API 有调用限制，翻译大量书籍时请注意配额
+2. **缓存机制**：翻译结果会被缓存到 `translation_cache.json`，重复翻译会使用缓存
+3. **PDF转换**：需要安装 Calibre 并配置 `ebook-convert` 路径
+4. **闲鱼发布**：需要配置Cookie，且账号需要满足发布条件
 
-2. **语言检测**：
-   - 仅支持PDF和EPUB文件
-   - 会自动跳过非文本页面（如封面、版权页等）
-   - 基于文本内容检测语言，可能对图片扫描版PDF不准确
+---
 
-3. **文件分组**：
-   - 基于文件名中第一个"_"前的部分判断文件是否相似
-   - 忽略大小写和特殊字符
+## 技术栈
 
-4. **执行顺序**：
-   - 在`both`模式下，会先执行重命名分组，再执行语言检测
-   - 语言检测会保留重命名后的结果
+- **Python 3.9+** - 主语言
+- **DeepSeek API** - AI能力（翻译、文案生成、精简版）
+- **SQLite** - 本地数据存储
+- **Calibre** - EPUB转PDF
+- **Typer** - CLI框架
+- **Rich** - 终端美化
 
-5. **兼容性**：
-   - 脚本支持Windows、Linux和macOS
-   - 需要Python 3.6或更高版本
+---
 
-## 故障排除
+## 后续规划
 
-### 1. 依赖安装失败
-
-如果安装依赖时遇到问题，可以尝试使用国内镜像：
-
-```bash
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple PyPDF2 ebooklib
-```
-
-### 2. 语言检测失败
-
-如果语言检测失败，可能是因为：
-- 文件不是PDF或EPUB格式
-- 文件是图片扫描版PDF，无法提取文本
-- 依赖库未正确安装
-
-### 3. 文件分组不正确
-
-如果文件分组不正确，可能是因为：
-- 文件名格式不符合预期
-- 文件名中没有"_"字符
-
-## 许可证
-
-本脚本采用MIT许可证。
+- [ ] 支持更多书籍类型识别
+- [ ] 优化适合度评估规则
+- [ ] 添加批量处理模式
+- [ ] 支持更多电商平台
+- [ ] 添加Web管理界面

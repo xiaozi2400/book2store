@@ -86,7 +86,7 @@ def is_toc_page(text):
     return False
 
 
-def _extract_pdf_text(filepath, target_text_pages=2, max_total_pages=10):
+def _extract_pdf_text(filepath, target_text_pages=5, max_total_pages=15):
     """从PDF文件提取文本页面，优先使用目录页"""
     if not PDF_SUPPORT:
         print(f"警告: PyPDF2未安装，跳过PDF文件 {filepath}")
@@ -100,7 +100,9 @@ def _extract_pdf_text(filepath, target_text_pages=2, max_total_pages=10):
         with open(filepath, 'rb') as f:
             pdf_reader = PyPDF2.PdfReader(f)
             total_pages = min(len(pdf_reader.pages), max_total_pages)
-            
+
+            toc_text = ""
+
             # 第一遍：查找目录页
             for i in range(total_pages):
                 page = pdf_reader.pages[i]
@@ -108,31 +110,30 @@ def _extract_pdf_text(filepath, target_text_pages=2, max_total_pages=10):
                 if is_toc_page(page_text):
                     toc_text = page_text
                     break
-            
-            # 如果找到目录页，优先使用目录页进行判断
+
+            # 优先使用目录页（目录页包含章节标题，语言特征明显）
             if toc_text:
-                print("    找到目录页，使用目录页进行语言判断")
                 return toc_text
-            
-            # 如果没有找到目录页，使用普通文本页面
+
+            # 如果没有目录页，使用普通文本页面
             for i in range(total_pages):
                 if text_pages_found >= target_text_pages:
                     break
-                    
+
                 page = pdf_reader.pages[i]
                 page_text = page.extract_text()
-                
+
                 if is_text_page(page_text):
                     text += page_text + "\n"
                     text_pages_found += 1
-        
+
         return text
     except Exception as e:
         print(f"读取PDF文件 {filepath} 时出错: {e}")
         return ""
 
 
-def _extract_epub_text(filepath, target_text_pages=2, max_total_pages=10):
+def _extract_epub_text(filepath, target_text_pages=5, max_total_pages=15):
     """从EPUB文件提取文本页面，优先使用目录页"""
     if not EPUB_SUPPORT:
         print(f"警告: ebooklib未安装，跳过EPUB文件 {filepath}")
@@ -142,46 +143,45 @@ def _extract_epub_text(filepath, target_text_pages=2, max_total_pages=10):
         text = ""
         text_pages_found = 0
         items_checked = 0
-        toc_text = ""  # 目录页文本
-        
+        toc_text = ""
+
         book = epub.read_epub(filepath)
-        
+
         # 第一遍：查找目录页
         for item in book.get_items():
             if items_checked >= max_total_pages:
                 break
-                
+
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 items_checked += 1
                 content = item.get_content().decode('utf-8', errors='ignore')
                 content = re.sub(r'<[^>]+>', ' ', content)
                 content = re.sub(r'\s+', ' ', content).strip()
-                
+
                 if is_toc_page(content):
                     toc_text = content
                     break
-        
-        # 如果找到目录页，优先使用目录页进行判断
+
+        # 优先使用目录页（目录页包含章节标题，语言特征明显）
         if toc_text:
-            print("    找到目录页，使用目录页进行语言判断")
             return toc_text
-        
-        # 如果没有找到目录页，使用普通文本页面
+
+        # 如果没有目录页，使用普通文本页面
         items_checked = 0
         for item in book.get_items():
             if text_pages_found >= target_text_pages or items_checked >= max_total_pages:
                 break
-                
+
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 items_checked += 1
                 content = item.get_content().decode('utf-8', errors='ignore')
                 content = re.sub(r'<[^>]+>', ' ', content)
                 content = re.sub(r'\s+', ' ', content).strip()
-                
+
                 if is_text_page(content):
                     text += content + "\n"
                     text_pages_found += 1
-        
+
         return text
     except Exception as e:
         print(f"读取EPUB文件 {filepath} 时出错: {e}")
@@ -203,75 +203,218 @@ def extract_text(filepath, target_text_pages=2):
 def detect_language(text):
     """
     检测文本语言：中文版本、英文版本、中英双语
-    
+
     判断规则：
-    - 中文字符占比 >= 90% → 中文版本（只允许极少量英文如书名、专有名词）
-    - 英文字符占比 >= 90% → 英文版本
-    - 中英文都存在且各自占比 >= 10% → 中英双语（中英文对照书籍）
-    - 其他情况根据占比高的判断
-    
+    - 中文占比 >= 30% 且 英文占比 >= 30% 且 绝对字符数都 >= 500 → 中英双语
+    - 中文字符占比 >= 85% → 中文版本
+    - 英文字符占比 >= 85% → 英文版本
+    - 中文占比 >= 60% → 中文版本
+    - 英文占比 >= 60% → 英文版本
+    - 其他情况根据绝对数量判断
+    - 文本总字符数 < 500 时返回 None（样本不足）
+
     参数:
         text: 要检测的文本
-    
+
     返回:
-        'zh': 中文版本（允许少量英文）
+        'zh': 中文版本
         'en': 英文版本
         'zh-en': 中英双语
         None: 无法确定
     """
     if not text:
         return None
-    
-    # 检测中文字符（Unicode范围）
+
+
+def _count_language(text):
+    """统计文本中中英文字符数"""
     zh_pattern = re.compile(r'[\u4e00-\u9fff]')
-    chinese_chars = zh_pattern.findall(text)
-    chinese_count = len(chinese_chars)
-    
-    # 检测英文字母
     en_pattern = re.compile(r'[a-zA-Z]')
-    english_chars = en_pattern.findall(text)
-    english_count = len(english_chars)
+    return len(zh_pattern.findall(text)), len(en_pattern.findall(text))
+
+
+def detect_language_v2(toc_text, body_text):
+    """
+    两步检测语言：目录页 + 正文页验证
     
-    # 计算总字符数（只考虑中文和英文）
-    total_relevant = chinese_count + english_count
-    
-    if total_relevant == 0:
+    目录页快速判断语言倾向，正文页检查是否有第二种语言
+    """
+    if not toc_text and not body_text:
         return None
-    
-    # 计算占比
-    zh_ratio = chinese_count / total_relevant
-    en_ratio = english_count / total_relevant
-    
-    # 判断规则
-    if zh_ratio >= 0.9:
-        # 中文字符占90%以上 → 中文版本（允许极少量英文）
-        return 'zh'
-    elif en_ratio >= 0.9:
-        # 英文字符占90%以上 → 英文版本
-        return 'en'
-    elif chinese_count > 0 and english_count > 0:
-        # 中英文都存在且都有一定比例 → 中英双语
-        # 只要中英文都超过10%就认为是双语
-        if zh_ratio >= 0.1 and en_ratio >= 0.1:
-            return 'zh-en'
-        # 如果一方占比极低，按占比高的判断
-        elif zh_ratio > en_ratio:
-            return 'zh'
-        else:
-            return 'en'
-    elif chinese_count > 0:
-        return 'zh'
-    elif english_count > 0:
-        return 'en'
+
+    # Step 1: 目录页检测
+    if toc_text:
+        zh_toc, en_toc = _count_language(toc_text)
+        total_toc = zh_toc + en_toc
     else:
+        zh_toc, en_toc, total_toc = 0, 0, 0
+
+    # Step 2: 正文页检测
+    if body_text:
+        zh_body, en_body = _count_language(body_text)
+    else:
+        zh_body, en_body = 0, 0
+
+    # 合并统计
+    zh_all = zh_toc + zh_body
+    en_all = en_toc + en_body
+    total_all = zh_all + en_all
+
+    if total_all < 100:
         return None
+
+    zh_ratio = zh_all / total_all
+    en_ratio = en_all / total_all
+
+    # 双语判断：两种语言都有明显存在
+    if zh_all >= 50 and en_all >= 50 and zh_ratio >= 0.15 and en_ratio >= 0.15:
+        return 'zh-en'
+
+    # 单语言判断
+    if zh_ratio >= 0.85:
+        return 'zh'
+    if en_ratio >= 0.85:
+        return 'en'
+
+    if zh_ratio >= 0.60:
+        return 'zh'
+    if en_ratio >= 0.60:
+        return 'en'
+
+    if zh_all > en_all:
+        return 'zh'
+    if en_all > 0:
+        return 'en'
+
+    return None
+
+
+def extract_body_text(filepath):
+    """提取正文文本（排除目录页）"""
+    ext = os.path.splitext(filepath)[1].lower()
+
+    if ext == '.pdf':
+        return _extract_body_text_pdf(filepath)
+    elif ext == '.epub':
+        return _extract_body_text_epub(filepath)
+    return ""
+
+
+def _extract_body_text_pdf(filepath, target_text_pages=3, max_total_pages=15):
+    """从PDF提取正文文本，跳过目录页"""
+    if not PDF_SUPPORT:
+        return ""
+
+    try:
+        text = ""
+        text_pages_found = 0
+
+        with open(filepath, 'rb') as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            total_pages = min(len(pdf_reader.pages), max_total_pages)
+
+            for i in range(total_pages):
+                if text_pages_found >= target_text_pages:
+                    break
+
+                page = pdf_reader.pages[i]
+                page_text = page.extract_text()
+
+                if is_toc_page(page_text):
+                    continue
+
+                if is_text_page(page_text):
+                    text += page_text + "\n"
+                    text_pages_found += 1
+
+        return text
+    except Exception:
+        return ""
+
+
+def _extract_body_text_epub(filepath, target_text_pages=3, max_total_pages=15):
+    """从EPUB提取正文文本，跳过目录页"""
+    if not EPUB_SUPPORT:
+        return ""
+
+    try:
+        text = ""
+        text_pages_found = 0
+        items_checked = 0
+
+        book = epub.read_epub(filepath)
+
+        for item in book.get_items():
+            if text_pages_found >= target_text_pages or items_checked >= max_total_pages:
+                break
+
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                items_checked += 1
+                content = item.get_content().decode('utf-8', errors='ignore')
+                content = re.sub(r'<[^>]+>', ' ', content)
+                content = re.sub(r'\s+', ' ', content).strip()
+
+                if is_toc_page(content):
+                    continue
+
+                if is_text_page(content):
+                    text += content + "\n"
+                    text_pages_found += 1
+
+        return text
+    except Exception:
+        return ""
+
+
+def _is_hidden(path):
+    """检查路径是否为隐藏文件或目录（在Windows和Unix系统上）"""
+    name = os.path.basename(path)
+    if name.startswith('.') and name not in ['.', '..']:
+        return True
+    return False
+
+
+def _dir_has_ebook(dirpath):
+    """检查目录是否包含PDF或EPUB文件，且不包含隐藏子目录"""
+    if not os.path.isdir(dirpath):
+        return False
+    try:
+        for item in os.listdir(dirpath):
+            if _is_hidden(item):
+                continue
+            item_path = os.path.join(dirpath, item)
+            if os.path.isfile(item_path) and item.lower().endswith(('.pdf', '.epub')):
+                return True
+            if os.path.isdir(item_path):
+                if _dir_has_ebook(item_path):
+                    return True
+    except PermissionError:
+        return False
+    return False
+
+
+def _dir_has_hidden_subdir(dirpath):
+    """检查目录是否包含隐藏子目录"""
+    if not os.path.isdir(dirpath):
+        return False
+    try:
+        for item in os.listdir(dirpath):
+            if _is_hidden(item):
+                return True
+    except PermissionError:
+        return False
+    return False
 
 
 def collect_all_ebooks(root_dir):
-    """递归收集所有子目录中的PDF和EPUB文件"""
+    """递归收集所有子目录中的PDF和EPUB文件，跳过隐藏文件/目录"""
     ebooks = []
     for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = [d for d in dirnames if not _is_hidden(d)]
+        
         for filename in filenames:
+            if _is_hidden(filename):
+                continue
             if filename.lower().endswith(('.pdf', '.epub')):
                 filepath = os.path.join(dirpath, filename)
                 ebooks.append((filepath, dirpath, filename))
@@ -356,8 +499,8 @@ def organize_ebooks(source_dir, output_dir=None, dry_run=False):
             else:
                 book_dir = os.path.join(output_dir, book_title)
             
-            # 格式目录：书名+格式名称
-            format_dir = os.path.join(book_dir, f"{book_title}-{format_name}")
+            # 格式目录：只显示格式名称
+            format_dir = os.path.join(book_dir, format_name)
             
             # 创建目录结构
             if not os.path.exists(book_dir) and not dry_run:
@@ -416,7 +559,32 @@ def organize_ebooks(source_dir, output_dir=None, dry_run=False):
                     os.remove(duplicate)
         else:
             print("  未发现重复文件")
-        
+
+        # 步骤2.5：同一书籍目录只保留一个 cover.jpg
+        print("\n步骤2.5：清理多余的 cover.jpg 文件...")
+        format_dirs = set(format_dir for _, _, format_dir in moved_files)
+        cover_removed_count = 0
+
+        for format_dir in format_dirs:
+            if not os.path.exists(format_dir):
+                continue
+            cover_files = []
+            for filename in os.listdir(format_dir):
+                if filename.lower() == 'cover.jpg':
+                    cover_files.append(os.path.join(format_dir, filename))
+            if len(cover_files) > 1:
+                keep_cover = cover_files[0]
+                for cover_file in cover_files[1:]:
+                    print(f"    删除多余封面: {cover_file} (保留: {keep_cover})")
+                    if not dry_run:
+                        os.remove(cover_file)
+                    cover_removed_count += 1
+
+        if cover_removed_count > 0:
+            print(f"  共删除 {cover_removed_count} 个多余封面文件")
+        else:
+            print("  无多余封面文件")
+
         # 步骤3：检测语言并添加前缀
         print("\n步骤3：检测语言并添加前缀...")
         
@@ -442,15 +610,11 @@ def organize_ebooks(source_dir, output_dir=None, dry_run=False):
                     break
             
             print(f"  处理: {filename}")
-            
-            # 提取文本（跳过非文本页面，优先使用目录页）
-            text = extract_text(filepath, target_text_pages=2)
-            if not text:
-                print("    警告: 无法提取足够文本内容，跳过")
-                continue
-            
-            # 检测语言
-            lang = detect_language(text)
+
+            # 两步检测：目录页 + 正文页
+            toc_text = extract_text(filepath)
+            body_text = extract_body_text(filepath)
+            lang = detect_language_v2(toc_text, body_text)
             if lang is None:
                 print("    警告: 无法检测语言，跳过")
                 continue
@@ -459,12 +623,13 @@ def organize_ebooks(source_dir, output_dir=None, dry_run=False):
             correct_prefix = prefix_map.get(lang)
             if not correct_prefix:
                 continue
-            
+
             # 如果已有前缀且正确，则无需修改
+            # 否则重命名（强制重新检测，覆盖不一致的前缀）
             if existing_prefix == correct_prefix:
                 print(f"    前缀正确，无需修改")
                 continue
-            
+
             # 构建新文件名（使用正确的前缀）
             if existing_prefix:
                 # 已有前缀但不正确，替换为正确的前缀
@@ -502,35 +667,20 @@ def organize_ebooks(source_dir, output_dir=None, dry_run=False):
                 ebook_dirs.add(os.path.abspath(format_dir))
         
         for dirpath, dirnames, filenames in os.walk(source_dir, topdown=False):
+            dirnames[:] = [d for d in dirnames if not _is_hidden(d)]
+
             dir_abs = os.path.abspath(dirpath)
-            
-            # 跳过包含电子书的目录
+
             if dir_abs in ebook_dirs:
                 continue
-            
-            # 检查是否包含电子书文件
-            has_ebook = False
-            for filename in filenames:
-                if filename.lower().endswith(('.pdf', '.epub')):
-                    has_ebook = True
-                    break
-            
-            # 检查子目录是否包含电子书
-            for subdir in dirnames:
-                subdir_path = os.path.join(dirpath, subdir)
-                for root, _, files in os.walk(subdir_path):
-                    for filename in files:
-                        if filename.lower().endswith(('.pdf', '.epub')):
-                            has_ebook = True
-                            break
-                    if has_ebook:
-                        break
-            
-            if not has_ebook:
+
+            if _dir_has_hidden_subdir(dirpath):
+                continue
+
+            if not _dir_has_ebook(dirpath):
                 if dry_run:
                     print(f"  [干运行] 删除不包含电子书的文件夹: {dirpath}")
                 else:
-                    # 删除文件夹及其内容
                     shutil.rmtree(dirpath)
                     print(f"  删除不包含电子书的文件夹: {dirpath}")
         

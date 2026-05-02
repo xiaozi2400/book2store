@@ -89,6 +89,16 @@ class DatabaseManager:
         finally:
             close_session(session)
 
+    def get_book_by_id(self, book_id: str) -> 'Book':
+        """根据ID获取书籍"""
+        from .models import Book
+
+        session = get_session()
+        try:
+            return session.query(Book).filter(Book.id == book_id).first()
+        finally:
+            close_session(session)
+
     def get_all_books(self, status: str = None) -> list:
         """获取所有书籍"""
         from .models import Book
@@ -147,7 +157,15 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            output = session.query(BookOutput).filter(BookOutput.book_id == book_id).first()
+            output = session.query(BookOutput).filter(
+                (BookOutput.book_id == book_id) | 
+                (BookOutput.book_id.startswith(book_id))
+            ).first()
+            
+            if not output:
+                logger.warning(f"未找到书籍输出记录: {book_id}")
+                return
+                
             if output:
                 for key, value in kwargs.items():
                     if hasattr(output, key):
