@@ -477,7 +477,7 @@ class EPUBGenerator:
                 if mode == 'bilingual':
                     tag.clear()
                     tag.append(text)
-                    tag.append('\n')
+                    tag.append(soup.new_tag('br'))
                     span = soup.new_tag('span')
                     span['class'] = 'translated'
                     span.string = translation
@@ -525,7 +525,7 @@ class EPUBGenerator:
             if mode == 'bilingual':
                 tag.clear()
                 tag.append(text)
-                tag.append('\n')
+                tag.append(soup.new_tag('br'))
                 span = soup.new_tag('span')
                 span['class'] = 'translated'
                 span.string = translation
@@ -569,7 +569,7 @@ class EPUBGenerator:
                     if mode == 'bilingual':
                         tag.clear()
                         tag.append(text)
-                        tag.append('\n')
+                        tag.append(soup.new_tag('br'))
                         span = soup.new_tag('span')
                         span['class'] = 'translated'
                         span.string = translation
@@ -580,7 +580,7 @@ class EPUBGenerator:
                 elif mode == 'bilingual':
                     tag.clear()
                     tag.append(text)
-                    tag.append('\n')
+                    tag.append(soup.new_tag('br'))
                     span = soup.new_tag('span')
                     span['class'] = 'translated'
                     span.string = translation
@@ -632,36 +632,37 @@ class EPUBGenerator:
                 css_dir = os.path.join(temp_dir, 'styles')
                 os.makedirs(css_dir, exist_ok=True)
                 css_path = os.path.join(css_dir, 'translation.css')
-                
-                bilingual_css = """
-/* 中英对照样式 */
-p {
-    text-indent: 2em !important;
-    margin-bottom: 1em !important;
-    line-height: 1.8 !important;
-}
 
-div {
-    text-indent: 2em !important;
-    margin-bottom: 1em !important;
-    line-height: 1.8 !important;
-}
+                css_config = self.config.get('css', {})
 
-.translated {
+                bilingual_css = f"""/* 中英对照样式 - 从配置文件加载 */
+p {{
+    text-indent: {css_config.get('paragraph_text_indent', '2em')} !important;
+    margin-bottom: {css_config.get('paragraph_margin_bottom', '1.5em')} !important;
+    line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
+}}
+
+div {{
+    text-indent: {css_config.get('paragraph_text_indent', '2em')} !important;
+    margin-bottom: {css_config.get('paragraph_margin_bottom', '1.5em')} !important;
+    line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
+}}
+
+.translated {{
     display: block;
     color: #555;
-    text-indent: 2em !important;
-    margin-top: 0.5em !important;
-    margin-bottom: 1em !important;
-    line-height: 1.8 !important;
-}
+    text-indent: {css_config.get('paragraph_text_indent', '2em')} !important;
+    margin-top: {css_config.get('translated_margin_top', '0.3em')} !important;
+    margin-bottom: {css_config.get('paragraph_margin_bottom', '1.5em')} !important;
+    line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
+}}
 
-.no-jump {
+.no-jump {{
     display: block;
     color: #888;
     cursor: default;
     margin-top: 0.3em !important;
-}
+}}
 """
                 with open(css_path, 'w', encoding='utf-8') as f:
                     f.write(bilingual_css)
