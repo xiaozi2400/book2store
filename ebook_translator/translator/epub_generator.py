@@ -477,10 +477,10 @@ class EPUBGenerator:
                 if mode == 'bilingual':
                     tag.clear()
                     tag.append(text)
+                    tag.append('\n')
                     span = soup.new_tag('span')
                     span['class'] = 'translated'
                     span.string = translation
-                    tag.append(' / ')
                     tag.append(span)
                 else:
                     tag.clear()
@@ -525,10 +525,10 @@ class EPUBGenerator:
             if mode == 'bilingual':
                 tag.clear()
                 tag.append(text)
+                tag.append('\n')
                 span = soup.new_tag('span')
                 span['class'] = 'translated'
                 span.string = translation
-                tag.append(' / ')
                 tag.append(span)
             else:
                 tag.clear()
@@ -569,10 +569,10 @@ class EPUBGenerator:
                     if mode == 'bilingual':
                         tag.clear()
                         tag.append(text)
+                        tag.append('\n')
                         span = soup.new_tag('span')
                         span['class'] = 'translated'
                         span.string = translation
-                        tag.append(' / ')
                         tag.append(span)
                     else:
                         tag.clear()
@@ -580,10 +580,10 @@ class EPUBGenerator:
                 elif mode == 'bilingual':
                     tag.clear()
                     tag.append(text)
+                    tag.append('\n')
                     span = soup.new_tag('span')
                     span['class'] = 'translated'
                     span.string = translation
-                    tag.append(' / ')
                     tag.append(span)
                 else:
                     tag.clear()
