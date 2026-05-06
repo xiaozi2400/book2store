@@ -427,7 +427,7 @@ def extract_book_title(filename):
     去除语言前缀、版本信息等，只保留核心书名
     """
     # 移除语言前缀
-    prefixes = ['中文版本-', '英文版本-', '中英双语-']
+    prefixes = ['中文-', '英文-', '双语-']
     for prefix in prefixes:
         if filename.startswith(prefix):
             filename = filename[len(prefix):]
@@ -590,9 +590,9 @@ def organize_ebooks(source_dir, output_dir=None, dry_run=False):
         
         # 前缀映射
         prefix_map = {
-            'zh': '中文版本-',
-            'en': '英文版本-',
-            'zh-en': '中英双语-'
+            'zh': '中文-',
+            'en': '英文-',
+            'zh-en': '双语-'
         }
         
         for filepath, filename, format_dir in moved_files:

@@ -52,14 +52,15 @@ class DirectoryScanner:
         if existing_book:
             output_dir = Path(config.output_dir)
             base_name = epub_path.stem
+            short_name = base_name.split('_')[0].strip()
 
             output_patterns = [
-                output_dir / base_name / f"中英双语-{base_name}.epub",
-                output_dir / base_name / f"中英双语-{base_name}.pdf",
-                output_dir / base_name / f"中文版本-{base_name}.epub",
-                output_dir / base_name / f"中文版本-{base_name}.pdf",
-                output_dir / base_name / f"英文原版-{base_name}.epub",
-                output_dir / base_name / f"英文原版-{base_name}.pdf",
+                output_dir / base_name / f"双语-{short_name}.epub",
+                output_dir / base_name / f"双语-{short_name}.pdf",
+                output_dir / base_name / f"中文-{short_name}.epub",
+                output_dir / base_name / f"中文-{short_name}.pdf",
+                output_dir / base_name / f"英文-{short_name}.epub",
+                output_dir / base_name / f"英文-{short_name}.pdf",
             ]
 
             has_output = any(p.exists() for p in output_patterns)

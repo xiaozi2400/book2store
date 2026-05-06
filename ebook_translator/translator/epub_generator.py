@@ -392,6 +392,9 @@ class EPUBGenerator:
             mode: 翻译模式 ('bilingual' 或 'chinese')
             is_nav: 是否为导航文件，导航文件需要保留链接
         """
+        if is_nav:
+            return content
+
         soup = BeautifulSoup(content, 'lxml')
 
         total_matched = 0
@@ -678,7 +681,7 @@ div {{
                         soup = BeautifulSoup(content, 'lxml-xml')
                         title_elem = soup.find('dc:title')
                         if title_elem:
-                            title_elem.string = f"中英双语-{title_elem.string}"
+                            title_elem.string = f"双语-{title_elem.string}"
                         
                         # 添加 CSS 引用
                         for root, dirs, files in os.walk(temp_dir):
@@ -817,7 +820,7 @@ blockquote {{
                         soup = BeautifulSoup(content, 'lxml-xml')
                         title_elem = soup.find('dc:title')
                         if title_elem:
-                            title_elem.string = f"中文版本-{title_elem.string}"
+                            title_elem.string = f"中文-{title_elem.string}"
                         
                         # 添加 CSS 引用
                         for root, dirs, files in os.walk(temp_dir):

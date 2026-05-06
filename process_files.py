@@ -319,7 +319,7 @@ def detect_language_and_prefix(directory, pages=2, dry_run=False):
                     continue
                 
                 # 跳过已经添加前缀的文件
-                if filename.startswith(('英文原版-', '中英对照-')):
+                if filename.startswith(('英文-', '双语-')):
                     continue
                 
                 filepath = os.path.join(root, filename)
@@ -339,9 +339,9 @@ def detect_language_and_prefix(directory, pages=2, dry_run=False):
                 
                 # 确定前缀
                 if lang == 'en':
-                    prefix = '英文原版-'
+                    prefix = '英文-'
                 elif lang == 'zh-en':
-                    prefix = '中英对照-'
+                    prefix = '双语-'
                 else:
                     continue
                 

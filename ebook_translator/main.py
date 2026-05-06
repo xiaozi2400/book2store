@@ -201,21 +201,23 @@ def main():
     base_name = os.path.basename(args.input_epub)
     name_without_ext = os.path.splitext(base_name)[0]
 
+    short_name = name_without_ext.split('_')[0].strip()
+
     # 每个版本单独一个子目录
-    bilingual_dir = os.path.join(args.output_dir, f"中英双语-{name_without_ext}")
-    chinese_dir = os.path.join(args.output_dir, f"中文版本-{name_without_ext}")
-    english_dir = os.path.join(args.output_dir, f"英文原版-{name_without_ext}")
+    bilingual_dir = os.path.join(args.output_dir, f"双语-{short_name}")
+    chinese_dir = os.path.join(args.output_dir, f"中文-{short_name}")
+    english_dir = os.path.join(args.output_dir, f"英文-{short_name}")
 
     os.makedirs(bilingual_dir, exist_ok=True)
     os.makedirs(chinese_dir, exist_ok=True)
     os.makedirs(english_dir, exist_ok=True)
 
-    bilingual_epub = os.path.join(bilingual_dir, f"中英双语-{name_without_ext}.epub")
-    chinese_epub = os.path.join(chinese_dir, f"中文版本-{name_without_ext}.epub")
-    english_epub = os.path.join(english_dir, f"英文原版-{name_without_ext}.epub")
-    bilingual_pdf = os.path.join(bilingual_dir, f"中英双语-{name_without_ext}.pdf")
-    chinese_pdf = os.path.join(chinese_dir, f"中文版本-{name_without_ext}.pdf")
-    english_pdf = os.path.join(english_dir, f"英文原版-{name_without_ext}.pdf")
+    bilingual_epub = os.path.join(bilingual_dir, f"双语-{short_name}.epub")
+    chinese_epub = os.path.join(chinese_dir, f"中文-{short_name}.epub")
+    english_epub = os.path.join(english_dir, f"英文-{short_name}.epub")
+    bilingual_pdf = os.path.join(bilingual_dir, f"双语-{short_name}.pdf")
+    chinese_pdf = os.path.join(chinese_dir, f"中文-{short_name}.pdf")
+    english_pdf = os.path.join(english_dir, f"英文-{short_name}.pdf")
 
     # 打印输出路径
     print(f"\n输出目录：{args.output_dir}")

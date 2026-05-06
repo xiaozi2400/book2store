@@ -29,17 +29,18 @@ class TranslationProcessor:
             self.db.add_log(book_id, "translating", "start", "开始翻译")
 
             base_name = Path(epub_path).stem
+            short_name = base_name.split('_')[0].strip()
 
-            bilingual_dir = ensure_dir(self.output_dir / base_name / f"中英双语-{base_name}")
-            chinese_dir = ensure_dir(self.output_dir / base_name / f"中文版本-{base_name}")
-            english_dir = ensure_dir(self.output_dir / base_name / f"英文原版-{base_name}")
+            bilingual_dir = ensure_dir(self.output_dir / base_name / f"双语-{short_name}")
+            chinese_dir = ensure_dir(self.output_dir / base_name / f"中文-{short_name}")
+            english_dir = ensure_dir(self.output_dir / base_name / f"英文-{short_name}")
 
-            bilingual_epub = bilingual_dir / f"中英双语-{base_name}.epub"
-            chinese_epub = chinese_dir / f"中文版本-{base_name}.epub"
-            english_epub = english_dir / f"英文原版-{base_name}.epub"
-            bilingual_pdf = bilingual_dir / f"中英双语-{base_name}.pdf"
-            chinese_pdf = chinese_dir / f"中文版本-{base_name}.pdf"
-            english_pdf = english_dir / f"英文原版-{base_name}.pdf"
+            bilingual_epub = bilingual_dir / f"双语-{short_name}.epub"
+            chinese_epub = chinese_dir / f"中文-{short_name}.epub"
+            english_epub = english_dir / f"英文-{short_name}.epub"
+            bilingual_pdf = bilingual_dir / f"双语-{short_name}.pdf"
+            chinese_pdf = chinese_dir / f"中文-{short_name}.pdf"
+            english_pdf = english_dir / f"英文-{short_name}.pdf"
 
             cmd = [
                 sys.executable,
@@ -74,16 +75,17 @@ class TranslationProcessor:
                 return False
 
             base_name = Path(epub_path).stem
-            bilingual_dir = ensure_dir(self.output_dir / base_name / f"中英双语-{base_name}")
-            chinese_dir = ensure_dir(self.output_dir / base_name / f"中文版本-{base_name}")
-            english_dir = ensure_dir(self.output_dir / base_name / f"英文原版-{base_name}")
+            short_name = base_name.split('_')[0].strip()
+            bilingual_dir = ensure_dir(self.output_dir / base_name / f"双语-{short_name}")
+            chinese_dir = ensure_dir(self.output_dir / base_name / f"中文-{short_name}")
+            english_dir = ensure_dir(self.output_dir / base_name / f"英文-{short_name}")
 
-            bilingual_epub = bilingual_dir / f"中英双语-{base_name}.epub"
-            chinese_epub = chinese_dir / f"中文版本-{base_name}.epub"
-            english_epub = english_dir / f"英文原版-{base_name}.epub"
-            bilingual_pdf = bilingual_dir / f"中英双语-{base_name}.pdf"
-            chinese_pdf = chinese_dir / f"中文版本-{base_name}.pdf"
-            english_pdf = english_dir / f"英文原版-{base_name}.pdf"
+            bilingual_epub = bilingual_dir / f"双语-{short_name}.epub"
+            chinese_epub = chinese_dir / f"中文-{short_name}.epub"
+            english_epub = english_dir / f"英文-{short_name}.epub"
+            bilingual_pdf = bilingual_dir / f"双语-{short_name}.pdf"
+            chinese_pdf = chinese_dir / f"中文-{short_name}.pdf"
+            english_pdf = english_dir / f"英文-{short_name}.pdf"
 
             self.db.update_book_output(
                 book_id,

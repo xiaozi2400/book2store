@@ -83,12 +83,14 @@ class PDFConverter:
             "--minimum-line-height", str(typo_cfg['minimum_line_height']),
         ])
 
-        # ==================== 强制段落间距 ====================
+        # ==================== 强制段落样式 ====================
         # 原始EPUB的CSS可能覆盖翻译样式，使用--extra-css强制设置
         css_config = self.config.get('css', {})
         margin_bottom = css_config.get('paragraph_margin_bottom', '1.5em')
         line_height = css_config.get('paragraph_line_height', '2.2')
-        extra_css = f"p, div {{ margin-bottom: {margin_bottom} !important; line-height: {line_height} !important; }}"
+        text_indent = css_config.get('paragraph_text_indent', '0em')
+
+        extra_css = f"p, div {{ text-indent: {text_indent} !important; margin-bottom: {margin_bottom} !important; line-height: {line_height} !important; }} li {{ margin-bottom: 0.3em !important; line-height: {line_height} !important; }} ol, ul {{ padding-left: 1.5em !important; margin: 0.3em 0 !important; }}"
         cmd.extend(["--extra-css", extra_css])
         
         # ==================== 页眉页脚（简洁设计）====================
@@ -101,9 +103,9 @@ class PDFConverter:
         cmd.extend([
             "--pdf-add-toc",
             "--duplicate-links-in-toc",
-            "--level1-toc", "//h:a[@href]",  # 从 <a href> 标签构建一级目录
-            "--level2-toc", "//h:h1",  # 从h1标签构建二级目录
-            "--level3-toc", "//h:h2",  # 从h2标签构建三级目录
+            "--level1-toc", "//h:h1",  # 从h1标签构建一级目录
+            "--level2-toc", "//h:h2",  # 从h2标签构建二级目录
+            "--level3-toc", "//h:h3",  # 从h3标签构建三级目录
         ])
         
         # ==================== 高级选项 ====================
