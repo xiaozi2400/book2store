@@ -7,6 +7,7 @@ import json
 # 请设置环境变量 DEEPSEEK_API_KEY 为您的 API 密钥
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_MODEL = "deepseek-chat"
 
 # MiniMax API 配置
 # 请设置环境变量 MINIMAX_API_KEY 为您的 API 密钥

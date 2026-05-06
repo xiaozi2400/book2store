@@ -10,24 +10,50 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    MINIMAX_API_KEY, MINIMAX_API_URL, MINIMAX_MODEL,
+    TRANSLATION_PROVIDER,
+    DEEPSEEK_API_KEY, DEEPSEEK_API_URL,
+    MINIMAX_API_KEY, MINIMAX_API_URL,
+    DEEPSEEK_MODEL, MINIMAX_MODEL,
     MAX_TOKENS, TEMPERATURE,
     TIER_CONFIG, TRANSLATION_OPTIMIZATION
 )
 
-class MiniMaxTranslator:
-    """MiniMax API 翻译器 - 智能分层版本"""
+PROVIDER_CONFIG = {
+    "deepseek": {
+        "api_key": DEEPSEEK_API_KEY,
+        "api_url": DEEPSEEK_API_URL,
+        "model": DEEPSEEK_MODEL,
+    },
+    "minimax": {
+        "api_key": MINIMAX_API_KEY,
+        "api_url": MINIMAX_API_URL,
+        "model": MINIMAX_MODEL,
+    }
+}
 
-    def __init__(self):
-        """初始化翻译器"""
-        self.api_key = MINIMAX_API_KEY
-        self.api_url = MINIMAX_API_URL
-        self.model = MINIMAX_MODEL
+class Translator:
+    """通用翻译器 - 支持多种AI提供商"""
+
+    def __init__(self, provider: str = None):
+        """初始化翻译器
+
+        Args:
+            provider: AI提供商，可选 "deepseek" 或 "minimax"，默认从配置读取
+        """
+        self.provider = provider or TRANSLATION_PROVIDER
+
+        if self.provider not in PROVIDER_CONFIG:
+            raise ValueError(f"不支持的翻译提供商: {self.provider}")
+
+        config = PROVIDER_CONFIG[self.provider]
+        self.api_key = config["api_key"]
+        self.api_url = config["api_url"]
+        self.model = config["model"]
         self.max_tokens = MAX_TOKENS
         self.temperature = TEMPERATURE
 
         if not self.api_key:
-            print("警告：未设置 MiniMax API 密钥")
+            print(f"警告：未设置 {self.provider.upper()} API 密钥")
 
         self.headers = {
             "Content-Type": "application/json",
@@ -68,7 +94,7 @@ class MiniMaxTranslator:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "你是一个专业的翻译助手，将英文文本翻译成中文。保持翻译准确、流畅，符合中文表达习惯。"
+                            "content": "你是科技领域专业译者，擅长AI、软件开发、创业和投资，负责将英文文本翻译成中文，保持翻译准确、流畅，符合中文表达习惯。要求：1、只将给定内容从英语翻译成中文，不要解释任何术语或回答任何类似问题的内容。2、你的答案应该仅仅是给定内容的翻译。在你的答案中，不要给翻译内容添加任何前缀或后缀。3、代码/命令行/配置文件/网站的URL地址等，应保持原样保留在翻译输出中。4、不要遗漏内容的任何部分，即使它看起来不重要。"
                         },
                         {
                             "role": "user",
@@ -84,29 +110,8 @@ class MiniMaxTranslator:
 
                 self.stats["api_calls"] += 1
                 result = response.json()
-                
-                # MiniMax API 响应格式可能与 OpenAI 不同
-                # 检查响应格式
-                if "choices" in result and result["choices"]:
-                    translated_text = result["choices"][0]["message"]["content"]
-                elif "data" in result and result["data"]:
-                    translated_text = result["data"].get("content", "")
-                elif "reply" in result:
-                    translated_text = result["reply"]
-                elif "base_resp" in result:
-                    base_resp = result["base_resp"]
-                    status_code = base_resp.get("status_code", 0)
-                    if status_code != 0:
-                        logger.warning(f"MiniMax base_resp error: {status_code} - {base_resp.get('status_msg', 'unknown')}")
-                        retry_count += 1
-                        time.sleep(min(2 ** retry_count, 30))
-                        continue
-                    translated_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-                else:
-                    logger.warning(f"MiniMax API 响应格式未知: {list(result.keys())}")
-                    logger.debug(f"Full response: {json.dumps(result, ensure_ascii=False)[:500]}")
-                    retry_count += 1
-                    continue
+
+                translated_text = result["choices"][0]["message"]["content"]
 
                 if "usage" in result:
                     self.stats["total_tokens"] += result["usage"].get("total_tokens", 0)
@@ -120,7 +125,7 @@ class MiniMaxTranslator:
                     time.sleep(wait_time)
             except Exception as e:
                 retry_count += 1
-                logger.warning(f"MiniMax AI调用失败 (重试 {retry_count}/{max_retries}): {type(e).__name__}: {str(e)[:200]}")
+                logger.warning(f"AI调用失败 (重试 {retry_count}/{max_retries}): {type(e).__name__}: {str(e)[:200]}")
                 if retry_count < max_retries:
                     wait_time = min(2 ** retry_count, 30)
                     time.sleep(wait_time)
@@ -151,18 +156,8 @@ class MiniMaxTranslator:
 
                 self.stats["api_calls"] += 1
                 result = response.json()
-                
-                # MiniMax API 响应格式可能与 OpenAI 不同
-                if "choices" in result and result["choices"]:
-                    content = result["choices"][0]["message"]["content"]
-                elif "data" in result and result["data"]:
-                    content = result["data"].get("content", "")
-                elif "reply" in result:
-                    content = result["reply"]
-                else:
-                    logger.warning(f"MiniMax API 响应格式未知: {list(result.keys())}")
-                    retry_count += 1
-                    continue
+
+                content = result["choices"][0]["message"]["content"]
 
                 if "usage" in result:
                     self.stats["total_tokens"] += result["usage"].get("total_tokens", 0)
@@ -171,7 +166,7 @@ class MiniMaxTranslator:
 
             except Exception as e:
                 retry_count += 1
-                logger.warning(f"MiniMax AI chat调用失败 (重试 {retry_count}/{max_retries}): {type(e).__name__}: {str(e)[:200]}")
+                logger.warning(f"AI chat调用失败 (重试 {retry_count}/{max_retries}): {type(e).__name__}: {str(e)[:200]}")
                 if retry_count < max_retries:
                     wait_time = min(2 ** retry_count, 30)
                     time.sleep(wait_time)
@@ -187,7 +182,7 @@ class MiniMaxTranslator:
         if not tier_config.get('batch_translate', True):
             return self._translate_individually(paragraphs)
 
-        print(f"MiniMax批量翻译 {len(paragraphs)} 个 {tier} 段落")
+        print(f"批量翻译 {len(paragraphs)} 个 {tier} 段落")
 
         numbered_texts = []
         for i, para in enumerate(paragraphs):
@@ -268,11 +263,11 @@ class MiniMaxTranslator:
         return results
 
     def translate_smart(self, paragraphs):
-        """智能分层翻译"""
+        """智能分层翻译 - 核心方法"""
         if not paragraphs:
             return []
 
-        print(f"\nMiniMax开始智能分层翻译，共 {len(paragraphs)} 个段落")
+        print(f"\n开始智能分层翻译，共 {len(paragraphs)} 个段落")
 
         tier_groups = {
             'tier1_short_repeatable': [],
@@ -295,7 +290,7 @@ class MiniMaxTranslator:
         batch_config = self.opt_config['batch']
 
         if tier_groups['tier1_short_repeatable']:
-            print(f"\n[Tier 1] MiniMax翻译 {len(tier_groups['tier1_short_repeatable'])} 个短文本...")
+            print(f"\n[Tier 1] 翻译 {len(tier_groups['tier1_short_repeatable'])} 个短文本...")
             tier1_results = self._translate_tier(
                 tier_groups['tier1_short_repeatable'],
                 'tier1_short_repeatable',
@@ -304,7 +299,7 @@ class MiniMaxTranslator:
             all_results.update(tier1_results)
 
         if tier_groups['tier2_normal']:
-            print(f"\n[Tier 2] MiniMax翻译 {len(tier_groups['tier2_normal'])} 个普通文本...")
+            print(f"\n[Tier 2] 翻译 {len(tier_groups['tier2_normal'])} 个普通文本...")
             tier2_results = self._translate_tier(
                 tier_groups['tier2_normal'],
                 'tier2_normal',
@@ -313,7 +308,7 @@ class MiniMaxTranslator:
             all_results.update(tier2_results)
 
         if tier_groups['tier3_long_complex']:
-            print(f"\n[Tier 3] MiniMax翻译 {len(tier_groups['tier3_long_complex'])} 个长文本...")
+            print(f"\n[Tier 3] 翻译 {len(tier_groups['tier3_long_complex'])} 个长文本...")
             tier3_results = self._translate_tier(
                 tier_groups['tier3_long_complex'],
                 'tier3_long_complex',
@@ -335,7 +330,7 @@ class MiniMaxTranslator:
             if para['id'] in all_results:
                 ordered_results.append(all_results[para['id']])
 
-        print(f"\nMiniMax翻译完成: {len(ordered_results)}/{len(paragraphs)}")
+        print(f"\n翻译完成: {len(ordered_results)}/{len(paragraphs)}")
         return ordered_results
 
     def _translate_tier(self, paragraphs, tier, batch_size):
@@ -447,7 +442,7 @@ class MiniMaxTranslator:
 
     def print_translation_report(self):
         """打印翻译报告"""
-        print("\n=== MiniMax翻译统计报告 ===")
+        print(f"\n=== {self.provider.upper()} 翻译统计报告 ===")
         print(f"API 调用次数: {self.stats['api_calls']}")
         print(f"总 Token 消耗: {self.stats['total_tokens']}")
         print(f"翻译段落数: {self.stats['translated_paragraphs']}")
@@ -461,4 +456,4 @@ class MiniMaxTranslator:
                 'tier3_long_complex': '长文本(复杂)'
             }.get(tier, tier)
             print(f"  {tier_name}: {count}")
-        print("=======================\n")
+        print("====================\n")

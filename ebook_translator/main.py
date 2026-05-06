@@ -16,14 +16,9 @@ from config import PDF_CONFIG, TRANSLATION_PROVIDER
 
 def get_translator():
     """根据配置选择翻译器"""
-    if TRANSLATION_PROVIDER == "minimax":
-        from translator.minimax_api import MiniMaxTranslator
-        print(f"[翻译器] 使用 MiniMax ({TRANSLATION_PROVIDER})")
-        return MiniMaxTranslator()
-    else:
-        from translator.deepseek_api import DeepSeekTranslator
-        print(f"[翻译器] 使用 DeepSeek ({TRANSLATION_PROVIDER})")
-        return DeepSeekTranslator()
+    from translator.translator import Translator
+    print(f"[翻译器] 使用 {TRANSLATION_PROVIDER.upper()}")
+    return Translator()
 
 # 全局变量，用于标记是否收到中断信号
 interrupted = False
@@ -206,27 +201,30 @@ def main():
     base_name = os.path.basename(args.input_epub)
     name_without_ext = os.path.splitext(base_name)[0]
 
-    # 创建子目录
-    pdf_dir = os.path.join(args.output_dir, "PDF")
-    epub_dir = os.path.join(args.output_dir, "EPUB")
-    os.makedirs(pdf_dir, exist_ok=True)
-    os.makedirs(epub_dir, exist_ok=True)
+    # 每个版本单独一个子目录
+    bilingual_dir = os.path.join(args.output_dir, f"中英双语-{name_without_ext}")
+    chinese_dir = os.path.join(args.output_dir, f"中文版本-{name_without_ext}")
+    english_dir = os.path.join(args.output_dir, f"英文原版-{name_without_ext}")
 
-    # 生成输出文件路径
-    bilingual_epub = os.path.join(epub_dir, f"中英双语-{name_without_ext}.epub")
-    chinese_epub = os.path.join(epub_dir, f"中文版本-{name_without_ext}.epub")
-    bilingual_pdf = os.path.join(pdf_dir, f"中英双语-{name_without_ext}.pdf")
-    chinese_pdf = os.path.join(pdf_dir, f"中文版本-{name_without_ext}.pdf")
-    english_epub = os.path.join(epub_dir, f"英文原版-{name_without_ext}.epub")
+    os.makedirs(bilingual_dir, exist_ok=True)
+    os.makedirs(chinese_dir, exist_ok=True)
+    os.makedirs(english_dir, exist_ok=True)
+
+    bilingual_epub = os.path.join(bilingual_dir, f"中英双语-{name_without_ext}.epub")
+    chinese_epub = os.path.join(chinese_dir, f"中文版本-{name_without_ext}.epub")
+    english_epub = os.path.join(english_dir, f"英文原版-{name_without_ext}.epub")
+    bilingual_pdf = os.path.join(bilingual_dir, f"中英双语-{name_without_ext}.pdf")
+    chinese_pdf = os.path.join(chinese_dir, f"中文版本-{name_without_ext}.pdf")
+    english_pdf = os.path.join(english_dir, f"英文原版-{name_without_ext}.pdf")
 
     # 打印输出路径
     print(f"\n输出目录：{args.output_dir}")
-    print(f"PDF 目录：{pdf_dir}")
-    print(f"EPUB 目录：{epub_dir}")
     print(f"双语 EPUB：{bilingual_epub}")
     print(f"中文 EPUB：{chinese_epub}")
+    print(f"英文 EPUB：{english_epub}")
     print(f"双语 PDF：{bilingual_pdf}")
     print(f"中文 PDF：{chinese_pdf}")
+    print(f"英文 PDF：{english_pdf}")
     
     # 生成 EPUB 文件
     phase_start = time.time()
@@ -277,7 +275,6 @@ def main():
             print(f"✗ 中文 PDF 生成失败")
 
     if os.path.exists(english_epub):
-        english_pdf = os.path.join(pdf_dir, f"英文原版-{name_without_ext}.pdf")
         print(f"转换英文原版 EPUB...")
         if converter.convert_to_pdf(english_epub, english_pdf, is_bilingual=False):
             print(f"✓ 英文原版 PDF 生成成功")

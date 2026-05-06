@@ -50,8 +50,26 @@ class DirectoryScanner:
 
         existing_book = self.db.get_book_by_filename(epub_path.name)
         if existing_book:
-            logger.info(f"书籍已存在，跳过: {epub_path.name}")
-            return False
+            output_dir = Path(config.output_dir)
+            base_name = epub_path.stem
+
+            output_patterns = [
+                output_dir / base_name / f"中英双语-{base_name}.epub",
+                output_dir / base_name / f"中英双语-{base_name}.pdf",
+                output_dir / base_name / f"中文版本-{base_name}.epub",
+                output_dir / base_name / f"中文版本-{base_name}.pdf",
+                output_dir / base_name / f"英文原版-{base_name}.epub",
+                output_dir / base_name / f"英文原版-{base_name}.pdf",
+            ]
+
+            has_output = any(p.exists() for p in output_patterns)
+
+            if has_output:
+                logger.info(f"书籍已存在且处理完成，跳过: {epub_path.name}")
+                return False
+            else:
+                logger.info(f"书籍记录存在但处理失败，将重新处理: {epub_path.name}")
+                return True
 
         return True
 
@@ -62,18 +80,21 @@ class DirectoryScanner:
 
             metadata = self._extract_metadata(book)
 
-            db_book = self.db.create_book(
-                filename=epub_path.name,
-                title=metadata.get('title', extract_title_from_filename(epub_path.name)),
-                author=metadata.get('author')
-            )
+            existing_book = self.db.get_book_by_filename(epub_path.name)
+            if existing_book:
+                db_book = existing_book
+                logger.info(f"复用已有书籍记录: {db_book.title}")
+            else:
+                db_book = self.db.create_book(
+                    filename=epub_path.name,
+                    title=metadata.get('title', extract_title_from_filename(epub_path.name)),
+                    author=metadata.get('author')
+                )
+                self.db.create_book_output(db_book.id)
+                logger.info(f"书籍创建成功: {db_book.title}")
 
             self.db.update_book_status(db_book.id, "scanning")
             self.db.add_log(db_book.id, "scanning", "success", "书籍扫描完成")
-
-            self.db.create_book_output(db_book.id)
-
-            logger.info(f"书籍创建成功: {db_book.title}")
 
             return {
                 'id': db_book.id,

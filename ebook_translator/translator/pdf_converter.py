@@ -82,6 +82,14 @@ class PDFConverter:
         cmd.extend([
             "--minimum-line-height", str(typo_cfg['minimum_line_height']),
         ])
+
+        # ==================== 强制段落间距 ====================
+        # 原始EPUB的CSS可能覆盖翻译样式，使用--extra-css强制设置
+        css_config = self.config.get('css', {})
+        margin_bottom = css_config.get('paragraph_margin_bottom', '1.5em')
+        line_height = css_config.get('paragraph_line_height', '2.2')
+        extra_css = f"p, div {{ margin-bottom: {margin_bottom} !important; line-height: {line_height} !important; }}"
+        cmd.extend(["--extra-css", extra_css])
         
         # ==================== 页眉页脚（简洁设计）====================
         # 使用默认的页码功能（不使用自定义模板，避免变量替换问题）

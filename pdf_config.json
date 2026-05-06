@@ -157,16 +157,16 @@
     "_comment": "EPUB CSS样式 - 控制EPUB生成时的CSS样式，影响最终PDF的排版",
 
     "_translated_margin_top_desc": "双语版本译文与原文之间的顶部间距，单位: em",
-    "translated_margin_top": "0.3em",
+    "translated_margin_top": "0.5em",
 
     "_paragraph_margin_bottom_desc": "段落底部外边距，单位: em(相对于当前字体大小)，控制段落间距",
-    "paragraph_margin_bottom": "1.5em",
+    "paragraph_margin_bottom": "1em",
 
     "_paragraph_line_height_desc": "段落行高，单位: 倍数，控制行与行之间的垂直间距",
-    "paragraph_line_height": "2.2",
+    "paragraph_line_height": "1",
 
     "_paragraph_text_indent_desc": "段落首行缩进，单位: em，中文排版通常使用2em表示缩进两个字符",
-    "paragraph_text_indent": "2em",
+    "paragraph_text_indent": "0em",
 
     "_heading_margin_top_desc": "标题顶部外边距，单位: em，控制标题上方的空白",
     "heading_margin_top": "2.0em",

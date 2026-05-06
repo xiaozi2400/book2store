@@ -29,13 +29,23 @@ class TranslationProcessor:
             self.db.add_log(book_id, "translating", "start", "开始翻译")
 
             base_name = Path(epub_path).stem
-            book_output_dir = ensure_dir(self.output_dir / base_name)
+
+            bilingual_dir = ensure_dir(self.output_dir / base_name / f"中英双语-{base_name}")
+            chinese_dir = ensure_dir(self.output_dir / base_name / f"中文版本-{base_name}")
+            english_dir = ensure_dir(self.output_dir / base_name / f"英文原版-{base_name}")
+
+            bilingual_epub = bilingual_dir / f"中英双语-{base_name}.epub"
+            chinese_epub = chinese_dir / f"中文版本-{base_name}.epub"
+            english_epub = english_dir / f"英文原版-{base_name}.epub"
+            bilingual_pdf = bilingual_dir / f"中英双语-{base_name}.pdf"
+            chinese_pdf = chinese_dir / f"中文版本-{base_name}.pdf"
+            english_pdf = english_dir / f"英文原版-{base_name}.pdf"
 
             cmd = [
                 sys.executable,
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), "ebook_translator", "main.py"),
                 epub_path,
-                "--output-dir", str(book_output_dir)
+                "--output-dir", str(self.output_dir / base_name)
             ]
 
             logger.info(f"执行命令: {' '.join(cmd)}")
@@ -64,12 +74,16 @@ class TranslationProcessor:
                 return False
 
             base_name = Path(epub_path).stem
-            bilingual_epub = book_output_dir / "EPUB" / f"中英双语-{base_name}.epub"
-            chinese_epub = book_output_dir / "EPUB" / f"中文版本-{base_name}.epub"
-            english_epub = book_output_dir / "EPUB" / f"英文原版-{base_name}.epub"
-            bilingual_pdf = book_output_dir / "PDF" / f"中英双语-{base_name}.pdf"
-            chinese_pdf = book_output_dir / "PDF" / f"中文版本-{base_name}.pdf"
-            english_pdf = book_output_dir / "PDF" / f"英文原版-{base_name}.pdf"
+            bilingual_dir = ensure_dir(self.output_dir / base_name / f"中英双语-{base_name}")
+            chinese_dir = ensure_dir(self.output_dir / base_name / f"中文版本-{base_name}")
+            english_dir = ensure_dir(self.output_dir / base_name / f"英文原版-{base_name}")
+
+            bilingual_epub = bilingual_dir / f"中英双语-{base_name}.epub"
+            chinese_epub = chinese_dir / f"中文版本-{base_name}.epub"
+            english_epub = english_dir / f"英文原版-{base_name}.epub"
+            bilingual_pdf = bilingual_dir / f"中英双语-{base_name}.pdf"
+            chinese_pdf = chinese_dir / f"中文版本-{base_name}.pdf"
+            english_pdf = english_dir / f"英文原版-{base_name}.pdf"
 
             self.db.update_book_output(
                 book_id,

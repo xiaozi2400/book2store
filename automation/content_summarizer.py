@@ -96,7 +96,7 @@ class ContentSummarizer:
             self.db.update_book_status(book_id, "summarizing")
             self.db.add_log(book_id, "summarizing", "start", "开始生成精简版")
 
-            output_dir = ensure_dir(self.output_dir / Path(epub_path).stem / "PDF")
+            output_dir = ensure_dir(self.output_dir / Path(epub_path).stem)
             base_name = Path(epub_path).stem
             output_path = output_dir / f"{base_name}-精华版.pdf"
 
