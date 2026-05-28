@@ -24,26 +24,12 @@ class TemplateGenerator:
         self.default_template = self._get_default_template()
     
     def _get_default_template(self) -> str:
-        # 优先从配置文件读取，如果没有则使用硬编码默认值
+        # 从配置文件读取提示词
         summarizer_cfg = config.summarizer_config()
         if 'prompt' in summarizer_cfg and summarizer_cfg['prompt']:
             return summarizer_cfg['prompt']
         
-        return """请分析以下书籍内容，提取核心要点，生成精简版本。
-        
-书籍信息：
-- 书名：{title}
-- 作者：{author}
-
-内容：
-{content}
-
-请按以下格式生成精简版：
-1. 核心主题（100字以内）
-2. 主要章节要点（每个章节50字以内）
-3. 关键结论（100字以内）
-4. 一句话总结（30字以内）
-"""
+        raise ValueError("config.yaml 中没有配置 summarizer.prompt，无法生成精简版！")
     
     def detect_book_type(self, book_info: Dict[str, Any], details: Optional[Dict] = None) -> str:
         """检测书籍类型"""
