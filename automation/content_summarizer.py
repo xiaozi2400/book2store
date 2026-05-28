@@ -88,6 +88,99 @@ class ContentSummarizer:
         self.evaluator = SuitabilityEvaluator()
         self.template_gen = TemplateGenerator()
 
+    def _extract_cover_from_epub(self, epub_path: str) -> Optional[str]:
+        """从EPUB中提取封面图片"""
+        import zipfile
+        import tempfile
+        from xml.etree import ElementTree
+        
+        try:
+            cover_data = None
+            cover_name = None
+            
+            with zipfile.ZipFile(epub_path, 'r') as z:
+                all_files = z.namelist()
+                
+                # 第一步: 查找OPF文件
+                opf_path = None
+                for f in all_files:
+                    if f.lower().endswith('.opf'):
+                        opf_path = f
+                        break
+                
+                if opf_path:
+                    # 从OPF中查找封面
+                    try:
+                        opf_content = z.read(opf_path)
+                        root = ElementTree.fromstring(opf_content)
+                        
+                        # 查找元数据中的封面信息
+                        ns = {'opf': 'http://www.idpf.org/2007/opf'}
+                        
+                        # 查找meta标签中的封面
+                        for meta in root.findall('.//opf:meta', ns):
+                            name = meta.get('name')
+                            content = meta.get('content')
+                            if name and name.lower() == 'cover':
+                                cover_name = content
+                                logger.info(f"从元数据找到封面: {cover_name}")
+                                break
+                        
+                        # 构造封面在manifest中查找对应的文件
+                        if cover_name:
+                            # 尝试多个可能的路径
+                            possible_paths = [
+                                cover_name,
+                                f'OEBPS/{cover_name}',
+                                f'OEBPS/images/{cover_name}',
+                                f'OEBPS/image/{cover_name}',
+                            ]
+                            for path in possible_paths:
+                                if path in all_files:
+                                    cover_data = z.read(path)
+                                    logger.info(f"找到封面文件: {path}")
+                                    break
+                    except Exception as e:
+                        logger.warning(f"解析OPF封面信息失败: {e}")
+                
+                # 如果从OPF没找到，用备用方法找最大的图片（通常是封面）
+                if not cover_data:
+                    logger.info("从元数据未找到封面，尝试使用最大的图片")
+                    
+                    # 收集所有图片，选择最大的
+                    images = []
+                    for f in all_files:
+                        if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
+                            try:
+                                info = z.getinfo(f)
+                                images.append((-info.file_size, f))
+                            except Exception:
+                                pass
+                    
+                    if images:
+                        images.sort()  # 按文件大小降序排序
+                        largest_size, largest_path = images[0]
+                        cover_data = z.read(largest_path)
+                        logger.info(f"使用最大的图片作为封面: {largest_path} ({-largest_size} 字节)")
+                
+                if cover_data:
+                    # 保存封面到临时文件
+                    ext = 'jpg'
+                    if cover_name:
+                        if '.' in cover_name:
+                            ext = cover_name.split('.')[-1].lower()
+                    
+                    with tempfile.NamedTemporaryFile(suffix=f'.{ext}', delete=False) as f:
+                        f.write(cover_data)
+                        return f.name
+                    
+            return None
+        except Exception as e:
+            logger.warning(f"提取EPUB封面失败: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
+            return None
+
     def summarize(self, book_id: str, epub_path: str) -> bool:
         """生成书籍精简版"""
         logger.info(f"开始生成精简版: {book_id}")
@@ -98,7 +191,7 @@ class ContentSummarizer:
 
             output_dir = ensure_dir(self.output_dir / Path(epub_path).stem)
             base_name = Path(epub_path).stem
-            output_path = output_dir / f"{base_name}-精华版.pdf"
+            output_path = output_dir / "精简版.pdf"
 
             if output_path.exists():
                 logger.info(f"精简版已存在，将重新生成: {output_path}")
@@ -149,7 +242,26 @@ class ContentSummarizer:
                 self.db.add_log(book_id, "summarizing", "skipped", "AI生成失败，跳过精简版")
                 return False
 
-            self._create_pdf(summary_content, str(output_path))
+            # 提取封面 - 保存到输出目录，避免临时文件问题
+            cover_path = None
+            extracted_cover_path = self._extract_cover_from_epub(epub_path)
+            if extracted_cover_path:
+                # 复制到输出目录
+                import shutil
+                ext = os.path.splitext(extracted_cover_path)[1]
+                cover_path = output_dir / f"cover{ext}"
+                shutil.copy2(extracted_cover_path, cover_path)
+                logger.info(f"成功提取封面并保存: {cover_path}")
+                
+                # 删除临时文件
+                try:
+                    os.unlink(extracted_cover_path)
+                except:
+                    pass
+            else:
+                logger.warning("未能提取到封面")
+
+            self._create_pdf(summary_content, str(output_path), str(cover_path) if cover_path else None)
 
             self.db.update_book_output(book_id, summary_pdf=str(output_path))
 
@@ -410,11 +522,7 @@ class ContentSummarizer:
             for ch in chapters[:5]
         ])
         
-        default_content = f"""# {book_info.get('title', '书籍')}
-
-**作者**: {book_info.get('author', 'Unknown')}
-
-## 核心观点
+        default_content = f"""## 核心观点
 
 本书包含丰富的知识和见解，值得深入阅读。
 
@@ -431,21 +539,21 @@ class ContentSummarizer:
             'content': default_content
         }
 
-    def _create_pdf(self, content: Dict[str, Any], output_path: str):
+    def _create_pdf(self, content: Dict[str, Any], output_path: str, cover_path: Optional[str] = None):
         """生成PDF - 优先使用WeasyPrint，失败则回退到Playwright"""
         try:
-            self._create_pdf_weasyprint(content, output_path)
+            self._create_pdf_weasyprint(content, output_path, cover_path)
             logger.info(f"WeasyPrint PDF生成成功: {output_path}")
         except Exception as e:
             logger.warning(f"WeasyPrint生成失败，回退到Playwright: {e}")
             try:
-                self._create_pdf_playwright(content, output_path)
+                self._create_pdf_playwright(content, output_path, cover_path)
                 logger.info(f"Playwright PDF生成成功: {output_path}")
             except Exception as e2:
                 logger.warning(f"Playwright也失败，回退到ReportLab: {e2}")
-                self._create_pdf_reportlab(content, output_path)
+                self._create_pdf_reportlab(content, output_path, cover_path)
     
-    def _create_pdf_weasyprint(self, content: Dict[str, Any], output_path: str):
+    def _create_pdf_weasyprint(self, content: Dict[str, Any], output_path: str, cover_path: Optional[str] = None):
         """使用WeasyPrint生成PDF"""
         import markdown
         import os
@@ -476,12 +584,39 @@ class ContentSummarizer:
             subtitle = None
             body_html = html_body
 
-        full_html = self._build_weasyprint_html(title, subtitle, body_html)
+        full_html = self._build_weasyprint_html(title, subtitle, body_html, cover_path)
 
         HTML(string=full_html).write_pdf(output_path)
     
-    def _build_weasyprint_html(self, title: str, subtitle: str, body_html: str) -> str:
+    def _build_weasyprint_html(self, title: str, subtitle: str, body_html: str, cover_path: Optional[str] = None) -> str:
         """构建WeasyPrint使用的HTML文档"""
+        import base64
+        
+        cover_html = ''
+        if cover_path and os.path.exists(cover_path):
+            # 使用base64编码嵌入图片，避免路径问题
+            try:
+                with open(cover_path, 'rb') as f:
+                    cover_data = base64.b64encode(f.read()).decode('utf-8')
+                
+                ext = os.path.splitext(cover_path)[1].lower()
+                mime_type = {
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.png': 'image/png',
+                    '.gif': 'image/gif',
+                    '.bmp': 'image/bmp'
+                }.get(ext, 'image/jpeg')
+                
+                cover_html = f'''
+<div style="text-align: center; page-break-after: always;">
+    <img src="data:{mime_type};base64,{cover_data}" style="max-width: 100%; max-height: 90vh; display: block; margin: auto;">
+</div>'''
+                logger.info(f"成功嵌入封面图片")
+            except Exception as e:
+                    logger.warning(f"嵌入封面失败: {e}")
+                    cover_html = ''
+        
         return f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -578,14 +713,13 @@ pre {{
 </style>
 </head>
 <body>
-<div class="cover-title">《{title}》精华版</div>
-{'<div class="subtitle">' + subtitle + '</div>' if subtitle else ''}
+{cover_html}
 {body_html}
 </body>
 </html>
 '''
     
-    def _create_pdf_playwright(self, content: Dict[str, Any], output_path: str):
+    def _create_pdf_playwright(self, content: Dict[str, Any], output_path: str, cover_path: Optional[str] = None):
         """使用Playwright+Chrome生成PDF"""
         import markdown
         import re
@@ -606,7 +740,7 @@ pre {{
             subtitle = None
             body_html = html_body
 
-        full_html = self._build_playwright_html(title, subtitle, body_html)
+        full_html = self._build_playwright_html(title, subtitle, body_html, cover_path)
 
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -630,8 +764,35 @@ pre {{
 
             browser.close()
     
-    def _build_playwright_html(self, title: str, subtitle: str, body_html: str) -> str:
+    def _build_playwright_html(self, title: str, subtitle: str, body_html: str, cover_path: Optional[str] = None) -> str:
         """构建Playwright使用的HTML文档"""
+        import base64
+        
+        cover_html = ''
+        if cover_path and os.path.exists(cover_path):
+            # 使用base64编码嵌入图片
+            try:
+                with open(cover_path, 'rb') as f:
+                    cover_data = base64.b64encode(f.read()).decode('utf-8')
+                
+                ext = os.path.splitext(cover_path)[1].lower()
+                mime_type = {
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.png': 'image/png',
+                    '.gif': 'image/gif',
+                    '.bmp': 'image/bmp'
+                }.get(ext, 'image/jpeg')
+                
+                cover_html = f'''
+<div style="text-align: center; page-break-after: always;">
+    <img src="data:{mime_type};base64,{cover_data}" style="max-width: 100%; max-height: 90vh; display: block; margin: auto;">
+</div>'''
+                logger.info(f"成功嵌入封面图片(Playwright)")
+            except Exception as e:
+                    logger.warning(f"嵌入封面失败(Playwright): {e}")
+                    cover_html = ''
+        
         return f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -729,14 +890,13 @@ pre {{
 </style>
 </head>
 <body>
-<div class="cover-title">《{title}》精华版</div>
-{'<div class="subtitle">' + subtitle + '</div>' if subtitle else ''}
+{cover_html}
 {body_html}
 </body>
 </html>
 '''
     
-    def _create_pdf_reportlab(self, content: Dict[str, Any], output_path: str):
+    def _create_pdf_reportlab(self, content: Dict[str, Any], output_path: str, cover_path: Optional[str] = None):
         """使用reportlab直接生成PDF - 原生支持中文"""
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
