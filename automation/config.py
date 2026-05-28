@@ -114,6 +114,11 @@ class Config:
         return self.get("paths.input_dir", "E:\\ebooks\\input")
 
     @property
+    def test_input_dir(self) -> str:
+        """测试输入目录"""
+        return self.get("paths.test_input_dir", "E:\\ebooks\\test-input")
+
+    @property
     def output_dir(self) -> str:
         """输出目录"""
         return self.get("paths.output_dir", "./output")

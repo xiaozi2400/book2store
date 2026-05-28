@@ -20,6 +20,7 @@ from automation.ai_copywriter import generate_copywriting
 from automation.link_importer import import_links
 from automation.xianyu_publisher import publish_to_xianyu
 from automation.config import config
+from automation.utils import extract_title_from_filename
 
 app = typer.Typer(help="电子书自动化处理系统")
 console = Console()
@@ -300,6 +301,107 @@ def auto(
             fail_count += 1
 
     console.print(f"\n[bold]===== 处理完成 =====[/bold]")
+    console.print(f"[green]成功: {success_count}[/green]")
+    if fail_count > 0:
+        console.print(f"[red]失败: {fail_count}[/red]")
+
+
+@app.command()
+def test(
+    skip_translate: bool = typer.Option(False, help="跳过翻译步骤"),
+    skip_summarize: bool = typer.Option(False, help="跳过生成精简版"),
+    skip_images: bool = typer.Option(False, help="跳过图片提取"),
+    skip_copywriting: bool = typer.Option(False, help="跳过文案生成")
+):
+    """测试模式：直接从 test_input_dir 读取文件处理（跳过闲鱼发布）"""
+    from automation.translation_processor import translate_book
+    from automation.image_extractor import extract_images
+    from automation.ai_copywriter import generate_copywriting
+    from automation.content_summarizer import generate_summary
+    from automation.utils import is_valid_epub
+    import time
+
+    test_dir = Path(config.test_input_dir)
+    console.print(f"[bold yellow]测试模式[/bold yellow]")
+    console.print(f"[dim]输入目录: {test_dir}[/dim]")
+    console.print(f"[dim]输出目录: {config.output_dir}[/dim]\n")
+
+    if not test_dir.exists():
+        console.print(f"[bold red]测试目录不存在: {test_dir}[/bold red]")
+        console.print(f"[yellow]请创建目录 {test_dir} 并放入 .epub 文件[/yellow]")
+        raise typer.Exit(1)
+
+    epub_files = sorted(test_dir.glob("*.epub"))
+    if not epub_files:
+        console.print(f"[yellow]测试目录中未找到 .epub 文件: {test_dir}[/yellow]")
+        return
+
+    console.print(f"[bold]发现 {len(epub_files)} 个测试文件，开始处理...[/bold]\n")
+
+    db = DatabaseManager()
+    success_count = 0
+    fail_count = 0
+
+    for i, epub_path in enumerate(epub_files, 1):
+        filename = epub_path.name
+        title = extract_title_from_filename(filename)
+        console.print(f"\n[bold cyan][测试 {i}/{len(epub_files)}] {title}[/bold cyan]")
+        console.print(f"[dim]文件: {epub_path}[/dim]")
+
+        if not is_valid_epub(str(epub_path)):
+            console.print(f"[bold red]无效的EPUB文件，跳过: {filename}[/bold red]")
+            fail_count += 1
+            continue
+
+        book_id = db.create_book(filename, f"[TEST] {title}", None).id
+        start_time = time.time()
+        db.update_book_status(book_id, "processing")
+
+        try:
+            db.create_book_output(book_id)
+
+            if not skip_translate:
+                console.print(f"  [dim]→ 翻译并生成PDF...[/dim]")
+                translate_book(book_id, str(epub_path))
+            else:
+                console.print(f"  [dim]→ 跳过翻译步骤[/dim]")
+
+            if not skip_summarize:
+                console.print(f"  [dim]→ 生成精简版...[/dim]")
+                generate_summary(book_id, str(epub_path))
+            else:
+                console.print(f"  [dim]→ 跳过精简版步骤[/dim]")
+
+            if not skip_images:
+                console.print(f"  [dim]→ 提取图片...[/dim]")
+                base_name = epub_path.stem
+                pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
+                extract_images(book_id, str(epub_path), str(pdf_path) if pdf_path.exists() else None)
+            else:
+                console.print(f"  [dim]→ 跳过图片提取步骤[/dim]")
+
+            if not skip_copywriting:
+                console.print(f"  [dim]→ 生成文案...[/dim]")
+                book_obj = db.get_book_by_id(book_id)
+                generate_copywriting(book_id, {'title': book_obj.title, 'author': book_obj.author})
+            else:
+                console.print(f"  [dim]→ 跳过文案生成步骤[/dim]")
+
+            console.print(f"  [dim]→ 跳过闲鱼发布（测试模式）[/dim]")
+
+            elapsed = time.time() - start_time
+            db.update_book_status(book_id, "completed")
+            console.print(f"[bold green]✓ [测试] {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
+            success_count += 1
+
+        except Exception as e:
+            db.update_book_status(book_id, "failed", str(e))
+            console.print(f"[bold red]✗ [测试] {title} 处理失败: {e}[/bold red]")
+            fail_count += 1
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
+    console.print(f"\n[bold]===== 测试处理完成 =====[/bold]")
     console.print(f"[green]成功: {success_count}[/green]")
     if fail_count > 0:
         console.print(f"[red]失败: {fail_count}[/red]")
