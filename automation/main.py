@@ -20,6 +20,7 @@ from automation.ai_copywriter import generate_copywriting
 from automation.link_importer import import_links
 from automation.xianyu_publisher import publish_to_xianyu
 from automation.config import config
+from automation.metadata_writer import MetadataWriter
 from automation.utils import extract_title_from_filename
 
 app = typer.Typer(help="电子书自动化处理系统")
@@ -196,6 +197,8 @@ def process(
 
         progress.update(task, description="完成!", completed=True)
 
+    MetadataWriter().write_full(book_id)
+
     console.print(f"[bold green]处理完成: {book_id}[/bold green]")
 
 
@@ -324,6 +327,7 @@ def auto(
 
             elapsed = time.time() - start_time
             db.update_book_status(book_id, "completed")
+            MetadataWriter().write_full(book_id)
             console.print(f"[bold green]✓ {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
             success_count += 1
 
@@ -436,6 +440,7 @@ def test(
 
             elapsed = time.time() - start_time
             db.update_book_status(book_id, "completed")
+            MetadataWriter().write_full(book_id)
             console.print(f"[bold green]✓ [测试] {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
             success_count += 1
 

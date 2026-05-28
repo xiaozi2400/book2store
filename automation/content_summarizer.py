@@ -252,6 +252,11 @@ class ContentSummarizer:
                 cover_path = output_dir / f"cover{ext}"
                 shutil.copy2(extracted_cover_path, cover_path)
                 logger.info(f"成功提取封面并保存: {cover_path}")
+
+                meta_dir = output_dir.parent / f"{output_dir.name}_metadata"
+                os.makedirs(meta_dir, exist_ok=True)
+                shutil.copy2(extracted_cover_path, meta_dir / f"cover{ext}")
+                logger.info(f"封面已复制到 metadata 目录: {meta_dir / f'cover{ext}'}")
                 
                 # 删除临时文件
                 try:

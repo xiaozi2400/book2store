@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .ai_client import AIClient
 from .database import DatabaseManager
 from .config import config
+from .metadata_writer import MetadataWriter
 from .utils import logger
 
 
@@ -53,6 +54,8 @@ class AICopywriter:
             logger.info(f"数据库更新完成")
 
             self.db.add_log(book_id, "copywriting", "success", "文案生成完成")
+
+            MetadataWriter().update_copywriting(book_id)
 
             logger.info(f"文案生成成功: {book_id}")
             return True
