@@ -111,12 +111,13 @@ class Translator:
                 self.stats["api_calls"] += 1
                 result = response.json()
 
-                translated_text = result["choices"][0]["message"]["content"]
-
-                if "usage" in result:
-                    self.stats["total_tokens"] += result["usage"].get("total_tokens", 0)
-
-                return translated_text.strip()
+                choices = result.get("choices")
+                if choices and len(choices) > 0:
+                    content = choices[0].get("message", {}).get("content", "")
+                    if content:
+                        self.stats["total_tokens"] += result.get("usage", {}).get("total_tokens", 0)
+                        return content.strip()
+                logger.warning(f"translate() API 返回异常或内容为空: {str(result)[:200]}")
 
             except requests.exceptions.Timeout:
                 retry_count += 1
@@ -157,12 +158,13 @@ class Translator:
                 self.stats["api_calls"] += 1
                 result = response.json()
 
-                content = result["choices"][0]["message"]["content"]
-
-                if "usage" in result:
-                    self.stats["total_tokens"] += result["usage"].get("total_tokens", 0)
-
-                return content.strip()
+                choices = result.get("choices")
+                if choices and len(choices) > 0:
+                    content = choices[0].get("message", {}).get("content", "")
+                    if content:
+                        self.stats["total_tokens"] += result.get("usage", {}).get("total_tokens", 0)
+                        return content.strip()
+                logger.warning(f"chat() API 返回异常或内容为空: {str(result)[:200]}")
 
             except Exception as e:
                 retry_count += 1

@@ -340,10 +340,10 @@ class ContentSummarizer:
             logger.info(f"精简版AI响应（前500字符）: {str(result)[:500] if result else '空'}")
 
             if not result or 'error' in str(result).lower():
-                error_msg = f"AI生成失败，返回结果为空或包含错误: result长度={len(result) if result else 0}"
-                logger.warning(error_msg)
-                self.db.add_log(book_id, "summarizing", "failed", error_msg)
-                raise Exception(error_msg)
+                warn_msg = f"AI生成失败，返回结果为空或包含错误: result长度={len(result) if result else 0}，使用默认摘要"
+                logger.warning(warn_msg)
+                self.db.add_log(book_id, "summarizing", "warning", warn_msg)
+                return self._get_default_summary(book_info, chapters)
 
             parsed_result = self._parse_summary_result(result)
             
@@ -365,8 +365,22 @@ class ContentSummarizer:
             return None
 
     def _build_summary_prompt(self, book_info: Dict, content: str, template_prompt: str) -> str:
-        """构建摘要生成提示词 - 纯规则模式，模板中包含{content}占位符"""
-        return template_prompt.replace("{content}", content)
+        """构建摘要生成提示词 - 替换所有占位符"""
+        summarizer_cfg = config.summarizer_config()
+        
+        try:
+            return template_prompt.format(
+                title=book_info.get('title', '未知书籍'),
+                author=book_info.get('author', '未知作者'),
+                core_insight_length=summarizer_cfg.get('core_insight_length', '300-500'),
+                chapter_summary_length=summarizer_cfg.get('chapter_summary_length', '150-200'),
+                max_quotes=summarizer_cfg.get('max_quotes', 15),
+                content=content
+            )
+        except KeyError as e:
+            logger.warning(f"提示词占位符替换失败，使用默认值: {e}")
+            # 如果有占位符找不到，使用简单替换
+            return template_prompt.replace("{content}", content)
 
     def _parse_summary_result(self, result: str) -> Dict[str, Any]:
         """解析AI返回的结果"""

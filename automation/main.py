@@ -26,6 +26,38 @@ app = typer.Typer(help="电子书自动化处理系统")
 console = Console()
 
 
+def extract_epub_metadata(epub_path: Path) -> dict:
+    """从 EPUB 文件提取元数据（复用 directory_scanner 的逻辑）"""
+    try:
+        import ebooklib
+        from ebooklib import epub
+        
+        book = epub.read_epub(str(epub_path))
+        metadata = {
+            'title': None,
+            'author': None,
+            'language': 'en',
+        }
+        
+        if book.get_metadata('DC', 'title'):
+            metadata['title'] = book.get_metadata('DC', 'title')[0][0]
+        
+        if book.get_metadata('DC', 'creator'):
+            metadata['author'] = book.get_metadata('DC', 'creator')[0][0]
+        
+        if book.get_metadata('DC', 'language'):
+            lang = book.get_metadata('DC', 'language')[0][0]
+            metadata['language'] = lang.lower()
+        
+        return metadata
+    except Exception:
+        return {
+            'title': None,
+            'author': "Unknown",
+            'language': 'en',
+        }
+
+
 @app.command()
 def scan():
     """扫描输入目录，检测新书籍"""
@@ -311,7 +343,8 @@ def test(
     skip_translate: bool = typer.Option(False, help="跳过翻译步骤"),
     skip_summarize: bool = typer.Option(False, help="跳过生成精简版"),
     skip_images: bool = typer.Option(False, help="跳过图片提取"),
-    skip_copywriting: bool = typer.Option(False, help="跳过文案生成")
+    skip_copywriting: bool = typer.Option(False, help="跳过文案生成"),
+    skip_cache: bool = typer.Option(False, help="跳过翻译缓存，强制重新翻译")
 ):
     """测试模式：直接从 test_input_dir 读取文件处理（跳过闲鱼发布）"""
     from automation.translation_processor import translate_book
@@ -353,7 +386,16 @@ def test(
             fail_count += 1
             continue
 
-        book_id = db.create_book(filename, f"[TEST] {title}", None).id
+        import shutil
+        base_name = epub_path.stem
+        book_output_dir = Path(config.output_dir) / base_name
+        if book_output_dir.exists():
+            shutil.rmtree(book_output_dir)
+
+        metadata = extract_epub_metadata(epub_path)
+        final_title = metadata.get('title') or title
+        author = metadata.get('author') or "Unknown"
+        book_id = db.create_book(filename, f"[TEST] {final_title}", author).id
         start_time = time.time()
         db.update_book_status(book_id, "processing")
 
@@ -361,8 +403,11 @@ def test(
             db.create_book_output(book_id)
 
             if not skip_translate:
-                console.print(f"  [dim]→ 翻译并生成PDF...[/dim]")
-                translate_book(book_id, str(epub_path))
+                if skip_cache:
+                    console.print(f"  [dim]→ 翻译并生成PDF（跳过缓存）...[/dim]")
+                else:
+                    console.print(f"  [dim]→ 翻译并生成PDF...[/dim]")
+                translate_book(book_id, str(epub_path), skip_cache=skip_cache)
             else:
                 console.print(f"  [dim]→ 跳过翻译步骤[/dim]")
 

@@ -7,8 +7,11 @@ from typing import Optional, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ebook_translator.translator.translator import Translator
+# 先读取 config.yaml 并设置环境变量，再导入 Translator
 from .config import config
+os.environ["TRANSLATION_PROVIDER"] = config.ai_config.get("provider", "deepseek")
+
+from ebook_translator.translator.translator import Translator
 
 
 class AIClient:

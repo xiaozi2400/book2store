@@ -1,8 +1,14 @@
 """
 模板生成器 - 生成书籍精简版提示词模板
 """
+import os
+import sys
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from .config import config
 
 @dataclass
 class TemplateResult:
@@ -18,6 +24,11 @@ class TemplateGenerator:
         self.default_template = self._get_default_template()
     
     def _get_default_template(self) -> str:
+        # 优先从配置文件读取，如果没有则使用硬编码默认值
+        summarizer_cfg = config.summarizer_config()
+        if 'prompt' in summarizer_cfg and summarizer_cfg['prompt']:
+            return summarizer_cfg['prompt']
+        
         return """请分析以下书籍内容，提取核心要点，生成精简版本。
         
 书籍信息：
@@ -53,15 +64,11 @@ class TemplateGenerator:
         author = book_info.get('author', '未知作者')
         book_type = self.detect_book_type(book_info, details)
         
-        prompt = self.default_template.format(
-            title=title,
-            author=author,
-            content='{content}'
-        )
-        
+        # 不要在这里格式化模板，保持原始占位符让 _build_summary_prompt 统一处理
+        # 只返回原始模板字符串
         return TemplateResult(
             template_name=f"{book_type}_template",
-            prompt_for_ai=prompt,
+            prompt_for_ai=self.default_template,
             book_type=book_type
         )
 

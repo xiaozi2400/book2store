@@ -20,7 +20,7 @@ MINIMAX_MODEL = "MiniMax-M2.7"
 # 翻译器选择配置
 # 可选值: "deepseek" 或 "minimax"
 # 也可以通过环境变量 TRANSLATION_PROVIDER 设置
-TRANSLATION_PROVIDER = "deepseek"
+TRANSLATION_PROVIDER = os.environ.get("TRANSLATION_PROVIDER", "deepseek")
 
 # 翻译配置
 # 根据 provider 自动选择模型

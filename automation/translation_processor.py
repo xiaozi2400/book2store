@@ -20,7 +20,7 @@ class TranslationProcessor:
         self.db = DatabaseManager()
         self.output_dir = Path(config.output_dir)
 
-    def process(self, book_id: str, epub_path: str) -> bool:
+    def process(self, book_id: str, epub_path: str, skip_cache: bool = False) -> bool:
         """处理书籍：调用ebook_translator进行翻译和PDF转换"""
         logger.info(f"开始翻译处理: {book_id}")
 
@@ -48,6 +48,8 @@ class TranslationProcessor:
                 epub_path,
                 "--output-dir", str(self.output_dir / base_name)
             ]
+            if skip_cache:
+                cmd.append("--skip-cache")
 
             logger.info(f"执行命令: {' '.join(cmd)}")
 
@@ -109,10 +111,10 @@ class TranslationProcessor:
             return False
 
 
-def translate_book(book_id: str, epub_path: str) -> bool:
+def translate_book(book_id: str, epub_path: str, skip_cache: bool = False) -> bool:
     """翻译书籍"""
     processor = TranslationProcessor()
-    return processor.process(book_id, epub_path)
+    return processor.process(book_id, epub_path, skip_cache)
 
 
 if __name__ == "__main__":
