@@ -233,7 +233,7 @@ xianyu:
   base_url: "https://seller.goofish.com"
   timeout: 30
   auto_retry: true
-  inventory: 1
+  inventory: 100
   location: "深圳北站"
   shipping: "包邮"
   cookie_path: "data/xianyu_cookie.json"
