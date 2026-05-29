@@ -134,6 +134,21 @@ class DatabaseManager:
         finally:
             close_session(session)
 
+    def update_book_summary(self, book_id: str, summary_text: str) -> 'Book':
+        """更新书籍摘要文本并返回 Book 对象"""
+        from .models import Book
+
+        session = get_session()
+        try:
+            book = session.query(Book).filter(Book.id == book_id).first()
+            if book:
+                book.summary_text = summary_text
+                session.commit()
+                session.refresh(book)
+            return book
+        finally:
+            close_session(session)
+
     def create_book_output(self, book_id: str) -> 'BookOutput':
         """创建书籍输出记录"""
         from .models import BookOutput
