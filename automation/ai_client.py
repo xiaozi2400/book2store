@@ -30,10 +30,13 @@ class AIClient:
         retries = max_retries or self.ai_config.get("retry_times", 3)
         return self.translator.translate(text, max_retries=retries)
 
-    def chat(self, prompt: str, max_retries: int = None, max_tokens: int = None) -> str:
-        """通用对话"""
+    def chat(self, prompt: str, max_retries: int = None, max_tokens: int = None) -> tuple:
+        """通用对话，返回 (text, usage)"""
         retries = max_retries or self.ai_config.get("retry_times", 3)
-        return self.translator.chat(prompt, max_retries=retries, max_tokens=max_tokens)
+        result = self.translator.chat_raw(prompt, max_retries=retries, max_tokens=max_tokens)
+        text = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        usage = result.get("usage", {})
+        return text, usage
 
     def generate_summary(self, book_info: Dict[str, Any], content: str) -> Dict[str, Any]:
         """生成书籍摘要"""
@@ -77,59 +80,39 @@ class AIClient:
             content=content[:max_content]
         )
 
-        response = self.chat(prompt, max_tokens=2000)
+        response, _ = self.chat(prompt, max_tokens=2000)
         return self._parse_json_response(response)
 
-    def generate_xianyu_listing(self, book_info: Dict[str, Any]) -> Dict[str, Any]:
-        """生成闲鱼商品文案"""
+    def generate_xianyu_listing(self, book_info: Dict[str, Any]) -> str:
+        """生成闲鱼商品文案，返回原始文案文本"""
+        copywriting_cfg = config.copywriting_config
+        prompt_template = copywriting_cfg.get(
+            "xianyu_listing_prompt",
+            "你是一个闲鱼二手书卖家。用户提供了以下书籍信息：\n\n书名：{title}\n作者：{author}\n\n请你执行以下步骤：\n\n## 1、自动搜索（真实优先）\n\n..."
+        )
 
-        prompt = f"""你是一位闲鱼电商文案专家。请为以下书籍生成商品文案：
+        prompt = prompt_template.format(
+            title=book_info.get('title', 'Unknown'),
+            author=book_info.get('author', 'Unknown'),
+        )
 
-【书名】: {book_info.get('title', 'Unknown')}
-【作者】: {book_info.get('author', 'Unknown')}
-
-【SKU信息】:
-- 纯英文原版 PDF: ¥3.99
-- 完整套装(英文+中文+双语+精简版): ¥8.99
-
-【要求】:
-1. 标题：25-30字，吸引人，包含关键词
-2. 描述：
-   - 第一段：书籍价值和亮点
-   - 第二段：包含内容说明（4个版本）
-   - 第三段：购买须知和发货方式
-3. 标签：5-8个相关标签
-4. 语气：专业、友好、有说服力
-
-请按以下 JSON 格式输出：
-{{
-    "title": "商品标题",
-    "description": "商品描述（多段）",
-    "tags": ["标签1", "标签2", ...]
-}}"""
-
-        response = self.translate(prompt)
-        return self._parse_json_response(response)
+        return self.chat(prompt)
 
     def generate_xiaohongshu_note(self, book_info: Dict[str, Any]) -> str:
         """生成小红书种草笔记"""
+        copywriting_cfg = config.copywriting_config
+        prompt_template = copywriting_cfg.get(
+            "xiaohongshu_note_prompt",
+            "你是一位小红书读书博主。请为《{title}》生成种草笔记。"
+        )
 
-        prompt = f"""你是一位小红书读书博主。请为《{book_info.get('title', 'Unknown')}》生成种草笔记。
+        summary = book_info.get('summary', '')
 
-【作者】: {book_info.get('author', 'Unknown')}
-【核心观点】: {book_info.get('summary', '暂无')}
-
-【要求】:
-1. 标题：爆款风格，带 emoji，20字内
-2. 正文：
-   - 开头：痛点引入或金句
-   - 中间：书籍介绍 + 核心价值
-   - 结尾：推荐理由 + 获取方式
-3. 使用 emoji 增加可读性
-4. 添加相关话题标签（#读书 #好书推荐 等）
-5. 语气：亲切、真实、像朋友推荐
-
-请按 Markdown 格式输出。"""
+        prompt = prompt_template.format(
+            title=book_info.get('title', 'Unknown'),
+            author=book_info.get('author', 'Unknown'),
+            summary=summary,
+        )
 
         return self.chat(prompt, max_tokens=2000)
 

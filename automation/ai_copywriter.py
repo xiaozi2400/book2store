@@ -37,25 +37,27 @@ class AICopywriter:
                     'summary': ''
                 }
 
-            xianyu_result = self.ai.generate_xianyu_listing(book_info)
-            logger.info(f"闲鱼文案生成结果: {xianyu_result}")
+            xianyu_result, xianyu_usage = self.ai.generate_xianyu_listing(book_info)
+            if xianyu_usage:
+                self.db.record_token_usage(
+                    book_id, "copywriting_xianyu",
+                    input_tokens=xianyu_usage.get("prompt_tokens", 0),
+                    output_tokens=xianyu_usage.get("completion_tokens", 0)
+                )
+            logger.info(f"闲鱼文案生成结果: {xianyu_result[:200] if xianyu_result else 'None'}...")
 
-            xiaohongshu_result = self.ai.generate_xiaohongshu_note(book_info)
+            xiaohongshu_result, xiaohongshu_usage = self.ai.generate_xiaohongshu_note(book_info)
+            if xiaohongshu_usage:
+                self.db.record_token_usage(
+                    book_id, "copywriting_xiaohongshu",
+                    input_tokens=xiaohongshu_usage.get("prompt_tokens", 0),
+                    output_tokens=xiaohongshu_usage.get("completion_tokens", 0)
+                )
             logger.info(f"小红书笔记生成结果: {xiaohongshu_result[:100] if xiaohongshu_result else 'None'}...")
 
-            logger.info(f"更新数据库: book_id={book_id}")
-            self.db.update_book_output(
-                book_id,
-                xianyu_title=xianyu_result.get('title'),
-                xianyu_description=xianyu_result.get('description'),
-                xianyu_tags=','.join(xianyu_result.get('tags', [])),
-                xiaohongshu_note=xiaohongshu_result
-            )
-            logger.info(f"数据库更新完成")
+            MetadataWriter().write_copywriting(book_id, xianyu_result, xiaohongshu_result)
 
             self.db.add_log(book_id, "copywriting", "success", "文案生成完成")
-
-            MetadataWriter().update_copywriting(book_id)
 
             logger.info(f"文案生成成功: {book_id}")
             return True

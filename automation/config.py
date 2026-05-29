@@ -204,6 +204,11 @@ class Config:
         """精简版生成配置"""
         return self.get("summarizer", {})
 
+    @property
+    def copywriting_config(self) -> Dict:
+        """文案生成配置"""
+        return self.get("copywriting", {})
+
     def suitability_eval_config(self) -> Dict:
         """精简版适合度评估配置"""
         return self.get("suitability_eval", {})

@@ -2,10 +2,17 @@
 数据库连接管理
 """
 import os
+import logging
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from .models import Base
+
+logger = logging.getLogger(__name__)
+
+# DeepSeek 定价（元/百万token）
+INPUT_PRICE_PER_MILLION = 1.0
+OUTPUT_PRICE_PER_MILLION = 2.0
 
 _db_engine = None
 _SessionLocal = None
@@ -226,3 +233,59 @@ class DatabaseManager:
             }
         finally:
             close_session(session)
+
+    def record_token_usage(self, book_id, step, input_tokens, output_tokens, model="deepseek-chat"):
+        """记录Token消耗"""
+        from .models import TokenUsage
+        total_tokens = input_tokens + output_tokens
+        cost = (input_tokens / 1_000_000 * INPUT_PRICE_PER_MILLION +
+                output_tokens / 1_000_000 * OUTPUT_PRICE_PER_MILLION)
+        session = get_session()
+        try:
+            record = TokenUsage(
+                book_id=book_id,
+                step=step,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                cost=round(cost, 6)
+            )
+            session.add(record)
+            session.commit()
+            logger.info(f"TokenUsage - book_id={book_id} step={step} "
+                        f"input={input_tokens} output={output_tokens} "
+                        f"total={total_tokens} cost=¥{cost:.4f}")
+            return record
+        finally:
+            close_session(session)
+
+    def get_token_usage(self, book_id=None):
+        """查询Token消耗记录"""
+        from .models import TokenUsage
+        session = get_session()
+        try:
+            query = session.query(TokenUsage)
+            if book_id:
+                query = query.filter(TokenUsage.book_id == book_id)
+            return query.order_by(TokenUsage.created_at).all()
+        finally:
+            close_session(session)
+
+    def get_token_summary(self, book_id):
+        """获取指定书籍的Token消耗汇总"""
+        records = self.get_token_usage(book_id)
+        if not records:
+            return None
+
+        steps = {}
+        for r in records:
+            step = r.step
+            if step not in steps:
+                steps[step] = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost": 0.0}
+            steps[step]["input_tokens"] += r.input_tokens
+            steps[step]["output_tokens"] += r.output_tokens
+            steps[step]["total_tokens"] += r.total_tokens
+            steps[step]["cost"] += r.cost
+
+        return steps

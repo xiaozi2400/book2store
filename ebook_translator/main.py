@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--api-key', '-k', help='DeepSeek API 密钥')
     parser.add_argument('--skip-cache', action='store_true', help='跳过缓存')
     parser.add_argument('--test-mode', action='store_true', help='测试模式（只处理前50个段落）')
+    parser.add_argument('--book-id', help='书籍ID（用于跨进程传递Token统计）')
     
     args = parser.parse_args()
     
@@ -315,6 +316,21 @@ def main():
     if stats['total_tokens'] > 0:
         cost = stats['total_tokens'] / 1000000  # DeepSeek 约 1元/百万token
         print(f"\n估算成本: {cost:.4f} 元")
+    
+    # 如果指定了 book_id，将 Token 统计写入临时 JSON 文件（用于跨进程通信）
+    if args.book_id:
+        import tempfile
+        stats_file = os.path.join(tempfile.gettempdir(), f"translation_stats_{args.book_id}.json")
+        with open(stats_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "prompt_tokens": stats.get("prompt_tokens", 0),
+                "completion_tokens": stats.get("completion_tokens", 0),
+                "total_tokens": stats.get("total_tokens", 0),
+                "api_calls": stats.get("api_calls", 0),
+                "cache_hits": stats.get("cache_hits", 0),
+                "translated_paragraphs": stats.get("translated_paragraphs", 0)
+            }, f, ensure_ascii=False)
+        print(f"[Token统计] 已保存到临时文件")
     
     print("=" * 60)
     print("处理完成！")

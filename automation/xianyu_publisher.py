@@ -19,7 +19,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from playwright.sync_api import sync_playwright, Browser, Page, BrowserContext
 from .database import DatabaseManager
 from .config import config
-from .metadata_writer import MetadataWriter
 from .utils import logger, ensure_dir
 
 
@@ -43,13 +42,13 @@ class XianyuPublisher:
             self.db.update_book_status(book_id, "publishing")
             self.db.add_log(book_id, "publishing", "start", "开始发布到闲鱼")
 
-            metadata = self._load_metadata(book_id)
-            if not metadata:
-                raise ValueError("未找到 metadata.json: %s" % book_id)
-
-            copywriting = metadata.get("copywriting", {}).get("xianyu", {})
-            description = copywriting.get("description", "")
-            if not description:
+            meta_dir = self._get_meta_dir(book_id)
+            xianyu_txt = meta_dir / "xianyu_listing.txt"
+            if not xianyu_txt.exists():
+                raise ValueError("未找到闲鱼文案: %s" % xianyu_txt)
+            with open(xianyu_txt, "r", encoding="utf-8") as f:
+                description = f.read()
+            if not description.strip():
                 raise ValueError("闲鱼文案为空: %s" % book_id)
 
             self._start_browser()
@@ -58,7 +57,6 @@ class XianyuPublisher:
 
             self._navigate_to_publish()
 
-            meta_dir = self._get_meta_dir(book_id)
             self._upload_images(meta_dir)
 
             self._fill_description(description)
@@ -87,22 +85,6 @@ class XianyuPublisher:
             self._capture_error_screenshot(book_id)
             self._close()
             return False
-
-    def _load_metadata(self, book_id):
-        """加载 metadata.json"""
-        book = self.db.get_book_by_id(book_id)
-        if not book:
-            return None
-
-        base_name = Path(book.filename).stem
-        meta_path = self.output_dir / ("%s_metadata" % base_name) / "metadata.json"
-
-        if not meta_path.exists():
-            logger.warning("metadata.json 不存在: %s" % str(meta_path))
-            return None
-
-        with open(meta_path, "r", encoding="utf-8") as f:
-            return json.load(f)
 
     def _get_meta_dir(self, book_id):
         """获取 metadata 目录路径"""
@@ -671,7 +653,7 @@ class XianyuPublisher:
             if (i+1) % 10 == 0:
                 logger.info("已等待 %d * 0.5s，按钮仍禁用..." % (i+1))
 
-        publish_btn.click()
+        # publish_btn.click()
         logger.info("已点击发布按钮")
 
         time.sleep(5)
@@ -687,16 +669,13 @@ class XianyuPublisher:
         return current_url
 
     def _save_result(self, book_id, listing_url):
-        """保存发布结果到数据库和 metadata.json"""
+        """保存发布结果到数据库"""
         self.db.update_book_output(
             book_id,
             publish_status="published",
             xianyu_listing_url=listing_url,
         )
-        logger.info("数据库已更新: xianyu_listing_url=%s" % listing_url)
-
-        MetadataWriter().update_publish_info(book_id, listing_url)
-        logger.info("metadata.json 已更新")
+        logger.info("发布结果已保存: xianyu_listing_url=%s" % listing_url)
 
     def _capture_error_screenshot(self, book_id):
         """错误时截图保存"""

@@ -66,6 +66,8 @@ class Translator:
         self.stats = {
             "api_calls": 0,
             "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
             "cache_hits": 0,
             "translated_paragraphs": 0,
             "retried": 0,
@@ -115,7 +117,10 @@ class Translator:
                 if choices and len(choices) > 0:
                     content = choices[0].get("message", {}).get("content", "")
                     if content:
-                        self.stats["total_tokens"] += result.get("usage", {}).get("total_tokens", 0)
+                        usage = result.get("usage", {})
+                        self.stats["prompt_tokens"] += usage.get("prompt_tokens", 0)
+                        self.stats["completion_tokens"] += usage.get("completion_tokens", 0)
+                        self.stats["total_tokens"] += usage.get("total_tokens", 0)
                         return content.strip()
                 logger.warning(f"translate() API 返回异常或内容为空: {str(result)[:200]}")
 
@@ -162,7 +167,10 @@ class Translator:
                 if choices and len(choices) > 0:
                     content = choices[0].get("message", {}).get("content", "")
                     if content:
-                        self.stats["total_tokens"] += result.get("usage", {}).get("total_tokens", 0)
+                        usage = result.get("usage", {})
+                        self.stats["prompt_tokens"] += usage.get("prompt_tokens", 0)
+                        self.stats["completion_tokens"] += usage.get("completion_tokens", 0)
+                        self.stats["total_tokens"] += usage.get("total_tokens", 0)
                         return content.strip()
                 logger.warning(f"chat() API 返回异常或内容为空: {str(result)[:200]}")
 
@@ -174,6 +182,47 @@ class Translator:
                     time.sleep(wait_time)
 
         return ""
+
+    def chat_raw(self, prompt: str, max_retries: int = 3, max_tokens: int = None) -> dict:
+        """通用对话，返回完整 API 响应（包含 usage）"""
+        if not prompt:
+            return {"choices": [{"message": {"content": ""}}], "usage": {}}
+
+        effective_max_tokens = max_tokens if max_tokens else self.max_tokens
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                payload = {
+                    "model": self.model,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": effective_max_tokens,
+                    "temperature": self.temperature
+                }
+
+                response = self.session.post(self.api_url, json=payload, timeout=120)
+                response.raise_for_status()
+
+                self.stats["api_calls"] += 1
+                result = response.json()
+
+                usage = result.get("usage", {})
+                self.stats["prompt_tokens"] += usage.get("prompt_tokens", 0)
+                self.stats["completion_tokens"] += usage.get("completion_tokens", 0)
+                self.stats["total_tokens"] += usage.get("total_tokens", 0)
+
+                return result
+
+            except Exception as e:
+                retry_count += 1
+                logger.warning(f"AI chat_raw 调用失败 (重试 {retry_count}/{max_retries}): {type(e).__name__}: {str(e)[:200]}")
+                if retry_count < max_retries:
+                    wait_time = min(2 ** retry_count, 30)
+                    time.sleep(wait_time)
+
+        return {"choices": [{"message": {"content": ""}}], "usage": {}}
 
     def translate_batch(self, paragraphs, tier):
         """批量翻译"""

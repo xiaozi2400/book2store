@@ -242,23 +242,19 @@ class ContentSummarizer:
                 self.db.add_log(book_id, "summarizing", "skipped", "AI生成失败，跳过精简版")
                 return False
 
-            # 提取封面 - 保存到输出目录，避免临时文件问题
+            # 提取封面 - 只保存到 metadata 目录
             cover_path = None
             extracted_cover_path = self._extract_cover_from_epub(epub_path)
             if extracted_cover_path:
-                # 复制到输出目录
                 import shutil
-                ext = os.path.splitext(extracted_cover_path)[1]
-                cover_path = output_dir / f"cover{ext}"
-                shutil.copy2(extracted_cover_path, cover_path)
-                logger.info(f"成功提取封面并保存: {cover_path}")
-
                 meta_dir = output_dir.parent / f"{output_dir.name}_metadata"
                 os.makedirs(meta_dir, exist_ok=True)
-                shutil.copy2(extracted_cover_path, meta_dir / f"cover{ext}")
-                logger.info(f"封面已复制到 metadata 目录: {meta_dir / f'cover{ext}'}")
-                
-                # 删除临时文件
+                ext = os.path.splitext(extracted_cover_path)[1]
+                meta_cover_path = meta_dir / f"cover{ext}"
+                shutil.copy2(extracted_cover_path, meta_cover_path)
+                cover_path = str(meta_cover_path)
+                logger.info(f"封面已复制到 metadata 目录: {meta_cover_path}")
+
                 try:
                     os.unlink(extracted_cover_path)
                 except:
@@ -451,8 +447,15 @@ class ContentSummarizer:
             logger.info(f"精简版生成提示词: 长度={prompt_len}, 前500字符: {prompt[:500]}")
 
             logger.info("开始调用AI...")
-            result = self.ai.chat(prompt, max_tokens=8000)
+            result, usage = self.ai.chat(prompt, max_tokens=8000)
             logger.info(f"AI调用完成, 返回长度: {len(result) if result else 0}")
+
+            if usage:
+                self.db.record_token_usage(
+                    book_id, "summarizing",
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0)
+                )
 
             logger.info(f"精简版AI响应（前500字符）: {str(result)[:500] if result else '空'}")
 

@@ -3,6 +3,8 @@
 """
 import os
 import sys
+import json
+import tempfile
 import subprocess
 from pathlib import Path
 
@@ -46,7 +48,8 @@ class TranslationProcessor:
                 sys.executable,
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), "ebook_translator", "main.py"),
                 epub_path,
-                "--output-dir", str(self.output_dir / base_name)
+                "--output-dir", str(self.output_dir / base_name),
+                "--book-id", book_id
             ]
             if skip_cache:
                 cmd.append("--skip-cache")
@@ -99,6 +102,24 @@ class TranslationProcessor:
             )
 
             self.db.add_log(book_id, "translating", "success", "翻译完成")
+
+            stats_file = os.path.join(tempfile.gettempdir(), f"translation_stats_{book_id}.json")
+            if os.path.exists(stats_file):
+                try:
+                    with open(stats_file, "r", encoding="utf-8") as f:
+                        stats = json.load(f)
+                    os.remove(stats_file)
+                    self.db.record_token_usage(
+                        book_id=book_id,
+                        step="translation",
+                        input_tokens=stats.get("prompt_tokens", 0),
+                        output_tokens=stats.get("completion_tokens", 0)
+                    )
+                    logger.info(f"翻译Token消耗: 输入={stats.get('prompt_tokens', 0)}, "
+                                f"输出={stats.get('completion_tokens', 0)}")
+                except Exception as e:
+                    logger.warning(f"读取翻译Token统计失败: {e}")
+
             logger.info(f"翻译处理完成: {book_id}")
             return True
 

@@ -20,7 +20,6 @@ from automation.ai_copywriter import generate_copywriting
 from automation.link_importer import import_links
 from automation.xianyu_publisher import publish_to_xianyu
 from automation.config import config
-from automation.metadata_writer import MetadataWriter
 from automation.utils import extract_title_from_filename
 
 app = typer.Typer(help="电子书自动化处理系统")
@@ -197,9 +196,10 @@ def process(
 
         progress.update(task, description="完成!", completed=True)
 
-    MetadataWriter().write_full(book_id)
-
     console.print(f"[bold green]处理完成: {book_id}[/bold green]")
+    steps = db.get_token_summary(book_id)
+    if steps:
+        console.print(format_token_summary(steps))
 
 
 @app.command()
@@ -327,8 +327,10 @@ def auto(
 
             elapsed = time.time() - start_time
             db.update_book_status(book_id, "completed")
-            MetadataWriter().write_full(book_id)
             console.print(f"[bold green]✓ {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
+            steps = db.get_token_summary(book_id)
+            if steps:
+                console.print(format_token_summary(steps))
             success_count += 1
 
         except Exception as e:
@@ -440,8 +442,10 @@ def test(
 
             elapsed = time.time() - start_time
             db.update_book_status(book_id, "completed")
-            MetadataWriter().write_full(book_id)
             console.print(f"[bold green]✓ [测试] {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
+            steps = db.get_token_summary(book_id)
+            if steps:
+                console.print(format_token_summary(steps))
             success_count += 1
 
         except Exception as e:
@@ -455,6 +459,73 @@ def test(
     console.print(f"[green]成功: {success_count}[/green]")
     if fail_count > 0:
         console.print(f"[red]失败: {fail_count}[/red]")
+
+
+def format_token_summary(steps):
+    """将 token 汇总数据格式化为可读字符串"""
+    if not steps:
+        return "暂无Token消耗记录"
+
+    step_labels = {
+        "translation": "翻译",
+        "summarizing": "摘要",
+        "copywriting_xianyu": "闲鱼文案",
+        "copywriting_xiaohongshu": "小红书文案",
+    }
+
+    table = Table(title="Token 消耗汇总")
+    table.add_column("步骤", style="cyan")
+    table.add_column("输入 Tokens", justify="right")
+    table.add_column("输出 Tokens", justify="right")
+    table.add_column("总 Tokens", justify="right")
+    table.add_column("费用", justify="right")
+
+    total_input = total_output = total_tokens = 0
+    total_cost = 0.0
+
+    for step_key, data in steps.items():
+        label = step_labels.get(step_key, step_key)
+        input_t = data.get("input_tokens", 0)
+        output_t = data.get("output_tokens", 0)
+        total_t = data.get("total_tokens", input_t + output_t)
+        cost = data.get("cost", 0.0)
+
+        table.add_row(
+            label,
+            f"{input_t:,}",
+            f"{output_t:,}",
+            f"{total_t:,}",
+            f"¥{cost:.4f}",
+        )
+
+        total_input += input_t
+        total_output += output_t
+        total_tokens += total_t
+        total_cost += cost
+
+    table.add_row(
+        "[bold]合计[/bold]",
+        f"[bold]{total_input:,}[/bold]",
+        f"[bold]{total_output:,}[/bold]",
+        f"[bold]{total_tokens:,}[/bold]",
+        f"[bold]¥{total_cost:.4f}[/bold]",
+    )
+
+    table.caption = f"总计费用: ¥{total_cost:.4f} (输入: {total_input:,} / 输出: {total_output:,})"
+
+    from rich.console import Console
+    c = Console()
+    with c.capture() as capture:
+        c.print(table)
+    return capture.get()
+
+
+@app.command()
+def stats(book_id: str):
+    """查看Token消耗统计"""
+    db = DatabaseManager()
+    steps = db.get_token_summary(book_id)
+    console.print(format_token_summary(steps))
 
 
 @app.command()

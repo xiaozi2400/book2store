@@ -123,3 +123,23 @@ class ShareLink(Base):
 
     def __repr__(self):
         return f"<ShareLink(id={self.id}, filename={self.filename})>"
+
+
+class TokenUsage(Base):
+    """Token消耗记录"""
+    __tablename__ = "token_usage"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(String(36), ForeignKey("books.id"), nullable=False, index=True)
+    step = Column(String(32), nullable=False)  # translation / summary / xianyu / xiaohongshu
+    model = Column(String(64), default="deepseek-chat")
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    cost = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    book = relationship("Book", backref="token_usages")
+
+    def __repr__(self):
+        return f"<TokenUsage(book_id={self.book_id}, step={self.step}, tokens={self.total_tokens})>"
