@@ -76,7 +76,7 @@
 ```yaml
 xianyu:
   login_method: "qr_code"
-  base_url: "https://www.xianyu.com"
+  base_url: "https://seller.goofish.com"
   timeout: 30
   auto_retry: true
   # 新增配置项：
@@ -117,6 +117,7 @@ xianyu:
 | `_load_metadata(book_id)` | 定位并加载 `{base_name}_metadata/metadata.json` |
 | `_start_browser()` | 启动 Playwright，加载 cookie（如有） |
 | `_login()` | 检查登录状态，如需扫码则等待 |
+| `_navigate_to_publish()` | 点击「商品」→「商品发布」进入发布页 |
 | `_fill_description(description)` | 填写宝贝描述 |
 | `_upload_images(meta_dir)` | 上传封面和目录图 |
 | `_setup_skus(sku_list)` | 按配置设置商品规格 |
