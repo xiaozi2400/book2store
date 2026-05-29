@@ -159,6 +159,36 @@ class Config:
         return self.get("xianyu", {})
 
     @property
+    def xianyu_inventory(self) -> int:
+        """闲鱼库存"""
+        return self.get("xianyu.inventory", 1)
+
+    @property
+    def xianyu_location(self) -> str:
+        """闲鱼所在地"""
+        return self.get("xianyu.location", "深圳北站")
+
+    @property
+    def xianyu_shipping(self) -> str:
+        """闲鱼发货方式"""
+        return self.get("xianyu.shipping", "包邮")
+
+    @property
+    def xianyu_cookie_path(self) -> str:
+        """闲鱼Cookie持久化路径"""
+        return self.get("xianyu.cookie_path", "data/xianyu_cookie.json")
+
+    @property
+    def xianyu_max_retries(self) -> int:
+        """闲鱼最大重试次数"""
+        return self.get("xianyu.max_retries", 3)
+
+    @property
+    def xianyu_retry_interval(self) -> int:
+        """闲鱼重试间隔(秒)"""
+        return self.get("xianyu.retry_interval", 2)
+
+    @property
     def error_handling_config(self) -> Dict:
         """错误处理配置"""
         return self.get("error_handling", {})
