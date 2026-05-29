@@ -88,12 +88,13 @@ class AIClient:
         copywriting_cfg = config.copywriting_config
         prompt_template = copywriting_cfg.get(
             "xianyu_listing_prompt",
-            "你是一个闲鱼二手书卖家。用户提供了以下书籍信息：\n\n书名：{title}\n作者：{author}\n\n请你执行以下步骤：\n\n## 1、自动搜索（真实优先）\n\n..."
+            "你是一个闲鱼二手书卖家。用户提供了以下书籍信息：\n\n书名：{title}\n作者：{author}\n摘要：{summary}"
         )
 
         prompt = prompt_template.format(
             title=book_info.get('title', 'Unknown'),
             author=book_info.get('author', 'Unknown'),
+            summary=book_info.get('summary', '暂无摘要信息'),
         )
 
         return self.chat(prompt)
