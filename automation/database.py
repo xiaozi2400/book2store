@@ -45,7 +45,19 @@ def init_database():
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_db_engine)
 
     Base.metadata.create_all(bind=_db_engine)
+    _migrate_database(_db_engine)
     return _db_engine
+
+
+def _migrate_database(engine):
+    """数据库迁移：新增字段等"""
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns('books')]
+    if 'summary_text' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE books ADD COLUMN summary_text TEXT"))
+            conn.commit()
 
 
 def get_session() -> Session:
