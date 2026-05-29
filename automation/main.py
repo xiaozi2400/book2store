@@ -187,7 +187,8 @@ def process(
         progress.update(task, description="生成文案...")
         generate_copywriting(book_id, {
             'title': book_obj.title,
-            'author': book_obj.author
+            'author': book_obj.author,
+            'summary': book_obj.summary_text or ''
         })
 
         if not skip_publish:
@@ -319,7 +320,11 @@ def auto(
 
             console.print(f"[dim]生成文案...[/dim]")
             book_obj = db.get_book_by_id(book_id)
-            generate_copywriting(book_id, {'title': book_obj.title, 'author': book_obj.author})
+            generate_copywriting(book_id, {
+                'title': book_obj.title,
+                'author': book_obj.author,
+                'summary': book_obj.summary_text or ''
+            })
 
             if not skip_publish:
                 console.print(f"[dim]发布到闲鱼...[/dim]")
@@ -434,7 +439,11 @@ def test(
             if not skip_copywriting:
                 console.print(f"  [dim]→ 生成文案...[/dim]")
                 book_obj = db.get_book_by_id(book_id)
-                generate_copywriting(book_id, {'title': book_obj.title, 'author': book_obj.author})
+                generate_copywriting(book_id, {
+                    'title': book_obj.title,
+                    'author': book_obj.author,
+                    'summary': book_obj.summary_text or ''
+                })
             else:
                 console.print(f"  [dim]→ 跳过文案生成步骤[/dim]")
 
