@@ -262,6 +262,9 @@ class ContentSummarizer:
             else:
                 logger.warning("未能提取到封面")
 
+            summary_text = self._format_summary_to_text(summary_content)
+            self.db.update_book_summary(book_id, summary_text)
+
             self._create_pdf(summary_content, str(output_path), str(cover_path) if cover_path else None)
 
             self.db.update_book_output(book_id, summary_pdf=str(output_path))
@@ -522,6 +525,16 @@ class ContentSummarizer:
             return {'content': result}
         except Exception:
             return {'content': result}
+
+    @staticmethod
+    def _format_summary_to_text(summary_content: Dict[str, Any]) -> str:
+        """将摘要字典格式化为结构化文本"""
+        title = summary_content.get('title', '')
+        author = summary_content.get('author', '')
+        book_type = summary_content.get('book_type', '')
+        content = summary_content.get('content', '')
+        parts = [f"书名：{title}", f"作者：{author}", f"类型：{book_type}", "", content]
+        return "\n".join(parts)
 
     def _get_default_summary(self, book_info: Dict, chapters: list) -> Dict[str, Any]:
         """获取默认摘要 - 新格式支持 Markdown"""
