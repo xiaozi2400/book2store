@@ -68,6 +68,34 @@ class MetadataWriter:
 
         return True
 
+    def update_publish_info(self, book_id: str, xianyu_listing_url: str) -> bool:
+        """发布成功后更新 metadata.json 中的发布信息"""
+        book = self.db.get_book_by_id(book_id)
+        if not book:
+            logger.warning(f"书籍不存在: {book_id}")
+            return False
+
+        base_name = Path(book.filename).stem
+        meta_path = self.output_dir / f"{base_name}_metadata" / "metadata.json"
+
+        if not meta_path.exists():
+            logger.warning(f"metadata.json 不存在: {meta_path}")
+            return False
+
+        with open(meta_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        if "publish" not in metadata:
+            metadata["publish"] = {}
+
+        metadata["publish"]["xianyu_listing_url"] = xianyu_listing_url
+
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"发布链接已写入 metadata.json: {xianyu_listing_url}")
+        return True
+
     def _build_metadata(self, book, output, base_name: str) -> dict:
         """构建完整的元数据字典"""
         metadata = {
