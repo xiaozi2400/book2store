@@ -104,8 +104,8 @@ class XianyuPublisher:
     def _start_browser(self):
         """启动浏览器"""
         try:
-            playwright = sync_playwright().start()
-            self.browser = playwright.chromium.launch(headless=self.xianyu_cfg.get("headless", False))
+            self.playwright = sync_playwright().start()
+            self.browser = self.playwright.chromium.launch(headless=self.xianyu_cfg.get("headless", False))
             cookie_path = Path(config.xianyu_cookie_path)
 
             if cookie_path.exists():
@@ -244,9 +244,20 @@ class XianyuPublisher:
         ).first
         if stock_input.is_visible():
             stock_input.fill(str(config.xianyu_inventory))
-
         logger.info(f"  库存: {config.xianyu_inventory}")
+
+        location_input = self.page.locator("input[placeholder*=\"所在地\"]").or_(
+            self.page.locator("input[placeholder*=\"地区\"]")
+        ).first
+        if location_input.is_visible():
+            location_input.fill(config.xianyu_location)
         logger.info(f"  宝贝所在地: {config.xianyu_location}")
+
+        shipping_input = self.page.locator("input[placeholder*=\"发货\"]").or_(
+            self.page.locator("input[placeholder*=\"运费\"]")
+        ).first
+        if shipping_input.is_visible():
+            shipping_input.fill(config.xianyu_shipping)
         logger.info(f"  发货方式: {config.xianyu_shipping}")
 
     def _submit_and_get_url(self) -> str:
@@ -300,13 +311,15 @@ class XianyuPublisher:
         try:
             if self.browser:
                 self.browser.close()
-                logger.info("浏览器已关闭")
+            if self.playwright:
+                self.playwright.stop()
         except Exception as e:
             logger.warning(f"关闭浏览器时出错: {e}")
         finally:
             self.browser = None
             self.context = None
             self.page = None
+            self.playwright = None
 
 
 def publish_to_xianyu(book_id: str) -> bool:
