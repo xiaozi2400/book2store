@@ -49,6 +49,41 @@ class EPUBSplitter:
             else:
                 self.resource_items.append(item)
 
+    def _reorder_docs_by_spine(self):
+        with zipfile.ZipFile(self.epub_path, 'r') as zf:
+            container = BeautifulSoup(zf.read('META-INF/container.xml'), 'lxml-xml')
+            rootfile = container.find('rootfile')
+            if rootfile is None:
+                return
+            opf_path = rootfile.get('full-path', '')
+            if not opf_path:
+                return
+            opf_soup = BeautifulSoup(zf.read(opf_path), 'lxml-xml')
+            manifest = opf_soup.find('manifest')
+            spine = opf_soup.find('spine')
+            if manifest is None or spine is None:
+                return
+            href_by_id = {}
+            for item in manifest.find_all('item'):
+                item_id = item.get('id', '')
+                href = item.get('href', '')
+                if item_id and href:
+                    href_by_id[item_id] = href
+            doc_by_name = {d.get_name(): d for d in self.doc_items}
+            ordered = []
+            seen = set()
+            for itemref in spine.find_all('itemref'):
+                idref = itemref.get('idref', '')
+                if idref and idref in href_by_id:
+                    basename = os.path.basename(href_by_id[idref])
+                    if basename in doc_by_name and basename not in seen:
+                        ordered.append(doc_by_name[basename])
+                        seen.add(basename)
+            for d in self.doc_items:
+                if d not in ordered:
+                    ordered.append(d)
+            self.doc_items = ordered
+
     def _extract_metadata(self):
         title_data = self.book.get_metadata('DC', 'title')
         self.metadata['title'] = title_data[0][0] if title_data else 'Unknown'
@@ -102,18 +137,38 @@ class EPUBSplitter:
                 pass
         return name_to_zip_path
 
-    def split(self, output_dir: str, num_parts: int = 10) -> list[str]:
+    def split(self, output_dir: str) -> list[str]:
         self.book = epub.read_epub(self.epub_path)
         self._extract_items()
+        self._reorder_docs_by_spine()
         self._extract_metadata()
+
+        nav_docs = [d for d in self.doc_items if 'nav' in d.get_name().lower()]
+        body_docs = [d for d in self.doc_items if d not in nav_docs]
+
+        cover_doc = body_docs[:1]
+        content_only = body_docs[1:]
+
+        total_bytes = sum(len(d.get_content()) for d in content_only)
+        target_bytes = max(1, (total_bytes + 19) // 20)
+
+        kept = []
+        cum = 0
+        for d in content_only:
+            kept.append(d)
+            cum += len(d.get_content())
+            if cum >= target_bytes:
+                break
+
+        if not kept:
+            kept = content_only[:1]
+
+        self.doc_items = cover_doc + kept + nav_docs
 
         if not self.doc_items:
             raise ValueError("No document items found in EPUB")
 
-        groups = self._distribute_docs(num_parts)
-
         os.makedirs(output_dir, exist_ok=True)
-        output_paths = []
 
         base_name = Path(self.epub_path).stem
         base_name = re.sub(r'[<>:"/\\|?*]', '_', base_name)
@@ -127,49 +182,21 @@ class EPUBSplitter:
             content_dir_name = os.path.basename(content_dir)
             opf_rel = os.path.relpath(self._find_opf_path(extract_dir), extract_dir)
 
-            for i, group_indices in enumerate(groups):
-                part_num = i + 1
-                part_docs = [self.doc_items[idx] for idx in group_indices]
-                if not part_docs:
-                    continue
+            output_name = f"{base_name}.epub"
+            output_path = os.path.join(output_dir, output_name)
 
-                output_name = f"{base_name}_part{part_num:02d}.epub"
-                output_path = os.path.join(output_dir, output_name)
+            self._create_part_from_extracted(
+                extract_dir,
+                content_dir,
+                content_dir_name,
+                opf_rel,
+                output_path,
+                self.doc_items,
+            )
 
-                self._create_part_from_extracted(
-                    extract_dir,
-                    content_dir,
-                    content_dir_name,
-                    opf_rel,
-                    output_path,
-                    part_docs,
-                    part_num,
-                    num_parts,
-                )
-                output_paths.append(output_path)
+        return [output_path]
 
-        return output_paths
-
-    def _distribute_docs(self, num_parts: int) -> list[list[int]]:
-        total_docs = len(self.doc_items)
-        if total_docs == 0:
-            return [[] for _ in range(num_parts)]
-
-        base_count = total_docs // num_parts
-        remainder = total_docs % num_parts
-
-        groups = []
-        idx = 0
-        for i in range(num_parts):
-            extra = 1 if i < remainder else 0
-            count = base_count + extra
-            group = list(range(idx, idx + count))
-            idx += count
-            groups.append(group)
-
-        return groups
-
-    def _create_part_from_extracted(self, extract_dir, content_dir, content_dir_name, opf_rel, output_path, part_docs, part_num, total_parts):
+    def _create_part_from_extracted(self, extract_dir, content_dir, content_dir_name, opf_rel, output_path, part_docs):
         new_epub_dir = tempfile.mkdtemp(prefix='epub_part_')
         try:
             zip_path_map = self._build_zip_to_disk_map(extract_dir, content_dir_name, opf_rel)
@@ -208,7 +235,7 @@ class EPUBSplitter:
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     shutil.copy2(src, dst)
 
-            self._rewrite_opf(new_epub_dir, opf_rel, doc_names, part_num, total_parts)
+            self._rewrite_opf(new_epub_dir, opf_rel, doc_names)
             self._rewrite_nav(new_epub_dir, content_dir_name, doc_names)
 
             with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -230,6 +257,10 @@ class EPUBSplitter:
                     src = img.get('src', '')
                     if src:
                         used.add(src)
+                for svg_img in soup.find_all('image'):
+                    href = svg_img.get('xlink:href', '') or svg_img.get('href', '')
+                    if href:
+                        used.add(href)
                 for link in soup.find_all('link'):
                     href = link.get('href', '')
                     if href:
@@ -256,7 +287,7 @@ class EPUBSplitter:
             pass
         return css_files
 
-    def _rewrite_opf(self, new_epub_dir, opf_rel, doc_names, part_num, total_parts):
+    def _rewrite_opf(self, new_epub_dir, opf_rel, doc_names):
         opf_path = os.path.join(new_epub_dir, opf_rel)
         if not os.path.exists(opf_path):
             return
@@ -292,10 +323,6 @@ class EPUBSplitter:
                     if not found:
                         itemref.decompose()
 
-        dc_title = soup.find('dc:title')
-        if dc_title and dc_title.string:
-            dc_title.string = f"{self.metadata.get('title', 'Unknown')} - Part {part_num}/{total_parts}"
-
         with open(opf_path, 'w', encoding='utf-8') as f:
             f.write(str(soup))
 
@@ -317,12 +344,14 @@ class EPUBSplitter:
                 content = f.read()
             soup = BeautifulSoup(content, 'lxml')
 
+            doc_basenames = set(os.path.basename(n) for n in doc_names)
+
             for li in list(soup.find_all('li')):
                 a_tag = li.find('a')
                 if not a_tag:
                     continue
                 href = a_tag.get('href', '').split('#')[0].split('/')[-1]
-                if href and href not in doc_names:
+                if href and href not in doc_basenames:
                     li.decompose()
                     continue
 
@@ -330,7 +359,7 @@ class EPUBSplitter:
                     child_a = child_li.find('a')
                     if child_a:
                         child_href = child_a.get('href', '').split('#')[0].split('/')[-1]
-                        if child_href and child_href not in doc_names:
+                        if child_href and child_href not in doc_basenames:
                             child_li.decompose()
 
             with open(nav_path, 'w', encoding='utf-8') as f:

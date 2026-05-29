@@ -11,17 +11,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ebook_splitter.epub_splitter import EPUBSplitter
 
-app = typer.Typer(help="EPUB 拆分工具 - 将 EPUB 文件拆分为多个小文件")
+app = typer.Typer(help="EPUB 提取工具 - 提取 EPUB 文件前 1/20 的内容")
 
 
 @app.command()
 def split(
     input_path: str = typer.Argument(..., help="输入 EPUB 文件路径或包含 EPUB 文件的目录"),
     output_dir: Optional[str] = typer.Option(None, help="输出目录（默认：输入文件同目录下的 output 文件夹）"),
-    num_parts: int = typer.Option(10, help="拆分的份数"),
 ):
     """
-    将 EPUB 文件拆分为多个小 EPUB 文件。
+    提取 EPUB 文件的前 1/20 内容。
     """
     input_path = Path(input_path)
     if not input_path.exists():
@@ -36,16 +35,15 @@ def split(
     os.makedirs(output_dir, exist_ok=True)
 
     if input_path.is_dir():
-        epub_files = list(input_path.glob("*.epub")) + list(input_path.glob("*.EPUB"))
+        epub_files = list(input_path.glob("*.epub"))
         if not epub_files:
             typer.echo(f"[yellow]未找到 EPUB 文件: {input_path}[/yellow]", err=True)
             raise typer.Exit(0)
     else:
         epub_files = [input_path]
 
-    typer.echo(f"[bold blue]开始拆分 {len(epub_files)} 个 EPUB 文件...[/bold blue]")
-    typer.echo(f"输出目录: {output_dir}")
-    typer.echo(f"每文件份数: {num_parts}\n")
+    typer.echo(f"[bold blue]开始处理 {len(epub_files)} 个 EPUB 文件...[/bold blue]")
+    typer.echo(f"输出目录: {output_dir}\n")
 
     success_count = 0
     fail_count = 0
@@ -59,8 +57,8 @@ def split(
             typer.echo(f"  作者: {info['author']}")
             typer.echo(f"  章节数: {info['doc_count']}")
 
-            parts = splitter.split(str(output_dir), num_parts=num_parts)
-            typer.echo(f"  [green]成功生成 {len(parts)} 个分卷[/green]\n")
+            paths = splitter.split(str(output_dir))
+            typer.echo(f"  [green]成功生成: {paths[0]}[/green]\n")
             success_count += 1
         except Exception as e:
             typer.echo(f"  [red]失败: {e}[/red]\n")
