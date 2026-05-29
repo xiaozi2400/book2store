@@ -1,18 +1,19 @@
 """
-闲鱼发布器 - 使用Playwright自动化发布商品
+闲鱼发布器 - 使用 Playwright 自动化发布商品
 """
+import json
 import os
 import sys
-import json
+import time
 from pathlib import Path
-from typing import Dict, Any, Optional
-from datetime import datetime
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from playwright.sync_api import sync_playwright, Browser, Page, BrowserContext
 from .database import DatabaseManager
 from .config import config
+from .metadata_writer import MetadataWriter
 from .utils import logger, ensure_dir
 
 
@@ -21,42 +22,52 @@ class XianyuPublisher:
 
     def __init__(self):
         self.db = DatabaseManager()
-        self.output_dir = Path(config.output_dir)
-        self.xianyu_config = config.xianyu_config
+        self.output_dir = Path(config.output_dir).resolve()
+        self.xianyu_cfg = config.xianyu_config
+        self.sku_config = config.sku_config
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
 
     def publish(self, book_id: str) -> bool:
         """发布到闲鱼"""
-        logger.info(f"开始发布: {book_id}")
+        logger.info(f"=== 开始发布: {book_id} ===")
 
         try:
             self.db.update_book_status(book_id, "publishing")
             self.db.add_log(book_id, "publishing", "start", "开始发布到闲鱼")
 
-            book_output = self.db.get_book_output(book_id)
-            if not book_output:
-                raise ValueError(f"未找到书籍输出: {book_id}")
+            metadata = self._load_metadata(book_id)
+            if not metadata:
+                raise ValueError(f"未找到 metadata.json: {book_id}")
+
+            copywriting = metadata.get("copywriting", {}).get("xianyu", {})
+            description = copywriting.get("description", "")
+            if not description:
+                raise ValueError(f"闲鱼文案为空: {book_id}")
 
             self._start_browser()
 
             self._login()
 
-            self._fill_listing_form(book_output)
+            self._navigate_to_publish()
 
-            self._setup_sku(book_output)
+            self._fill_description(description)
 
-            self._set_delivery_links(book_output)
+            meta_dir = self._get_meta_dir(book_id)
+            self._upload_images(meta_dir)
 
-            self.db.update_book_output(
-                book_id,
-                publish_status="published",
-                xianyu_listing_url="https://www.xianyu.com/item/detail/xxx"
-            )
+            self._setup_skus(self.sku_config)
 
-            self.db.add_log(book_id, "publishing", "success", "发布成功")
-            logger.info(f"发布成功: {book_id}")
+            self._fill_basic_info()
+
+            listing_url = self._submit_and_get_url()
+
+            self._save_result(book_id, listing_url)
+
+            self.db.update_book_status(book_id, "published")
+            self.db.add_log(book_id, "publishing", "success", f"发布成功: {listing_url}")
+            logger.info(f"=== 发布成功: {book_id} ===")
 
             self._close()
             return True
@@ -64,15 +75,44 @@ class XianyuPublisher:
         except Exception as e:
             logger.error(f"发布失败: {book_id}, 错误: {e}")
             self.db.add_log(book_id, "publishing", "error", str(e))
+            self._capture_error_screenshot(book_id)
             self._close()
             return False
+
+    def _load_metadata(self, book_id: str) -> Optional[dict]:
+        """加载 metadata.json"""
+        book = self.db.get_book_by_id(book_id)
+        if not book:
+            return None
+
+        base_name = Path(book.filename).stem
+        meta_path = self.output_dir / f"{base_name}_metadata" / "metadata.json"
+
+        if not meta_path.exists():
+            logger.warning(f"metadata.json 不存在: {meta_path}")
+            return None
+
+        with open(meta_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def _get_meta_dir(self, book_id: str) -> Path:
+        """获取 metadata 目录路径"""
+        book = self.db.get_book_by_id(book_id)
+        base_name = Path(book.filename).stem
+        return self.output_dir / f"{base_name}_metadata"
 
     def _start_browser(self):
         """启动浏览器"""
         try:
             playwright = sync_playwright().start()
-            self.browser = playwright.chromium.launch(headless=False)
-            self.context = self.browser.new_context()
+            self.browser = playwright.chromium.launch(headless=self.xianyu_cfg.get("headless", False))
+            cookie_path = Path(config.xianyu_cookie_path)
+
+            if cookie_path.exists():
+                self.context = self.browser.new_context(storage_state=str(cookie_path))
+            else:
+                self.context = self.browser.new_context()
+
             self.page = self.context.new_page()
             logger.info("浏览器启动成功")
         except Exception as e:
@@ -80,138 +120,196 @@ class XianyuPublisher:
             raise
 
     def _login(self):
-        """登录闲鱼"""
-        logger.info("请扫码登录闲鱼...")
+        """登录验证"""
+        self.page.goto(config.xianyu_cfg.get("base_url", "https://seller.goofish.com"))
+        self.page.wait_for_load_state("networkidle")
+        time.sleep(2)
 
-        self.page.goto("https://www.xianyu.com")
+        cookies = self.context.cookies()
+        if cookies and any(c.get("name") == "smt" for c in cookies):
+            logger.info("已有有效登录态")
+            return
 
-        self.page.wait_for_timeout(5000)
+        logger.info("等待用户扫码登录闲鱼...")
+        self.db.add_log("", "publishing", "info", "请扫码登录闲鱼卖家中心")
 
-        if "login" in self.page.url.lower():
-            logger.info("等待用户扫码登录...")
-            self.page.wait_for_timeout(30000)
+        max_wait = self.xianyu_cfg.get("timeout", 60)
+        for i in range(max_wait):
+            time.sleep(1)
+            cookies = self.context.cookies()
+            if cookies and any(c.get("name") == "smt" for c in cookies):
+                logger.info("登录成功")
+                cookie_path = Path(config.xianyu_cookie_path)
+                cookie_path.parent.mkdir(parents=True, exist_ok=True)
+                self.context.storage_state(path=str(cookie_path))
+                return
 
-        logger.info("登录完成")
+        raise TimeoutError("登录超时，请重试")
 
-    def _fill_listing_form(self, book_output):
-        """填写商品表单"""
-        logger.info("填写商品信息...")
+    def _navigate_to_publish(self):
+        """导航到发布页：点击「商品」→「商品发布」"""
+        logger.info("导航到商品发布页...")
 
-        self.page.goto("https://www.xianyu.com/publish")
+        goods_tab = self.page.locator("text=商品").first
+        goods_tab.wait_for(timeout=10000)
+        goods_tab.click()
+        time.sleep(1)
 
-        title = book_output.xianyu_title or "英文原版电子书"
-        description = book_output.xianyu_description or ""
+        publish_btn = self.page.locator("text=商品发布").first
+        publish_btn.wait_for(timeout=10000)
+        publish_btn.click()
 
-        self.page.fill('input[placeholder*="标题"]', title)
+        self.page.wait_for_load_state("networkidle")
+        time.sleep(3)
+        logger.info("已进入商品发布页")
 
-        self.page.fill('textarea[placeholder*="描述"]', description)
+    def _fill_description(self, description: str):
+        """填写宝贝描述"""
+        logger.info("填写宝贝描述...")
 
-        images = []
-        if book_output.cover_image:
-            images.append(book_output.cover_image)
-        if book_output.toc_preview_image:
-            images.append(book_output.toc_preview_image)
+        desc_input = self.page.locator("textarea").or_(self.page.locator("[contenteditable=\"true\"]")).first
+        desc_input.wait_for(timeout=10000)
+        desc_input.fill(description)
+        logger.info("宝贝描述已填写")
 
-        if images:
-            for img in images[:9]:
-                self.page.click('input[type="file"]')
-                self.page.wait_for_timeout(500)
+    def _upload_images(self, meta_dir: Path):
+        """上传宝贝图片"""
+        logger.info("上传宝贝图片...")
 
-        logger.info("商品信息填写完成")
+        images_to_upload = []
+        for img_name in ["cover.jpg", "toc_preview.jpg"]:
+            img_path = meta_dir / img_name
+            if img_path.exists():
+                images_to_upload.append(str(img_path))
 
-    def _setup_sku(self, book_output):
-        """配置SKU"""
-        logger.info("配置SKU...")
+        if not images_to_upload:
+            logger.warning("没有找到可上传的图片")
+            return
 
-        self.page.click('text=设置SKU')
-        self.page.wait_for_timeout(1000)
+        file_input = self.page.locator("input[type=\"file\"]").first
+        if file_input.is_hidden():
+            upload_area = self.page.locator("text=上传图片").or_(
+                self.page.locator("text=添加图片")
+            ).first
+            upload_area.click()
+            time.sleep(1)
 
-        sku1_price = "3.99"
-        sku2_price = "8.99"
+        file_input = self.page.locator("input[type=\"file\"]").first
+        file_input.set_input_files(images_to_upload)
+        time.sleep(3)
+        logger.info(f"已上传 {len(images_to_upload)} 张图片")
 
-        self.page.fill('input[placeholder*="价格"]', sku1_price)
+    def _setup_skus(self, sku_list: list):
+        """设置商品规格（SKU）"""
+        logger.info("设置商品规格...")
 
-        logger.info("SKU配置完成")
+        for i, sku in enumerate(sku_list):
+            if i > 0:
+                add_btn = self.page.locator("text=添加规格类型").or_(
+                    self.page.locator("text=+ 添加规格类型")
+                ).first
+                if add_btn.is_visible():
+                    add_btn.click()
+                    time.sleep(1)
 
-    def _set_delivery_links(self, book_output):
-        """设置发货链接"""
-        logger.info("设置发货链接...")
+            sku_name = sku.get("name", f"规格{i+1}")
+            sku_price = sku.get("price", 0)
 
-        if book_output.pan_link_sku1:
-            logger.info(f"SKU1发货链接: {book_output.pan_link_sku1}")
+            name_input = self.page.locator("input[placeholder*=\"规格\"]").or_(
+                self.page.locator("input[placeholder*=\"名称\"]")
+            ).nth(i)
+            if name_input.is_visible():
+                name_input.fill(sku_name)
 
-        if book_output.pan_link_sku2:
-            logger.info(f"SKU2发货链接: {book_output.pan_link_sku2}")
+            price_input = self.page.locator("input[placeholder*=\"价格\"]").or_(
+                self.page.locator("input[placeholder*=\"价格\"]")
+            ).nth(i)
+            if price_input.is_visible():
+                price_input.fill(str(sku_price))
 
-        logger.info("发货链接设置完成")
+            stock_input = self.page.locator("input[placeholder*=\"库存\"]").or_(
+                self.page.locator("input[placeholder*=\"数量\"]")
+            ).nth(i)
+            if stock_input.is_visible():
+                stock_input.fill(str(config.xianyu_inventory))
+
+            logger.info(f"  SKU {i+1}: {sku_name} ¥{sku_price}")
+
+    def _fill_basic_info(self):
+        """填写基础信息（库存、所在地、发货方式）"""
+        logger.info("填写基础信息...")
+
+        stock_input = self.page.locator("input[placeholder*=\"库存\"]").or_(
+            self.page.locator("input[placeholder*=\"数量\"]")
+        ).first
+        if stock_input.is_visible():
+            stock_input.fill(str(config.xianyu_inventory))
+
+        logger.info(f"  库存: {config.xianyu_inventory}")
+        logger.info(f"  宝贝所在地: {config.xianyu_location}")
+        logger.info(f"  发货方式: {config.xianyu_shipping}")
+
+    def _submit_and_get_url(self) -> str:
+        """点击发布并获取商品链接"""
+        logger.info("点击发布...")
+
+        publish_btn = self.page.locator("button:has-text(\"发布\")").or_(
+            self.page.locator("text=立即发布")
+        ).first
+        publish_btn.wait_for(timeout=10000)
+        publish_btn.click()
+
+        time.sleep(5)
+
+        self.page.wait_for_load_state("networkidle")
+
+        current_url = self.page.url
+        logger.info(f"发布后当前URL: {current_url}")
+
+        self.page.wait_for_timeout(3000)
+
+        current_url = self.page.url
+        return current_url
+
+    def _save_result(self, book_id: str, listing_url: str):
+        """保存发布结果到数据库和 metadata.json"""
+        self.db.update_book_output(
+            book_id,
+            publish_status="published",
+            xianyu_listing_url=listing_url,
+        )
+        logger.info(f"数据库已更新: xianyu_listing_url={listing_url}")
+
+        MetadataWriter().update_publish_info(book_id, listing_url)
+        logger.info(f"metadata.json 已更新")
+
+    def _capture_error_screenshot(self, book_id: str):
+        """错误时截图保存"""
+        try:
+            if self.page:
+                log_dir = Path(config.log_dir)
+                log_dir.mkdir(parents=True, exist_ok=True)
+                screenshot_path = log_dir / f"publish_error_{book_id}_{int(time.time())}.png"
+                self.page.screenshot(path=str(screenshot_path))
+                logger.info(f"错误截图已保存: {screenshot_path}")
+        except Exception as e:
+            logger.warning(f"截图保存失败: {e}")
 
     def _close(self):
         """关闭浏览器"""
-        if self.browser:
-            self.browser.close()
-            logger.info("浏览器已关闭")
-
-    def generate_publish_list(self, book_id: str) -> str:
-        """生成发布清单（备用方案）"""
-        book_output = self.db.get_book_output(book_id)
-
-        if not book_output:
-            return "未找到书籍信息"
-
-        content = f"""【闲鱼发布清单】
-
-📚 书名: {book_output.book.title if book_output.book else 'Unknown'}
-✍️ 作者: {book_output.book.author if book_output.book else 'Unknown'}
-
-━━━━━━━━━━━━━━━━━━━━
-
-💰 价格:
-• 纯英文原版: ¥3.99
-• 完整套装: ¥8.99
-
-📦 包含内容:
-• 纯英文原版PDF
-• 中文翻译版PDF
-• 中英双语版PDF
-• 核心内容精简版PDF
-
-━━━━━━━━━━━━━━━━━━━━
-
-📝 标题:
-{book_output.xianyu_title or '请手动填写'}
-
-📖 描述:
-{book_output.xianyu_description or '请手动填写'}
-
-🏷️ 标签:
-{book_output.xianyu_tags or '英文原版, 电子书, PDF, 翻译版, 学习资料'}
-
-━━━━━━━━━━━━━━━━━━━━
-
-🔗 SKU1链接 (纯英文):
-{book_output.pan_link_sku1 or '请手动填写'}
-
-🔗 SKU2链接 (完整套装):
-{book_output.pan_link_sku2 or '请手动填写'}
-
-📌 提取码: {book_output.pan_code or '无'}
-"""
-
-        list_dir = ensure_dir(self.output_dir / "publish_lists")
-        list_path = list_dir / f"{book_id}_publish_list.txt"
-
-        with open(list_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-
-        logger.info(f"发布清单已生成: {list_path}")
-        return str(list_path)
+        try:
+            if self.browser:
+                self.browser.close()
+                logger.info("浏览器已关闭")
+        except Exception as e:
+            logger.warning(f"关闭浏览器时出错: {e}")
+        finally:
+            self.browser = None
+            self.context = None
+            self.page = None
 
 
 def publish_to_xianyu(book_id: str) -> bool:
-    """发布到闲鱼"""
+    """便捷函数：发布到闲鱼"""
     publisher = XianyuPublisher()
     return publisher.publish(book_id)
-
-
-if __name__ == "__main__":
-    print("闲鱼发布器测试")
