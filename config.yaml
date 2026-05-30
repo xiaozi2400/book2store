@@ -259,9 +259,9 @@ copywriting:
 
     ### 固定内容（必须原样附在文案末尾）
 
-    两种规格可供选择：
+    两种版本可选：
     1、英文原版；
-    2、英文+中译+双语+精简版；
+    2、英文+中译+双语+精简版；（精简版为原书核心内容概括以及章节摘要）
 
     【注意】
     虚拟商品、发货后不支持退换，有问题随时私聊
@@ -316,3 +316,27 @@ error_handling:
   file_error: "skip"
   parse_error: "skip"
   publish_error: "manual"
+
+# 图片生成器配置
+image_generator:
+  enabled: true
+  width: 800
+  height: 800
+  html_prompt: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+      body { width: 800px; height: 800px; margin: 0; padding: 40px; box-sizing: border-box; font-family: "Microsoft YaHei", sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #fff; }
+      .cover { width: 200px; height: 260px; object-fit: cover; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin-bottom: 30px; }
+      h1 { font-size: 36px; margin: 0 0 16px; font-weight: bold; line-height: 1.3; }
+      .summary { font-size: 16px; line-height: 1.6; opacity: 0.9; max-width: 600px; }
+    </style>
+    </head>
+    <body>
+      <img class="cover" src="data:image/jpeg;base64,{cover_base64}" alt="cover">
+      <h1>{title}</h1>
+      <div class="summary">{summary}</div>
+    </body>
+    </html>

@@ -154,6 +154,11 @@ class Config:
         return self.get("image", {})
 
     @property
+    def image_generator_config(self) -> Dict:
+        """图片生成器配置"""
+        return self.get("image_generator", {})
+
+    @property
     def xianyu_config(self) -> Dict:
         """闲鱼配置"""
         return self.get("xianyu", {})
