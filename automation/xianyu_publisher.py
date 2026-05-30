@@ -389,16 +389,24 @@ class XianyuPublisher:
         """上传宝贝图片"""
         logger.info("上传宝贝图片...")
 
-        # 收集要上传的图片，先检查存在性
         images_to_upload = []
         logger.info("  meta_dir: %s" % str(meta_dir))
-        for img_name in ["cover.jpg", "toc_preview.jpg"]:
-            img_path = meta_dir / img_name
-            if img_path.exists():
+
+        # 优先使用生成的主图序列
+        main_images = sorted(meta_dir.glob("main_image_*.jpg"))
+        if main_images:
+            for img_path in main_images:
                 images_to_upload.append(str(img_path))
-                logger.info("  找到图片: %s" % img_name)
-            else:
-                logger.warning("  缺少图片: %s" % img_name)
+                logger.info("  找到主图: %s" % img_path.name)
+        else:
+            # 回退到封面图和目录预览图
+            for img_name in ["cover.jpg", "toc_preview.jpg"]:
+                img_path = meta_dir / img_name
+                if img_path.exists():
+                    images_to_upload.append(str(img_path))
+                    logger.info("  找到图片: %s" % img_name)
+                else:
+                    logger.warning("  缺少图片: %s" % img_name)
 
         if not images_to_upload:
             logger.warning("没有找到可上传的图片，跳过上传")
