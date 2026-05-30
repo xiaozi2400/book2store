@@ -56,6 +56,7 @@ class BookOutput(Base):
     cover_image = Column(String)
     toc_preview_image = Column(String)
     other_images = Column(JSON)
+    main_image_count = Column(Integer, default=0)
 
     xianyu_title = Column(String)
     xianyu_description = Column(Text)

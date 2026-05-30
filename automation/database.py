@@ -59,6 +59,12 @@ def _migrate_database(engine):
             conn.execute(text("ALTER TABLE books ADD COLUMN summary_text TEXT"))
             conn.commit()
 
+    output_columns = [col['name'] for col in inspector.get_columns('book_outputs')]
+    if 'main_image_count' not in output_columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE book_outputs ADD COLUMN main_image_count INTEGER DEFAULT 0"))
+            conn.commit()
+
 
 def get_session() -> Session:
     """获取数据库会话"""
