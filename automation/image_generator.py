@@ -1,0 +1,141 @@
+"""根据书籍封面和摘要生成商品主图"""
+import logging
+import base64
+from pathlib import Path
+from typing import Optional
+
+from automation.ai_client import AIClient
+from automation.database import DatabaseManager, close_session, get_session
+from automation.models import BookOutput
+from automation.config import config
+
+logger = logging.getLogger(__name__)
+
+
+class ImageGenerator:
+    """AI生成HTML商品主图 → Playwright截图"""
+
+    def __init__(self):
+        self.ai = AIClient()
+        self.db = DatabaseManager()
+        self.output_dir = Path(config.output_dir)
+
+    def generate(self, book_id: str) -> bool:
+        """生成商品主图"""
+        img_cfg = config.image_generator_config
+        if not img_cfg.get("enabled", True):
+            logger.info("主图生成已禁用")
+            return False
+
+        book = self.db.get_book_by_id(book_id)
+        if not book or not book.summary_text:
+            logger.warning(f"书籍 {book_id} 无摘要，跳过主图生成")
+            return False
+
+        title = book.title or "Unknown"
+        author = book.author or "Unknown"
+        summary = book.summary_text
+
+        base_name = Path(book.filename).stem
+        meta_dir = self.output_dir / f"{base_name}_metadata"
+        cover_path = meta_dir / "cover.jpg"
+
+        cover_base64 = ""
+        if cover_path.exists():
+            with open(cover_path, "rb") as f:
+                cover_base64 = base64.b64encode(f.read()).decode("utf-8")
+            logger.info(f"封面图已加载 ({len(cover_base64)} bytes base64)")
+        else:
+            logger.warning("未找到封面图，生成纯文字HTML")
+
+        prompt = self._format_prompt(title, author, summary, cover_base64)
+        html = self._call_ai(prompt)
+        if not html:
+            return False
+
+        page_count = self._screenshot_html(html, meta_dir, img_cfg)
+        if page_count > 0:
+            self._update_db(book_id, page_count)
+            logger.info(f"主图生成完成: {page_count} 张")
+            return True
+        return False
+
+    def _format_prompt(self, title: str, author: str, summary: str, cover_base64: str) -> str:
+        """格式化提示词"""
+        img_cfg = config.image_generator_config
+        prompt_template = img_cfg.get("html_prompt", "")
+        return prompt_template.format(
+            title=title,
+            author=author,
+            summary=summary,
+            cover_base64=cover_base64,
+        )
+
+    def _call_ai(self, prompt: str) -> Optional[str]:
+        """调用AI生成HTML"""
+        try:
+            html, _ = self.ai.chat(prompt, max_tokens=4000)
+            html = html.strip()
+            html = html.removeprefix("```html").removesuffix("```").strip()
+            if "<html" not in html.lower() and "<!doctype" not in html.lower():
+                html = f"<!DOCTYPE html><html><head><meta charset='utf-8'><style>*{{margin:0;padding:0;box-sizing:border-box;}}</style></head><body>{html}</body></html>"
+            return html
+        except Exception as e:
+            logger.error(f"AI调用失败: {e}")
+            return None
+
+    def _screenshot_html(self, html: str, output_dir: Path, img_cfg: dict) -> int:
+        """将HTML逐页截图保存为JPG"""
+        from playwright.sync_api import sync_playwright
+
+        width = img_cfg.get("width", 800)
+        height = img_cfg.get("height", 800)
+        temp_html = output_dir / "_main_image_temp.html"
+
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            with open(temp_html, "w", encoding="utf-8") as f:
+                f.write(html)
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page(viewport={"width": width, "height": height})
+                page.goto(f"file://{temp_html.resolve()}")
+                page.wait_for_load_state("networkidle")
+
+                containers = page.query_selector_all(".page")
+                if not containers:
+                    page.screenshot(path=str(output_dir / "main_image_01.jpg"), full_page=True)
+                    browser.close()
+                    return 1
+
+                for i, container in enumerate(containers, 1):
+                    out_path = output_dir / f"main_image_{i:02d}.jpg"
+                    container.screenshot(path=str(out_path))
+                    logger.info(f"  已保存: {out_path.name}")
+
+                browser.close()
+            return len(containers)
+        except Exception as e:
+            logger.error(f"截图失败: {e}")
+            return 0
+        finally:
+            if temp_html.exists():
+                temp_html.unlink()
+
+    def _update_db(self, book_id: str, count: int):
+        """更新数据库中的主图数量"""
+        session = get_session()
+        try:
+            output = session.query(BookOutput).filter_by(book_id=book_id).first()
+            if output:
+                output.main_image_count = count
+                session.commit()
+        finally:
+            close_session(session)
+
+
+def generate_main_image(book_id: str) -> bool:
+    """便捷函数：生成商品主图"""
+    generator = ImageGenerator()
+    return generator.generate(book_id)
