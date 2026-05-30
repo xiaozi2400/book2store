@@ -323,20 +323,33 @@ image_generator:
   width: 800
   height: 800
   html_prompt: |
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <style>
-      body { width: 800px; height: 800px; margin: 0; padding: 40px; box-sizing: border-box; font-family: "Microsoft YaHei", sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #fff; }
-      .cover { width: 200px; height: 260px; object-fit: cover; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin-bottom: 30px; }
-      h1 { font-size: 36px; margin: 0 0 16px; font-weight: bold; line-height: 1.3; }
-      .summary { font-size: 16px; line-height: 1.6; opacity: 0.9; max-width: 600px; }
-    </style>
-    </head>
-    <body>
-      <img class="cover" src="data:image/jpeg;base64,{cover_base64}" alt="cover">
-      <h1>{title}</h1>
-      <div class="summary">{summary}</div>
-    </body>
-    </html>
+      你是一个电商主图设计师。根据以下书籍信息，生成用于闲鱼商品主图的HTML代码。
+
+      书名：{title}
+      作者：{author}
+      封面图：data:image/jpeg;base64,{cover_base64}
+
+      【书籍摘要】
+      {summary}
+
+      ## 设计要求
+
+      生成多张商品主图，每张图放在一个 <div class="page"></div> 容器中，每个 .page 容器宽800px、高800px。
+
+      ### 第一张图：封面展示
+      - 以书籍封面为主视觉，展示在左侧或居中
+      - 右侧/下方叠加书名、作者、核心卖点（一句话）
+      - 背景使用渐变色（深色系或暖色系）
+
+      ### 后续图片（你自由创意）
+      - 第二张：核心卖点图，展示3-5个关键卖点
+      - 第三张：适合人群图
+      - 更多：自由发挥
+
+      ### 通用要求：
+      - 设计感强，使用渐变色、阴影、圆角等CSS效果
+      - 字体使用系统字体：-apple-system, "Microsoft YaHei", sans-serif
+      - 所有文字使用中文
+      - 图片为800×800像素方形
+      - 每个 .page 中不要有滚动条
+      - 只输出HTML代码，不要加```html```标记
