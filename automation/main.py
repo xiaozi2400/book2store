@@ -179,6 +179,10 @@ def process(
         progress.update(task, description="生成精简版...")
         generate_summary(book_id, str(input_path))
 
+        progress.update(task, description="生成主图...")
+        from automation.image_generator import generate_main_image
+        generate_main_image(book_id)
+
         progress.update(task, description="提取图片...")
         base_name = Path(input_path).stem
         pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
@@ -313,6 +317,10 @@ def auto(
             console.print(f"[dim]生成精简版...[/dim]")
             generate_summary(book_id, str(input_path))
 
+            console.print(f"[dim]生成主图...[/dim]")
+            from automation.image_generator import generate_main_image
+            generate_main_image(book_id)
+
             console.print(f"[dim]提取图片...[/dim]")
             base_name = Path(input_path).stem
             pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
@@ -429,6 +437,10 @@ def test(
                 console.print(f"  [dim]→ 跳过精简版步骤[/dim]")
 
             if not skip_images:
+                console.print(f"  [dim]→ 生成主图...[/dim]")
+                from automation.image_generator import generate_main_image
+                generate_main_image(book_id)
+
                 console.print(f"  [dim]→ 提取图片...[/dim]")
                 base_name = epub_path.stem
                 pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
