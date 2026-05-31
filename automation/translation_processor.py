@@ -67,7 +67,7 @@ class TranslationProcessor:
 
             for line in iter(process.stdout.readline, ''):
                 if line:
-                    print(line.rstrip())
+                    print(line.rstrip(), flush=True)
                 if process.poll() is not None:
                     break
 

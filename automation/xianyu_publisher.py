@@ -241,8 +241,32 @@ class XianyuPublisher:
         desc_input = self.page.locator("textarea").or_(self.page.locator("[contenteditable='true']")).first
         self._scroll_to_element_center(desc_input)
         desc_input.wait_for(timeout=10000)
-        desc_input.fill(description)
-        logger.info("宝贝描述已填写")
+
+        is_contenteditable = desc_input.get_attribute("contenteditable") == "true"
+        if is_contenteditable:
+            desc_input.evaluate("""
+                (el, text) => {
+                    el.focus();
+                    document.execCommand('selectAll');
+                    document.execCommand('delete');
+                    const paragraphs = text.split('\\n');
+                    const fragment = document.createDocumentFragment();
+                    paragraphs.forEach((p, i) => {
+                        if (i > 0) {
+                            const br = document.createElement('br');
+                            fragment.appendChild(br);
+                        }
+                        const textNode = document.createTextNode(p);
+                        fragment.appendChild(textNode);
+                    });
+                    el.appendChild(fragment);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            """, description)
+            logger.info("宝贝描述已填写 (contenteditable)")
+        else:
+            desc_input.fill(description)
+            logger.info("宝贝描述已填写 (textarea)")
 
     def _select_category(self):
         """选择商品分类"""
@@ -661,7 +685,7 @@ class XianyuPublisher:
             if (i+1) % 10 == 0:
                 logger.info("已等待 %d * 0.5s，按钮仍禁用..." % (i+1))
 
-        # publish_btn.click()
+        publish_btn.click()
         logger.info("已点击发布按钮")
 
         time.sleep(5)

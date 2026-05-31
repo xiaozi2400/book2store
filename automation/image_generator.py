@@ -188,7 +188,7 @@ class ImageGenerator:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page(viewport={"width": width, "height": height})
-                page.goto(f"file://{temp_html.resolve()}")
+                page.goto(temp_html.resolve().as_uri())
                 page.wait_for_load_state("networkidle")
 
                 containers = page.query_selector_all(".page")

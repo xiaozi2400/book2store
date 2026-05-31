@@ -174,7 +174,9 @@ def process(
         task = progress.add_task("处理中...", total=None)
 
         progress.update(task, description="翻译并生成PDF...")
-        translate_book(book_id, str(input_path))
+        if not translate_book(book_id, str(input_path)):
+            console.print("[bold red]翻译失败，停止处理[/bold red]")
+            raise typer.Exit(1)
 
         progress.update(task, description="生成精简版...")
         generate_summary(book_id, str(input_path))
@@ -312,7 +314,8 @@ def auto(
             db.create_book_output(book_id)
 
             console.print(f"[dim]翻译并生成PDF...[/dim]")
-            translate_book(book_id, str(input_path))
+            if not translate_book(book_id, str(input_path)):
+                raise Exception("翻译失败")
 
             console.print(f"[dim]生成精简版...[/dim]")
             generate_summary(book_id, str(input_path))
@@ -426,7 +429,8 @@ def test(
                     console.print(f"  [dim]→ 翻译并生成PDF（跳过缓存）...[/dim]")
                 else:
                     console.print(f"  [dim]→ 翻译并生成PDF...[/dim]")
-                translate_book(book_id, str(epub_path), skip_cache=skip_cache)
+                if not translate_book(book_id, str(epub_path), skip_cache=skip_cache):
+                    raise Exception("翻译失败")
             else:
                 console.print(f"  [dim]→ 跳过翻译步骤[/dim]")
 
@@ -554,6 +558,54 @@ def init():
     """初始化数据库"""
     db = DatabaseManager()
     console.print("[bold green]数据库初始化完成[/bold green]")
+
+
+@app.command()
+def regenerate_images(
+    keyword: str = typer.Argument(None, help="书籍标题关键词"),
+    book_id: str = typer.Option(None, "--book-id", help="指定书籍ID（优先于关键词）"),
+):
+    """复用已有摘要重新生成主图（修改提示词后测试用）"""
+    from automation.image_generator import generate_main_image
+
+    db = DatabaseManager()
+
+    if book_id:
+        book = db.get_book_by_id(book_id)
+        if not book:
+            console.print(f"[red]未找到指定书籍: {book_id}[/red]")
+            raise typer.Exit(1)
+        if not book.summary_text:
+            console.print(f"[red]书籍 {book.title} 无摘要，无法生成主图[/red]")
+            raise typer.Exit(1)
+        target_books = [book]
+    else:
+        if not keyword:
+            console.print("[red]请提供关键词或 --book-id[/red]")
+            raise typer.Exit(1)
+        matched = []
+        for book in db.get_all_books():
+            if book.summary_text and keyword.lower() in (book.title or "").lower():
+                matched.append(book)
+
+        if not matched:
+            console.print("[yellow]未找到匹配的有摘要的书籍[/yellow]")
+            raise typer.Exit(1)
+
+        if len(matched) > 1:
+            console.print("[yellow]找到多本匹配书籍，请用 --book-id 指定:[/yellow]")
+            for b in matched:
+                console.print(f"  {b.id} - {b.title}")
+            raise typer.Exit(1)
+
+        target_books = matched
+
+    for book in target_books:
+        console.print(f"\n[bold cyan]重新生成主图: {book.title}[/bold cyan]")
+        if generate_main_image(book.id):
+            console.print(f"  [green]✓[/green] 主图生成完成")
+        else:
+            console.print(f"  [red]✗[/red] 主图生成失败")
 
 
 if __name__ == "__main__":
