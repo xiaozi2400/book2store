@@ -2,10 +2,13 @@ import json
 import os
 import hashlib
 import time
+from typing import Optional
 from config import CACHE_FILE, CACHE_EXPIRY
+from .cache_interface import TranslationCache
 
-class CacheManager:
-    """缓存管理器"""
+
+class CacheManager(TranslationCache):
+    """缓存管理器 - 实现 TranslationCache 接口"""
     
     def __init__(self):
         """初始化缓存管理器"""

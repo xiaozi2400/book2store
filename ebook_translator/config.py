@@ -243,12 +243,19 @@ TRANSLATION_OPTIMIZATION = {
         'tier1_batch_size': 15,        # 短文本批量大小（保守优化）
         'tier2_batch_size': 8,         # 普通文本批量大小（保守优化）
         'max_workers': 5,              # 最大并发数（保守优化）
+        # 按字符数合并策略（类似 Calibre 插件，可大幅减少 API 调用）
+        'use_char_based_batching': True,  # 是否启用按字符数合并策略
+        'max_chars_per_batch': 1800,    # 每个批次的最大字符数（Calibre 默认是 1800）
     },
     # 质量检查配置
     'quality_check': {
         'enabled': True,
-        'min_translation_ratio': 0.3,   # 翻译长度最小比例
-        'max_translation_ratio': 3.0,   # 翻译长度最大比例
-        'retry_empty': True,            # 空翻译重试
+        'min_translation_ratio': 0.3,   # 翻译长度最小比例（Tier1/2 默认）
+        'max_translation_ratio': 3.0,   # 翻译长度最大比例（Tier1/2 默认）
+        'tier3_min_ratio': 0.1,         # Tier3（长文本/代码）最小比例
+        'tier3_max_ratio': 5.0,         # Tier3（长文本/代码）最大比例
+        'short_text_min_length': 30,    # 短文本原文长度阈值，≤此值使用绝对长度检查
+        'short_text_min_absolute': 3,   # 短文本翻译绝对长度下限
+        'retry_empty': True,            # 质量问题重试
     }
 }

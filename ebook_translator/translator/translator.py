@@ -384,14 +384,45 @@ class Translator:
         print(f"\n翻译完成: {len(ordered_results)}/{len(paragraphs)}")
         return ordered_results
 
+    def _split_batches_by_chars(self, paragraphs, max_chars=1800):
+        """按字符数切分批次（类似 Calibre 插件策略）"""
+        batches = []
+        current_batch = []
+        current_chars = 0
+        
+        for para in paragraphs:
+            para_chars = len(para['text'])
+            
+            # 如果当前批次已不为空，且加上这个段落会超过限制，则创建新批次
+            if current_batch and (current_chars + para_chars > max_chars):
+                batches.append(current_batch)
+                current_batch = []
+                current_chars = 0
+            
+            current_batch.append(para)
+            current_chars += para_chars
+        
+        # 添加最后一个批次
+        if current_batch:
+            batches.append(current_batch)
+        
+        return batches
+    
     def _translate_tier(self, paragraphs, tier, batch_size):
         """翻译指定 tier 的段落"""
         if not paragraphs:
             return {}
 
         results = {}
-
-        batches = [paragraphs[i:i+batch_size] for i in range(0, len(paragraphs), batch_size)]
+        
+        # 根据配置选择批次切分策略
+        if self.opt_config['batch'].get('use_char_based_batching', False):
+            max_chars = self.opt_config['batch'].get('max_chars_per_batch', 1800)
+            batches = self._split_batches_by_chars(paragraphs, max_chars)
+            print(f"  [{tier}] 按字符数策略切分: {len(batches)} 批次 (最大 {max_chars} 字符/批次)")
+        else:
+            batches = [paragraphs[i:i+batch_size] for i in range(0, len(paragraphs), batch_size)]
+            print(f"  [{tier}] 按段落数策略切分: {len(batches)} 批次 ({batch_size} 段落/批次)")
 
         max_workers = self.opt_config['batch']['max_workers']
 
@@ -408,7 +439,7 @@ class Translator:
                     batch_results = future.result(timeout=180)
                     for result in batch_results:
                         if self.opt_config['quality_check']['enabled']:
-                            result = self._quality_check(result)
+                            result = self._quality_check(result, tier)
 
                         results[result['id']] = result
                         self.stats['translated_paragraphs'] += 1
@@ -440,13 +471,13 @@ class Translator:
         }
 
         if self.opt_config['quality_check']['enabled']:
-            result = self._quality_check(result)
+            result = self._quality_check(result, result.get('tier', 'tier2_normal'))
 
         self.stats['translated_paragraphs'] += 1
         return result
 
-    def _quality_check(self, result):
-        """质量检查"""
+    def _quality_check(self, result, tier='tier2_normal'):
+        """质量检查 - 按 tier 和原文长度区分重试策略"""
         original = result['original']
         translated = result['translated']
 
@@ -457,21 +488,41 @@ class Translator:
 
         orig_len = len(original)
         trans_len = len(translated)
+        short_threshold = self.opt_config['quality_check'].get('short_text_min_length', 30)
 
         if orig_len > 0:
             ratio = trans_len / orig_len
-            min_ratio = self.opt_config['quality_check']['min_translation_ratio']
-            max_ratio = self.opt_config['quality_check']['max_translation_ratio']
 
-            if ratio < min_ratio:
-                issues.append(f"翻译过短 ({ratio:.2f})")
-            if ratio > max_ratio:
-                issues.append(f"翻译过长 ({ratio:.2f})")
+            if orig_len <= short_threshold:
+                min_absolute = self.opt_config['quality_check'].get('short_text_min_absolute', 3)
+                if trans_len < min_absolute:
+                    issues.append(f"翻译过短 (绝对长度 {trans_len} < {min_absolute})")
+                if tier != 'tier3_long_complex' and ratio > self.opt_config['quality_check']['max_translation_ratio']:
+                    issues.append(f"翻译过长 ({ratio:.2f})")
+            else:
+                if tier == 'tier3_long_complex':
+                    min_ratio = self.opt_config['quality_check'].get('tier3_min_ratio', 0.1)
+                    max_ratio = self.opt_config['quality_check'].get('tier3_max_ratio', 5.0)
+                else:
+                    min_ratio = self.opt_config['quality_check']['min_translation_ratio']
+                    max_ratio = self.opt_config['quality_check']['max_translation_ratio']
 
-        if '===' in translated or '[段落' in translated:
-            issues.append("分隔符残留")
+                if ratio < min_ratio:
+                    issues.append(f"翻译过短 ({ratio:.2f})")
+                if ratio > max_ratio:
+                    issues.append(f"翻译过长 ({ratio:.2f})")
+
+        has_code_chars = any(c in original for c in ['{', '(', '[', '=', '<', '>', '\\', '`', '|', '&'])
+        if not has_code_chars:
+            if '===' in translated or '[段落' in translated:
+                issues.append("分隔符残留")
 
         if issues and self.opt_config['quality_check']['retry_empty']:
+            if tier == 'tier3_long_complex':
+                if "空翻译" not in issues:
+                    issues = []
+
+        if issues:
             print(f"  质量问题 ({', '.join(issues)}): {original[:50]}...")
             print(f"  尝试重译...")
 

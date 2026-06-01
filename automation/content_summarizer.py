@@ -357,7 +357,7 @@ class ContentSummarizer:
         return self._extract_from_epub(epub_path)
 
     def _extract_from_chinese_epub(self, epub_path: str) -> list:
-        """从中文EPUB提取章节内容"""
+        """从中文EPUB提取章节内容，按HTML标题标签(h1/h2/h3)智能分割章节"""
         try:
             import ebooklib
             from ebooklib import epub
@@ -371,18 +371,62 @@ class ContentSummarizer:
                 if item.get_type() == ebooklib.ITEM_DOCUMENT:
                     content = item.get_content().decode('utf-8')
                     soup = BeautifulSoup(content, 'html.parser')
-                    text = soup.get_text(separator='\n', strip=True)
 
-                    if text:
-                        current_chapter["content"] += text + "\n"
+                    body = soup.body
+                    if body is None:
+                        text = soup.get_text(separator='\n', strip=True)
+                        if text:
+                            current_chapter["content"] += text + "\n"
+                        continue
+
+                    headings = body.find_all(['h1', 'h2', 'h3'])
+                    if not headings:
+                        text = body.get_text(separator='\n', strip=True)
+                        if text and len(text) > 200:
+                            title = self._extract_title(soup)
+                            chapters.append({
+                                "title": title or f"第{len(chapters)+1}章",
+                                "content": text[:5000]
+                            })
+                        elif text:
+                            current_chapter["content"] += text + "\n"
+                    else:
+                        self._process_chapter_nodes(body, chapters, current_chapter)
 
             if current_chapter["content"].strip():
                 chapters.append(current_chapter)
 
-            return chapters
+            logger.info(f"从中文EPUB提取到 {len(chapters)} 个章节")
+            return chapters[:10]
         except Exception as e:
-            logger.warning(f"从EPUB提取章节失败: {e}")
+            logger.warning(f"从中文EPUB提取章节失败: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
             return []
+
+    def _process_chapter_nodes(self, parent, chapters, current_chapter):
+        """递归处理HTML节点，在标题标签处分割章节"""
+        from bs4 import Tag
+
+        for elem in parent.children:
+            if not isinstance(elem, Tag):
+                continue
+
+            if elem.name in ('h1', 'h2', 'h3'):
+                title_text = elem.get_text().strip()
+                if title_text and len(title_text) < 100:
+                    if current_chapter["content"].strip():
+                        chapters.append(dict(current_chapter))
+                    current_chapter.clear()
+                    current_chapter.update({"title": title_text, "content": ""})
+            else:
+                child_headings = elem.find_all(['h1', 'h2', 'h3'])
+                if child_headings:
+                    self._process_chapter_nodes(elem, chapters, current_chapter)
+                else:
+                    text = elem.get_text(separator='\n', strip=True)
+                    if text:
+                        current_chapter["content"] += text + "\n"
     
     def _extract_from_translated_txt(self, txt_path: str) -> list:
         """从已翻译的中文txt提取章节"""

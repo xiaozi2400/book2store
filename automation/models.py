@@ -145,3 +145,19 @@ class TokenUsage(Base):
 
     def __repr__(self):
         return f"<TokenUsage(book_id={self.book_id}, step={self.step}, tokens={self.total_tokens})>"
+
+
+class TranslationCache(Base):
+    """翻译缓存表"""
+    __tablename__ = "translation_cache"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_hash = Column(String(32), unique=True, nullable=False, index=True)
+    source_text = Column(Text, nullable=False)
+    translated_text = Column(Text, nullable=False)
+    model = Column(String(64))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<TranslationCache(hash={self.source_hash[:12]}...)>"
