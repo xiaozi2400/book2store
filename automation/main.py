@@ -274,7 +274,11 @@ def generate_list(
 
 @app.command()
 def auto(
-    skip_publish: bool = typer.Option(False, help="跳过发布步骤")
+    skip_publish: bool = typer.Option(False, help="跳过发布步骤"),
+    skip_translate: bool = typer.Option(False, help="跳过翻译步骤"),
+    skip_summarize: bool = typer.Option(False, help="跳过生成精简版"),
+    skip_images: bool = typer.Option(False, help="跳过图片提取"),
+    skip_copywriting: bool = typer.Option(False, help="跳过文案生成"),
 ):
     """一键处理：扫描输入目录，自动处理所有新书籍"""
     from automation.directory_scanner import scan_input_directory
@@ -313,29 +317,41 @@ def auto(
             input_path = Path(config.input_dir) / filename
             db.create_book_output(book_id)
 
-            console.print(f"[dim]翻译并生成PDF...[/dim]")
-            if not translate_book(book_id, str(input_path)):
-                raise Exception("翻译失败")
+            if not skip_translate:
+                console.print(f"[dim]翻译并生成PDF...[/dim]")
+                if not translate_book(book_id, str(input_path)):
+                    raise Exception("翻译失败")
+            else:
+                console.print(f"[dim]跳过翻译步骤[/dim]")
 
-            console.print(f"[dim]生成精简版...[/dim]")
-            generate_summary(book_id, str(input_path))
+            if not skip_summarize:
+                console.print(f"[dim]生成精简版...[/dim]")
+                generate_summary(book_id, str(input_path))
+            else:
+                console.print(f"[dim]跳过精简版步骤[/dim]")
 
-            console.print(f"[dim]生成主图...[/dim]")
-            from automation.image_generator import generate_main_image
-            generate_main_image(book_id)
+            if not skip_images:
+                console.print(f"[dim]生成主图...[/dim]")
+                from automation.image_generator import generate_main_image
+                generate_main_image(book_id)
 
-            console.print(f"[dim]提取图片...[/dim]")
-            base_name = Path(input_path).stem
-            pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
-            extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
+                console.print(f"[dim]提取图片...[/dim]")
+                base_name = Path(input_path).stem
+                pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
+                extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
+            else:
+                console.print(f"[dim]跳过图片提取步骤[/dim]")
 
-            console.print(f"[dim]生成文案...[/dim]")
-            book_obj = db.get_book_by_id(book_id)
-            generate_copywriting(book_id, {
-                'title': book_obj.title,
-                'author': book_obj.author,
-                'summary': book_obj.summary_text or ''
-            })
+            if not skip_copywriting:
+                console.print(f"[dim]生成文案...[/dim]")
+                book_obj = db.get_book_by_id(book_id)
+                generate_copywriting(book_id, {
+                    'title': book_obj.title,
+                    'author': book_obj.author,
+                    'summary': book_obj.summary_text or ''
+                })
+            else:
+                console.print(f"[dim]跳过文案生成步骤[/dim]")
 
             if not skip_publish:
                 console.print(f"[dim]发布到闲鱼...[/dim]")

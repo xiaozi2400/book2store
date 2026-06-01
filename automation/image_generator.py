@@ -40,8 +40,8 @@ class ImageGenerator:
         base_name = Path(book.filename).stem
         meta_dir = self.output_dir / f"{base_name}_metadata"
 
-        # 1. 提取封面主色调
-        cover_path = meta_dir / "cover.jpg"
+        # 1. 查找封面（支持多个扩展名）
+        cover_path = self._find_cover_path(meta_dir)
         cover_colors = self._extract_cover_colors(cover_path)
 
         # 2. 设计分析（Chain-of-Thought）
@@ -55,7 +55,7 @@ class ImageGenerator:
             return False
 
         # 3. 注入封面图（替换占位符）
-        cover_base64 = self._load_cover_base64(cover_path)
+        cover_base64 = self._load_cover_base64(cover_path) if cover_path else None
         if cover_base64:
             html = self._inject_cover_image(html, cover_base64)
             logger.info(f"封面图已注入 HTML")
@@ -82,9 +82,20 @@ class ImageGenerator:
             design_plan=design_plan,
         )
 
-    def _extract_cover_colors(self, cover_path: Path) -> str:
+    def _find_cover_path(self, meta_dir: Path) -> Optional[Path]:
+        """在metadata目录中查找封面，支持多个扩展名"""
+        cover_exts = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
+        for ext in cover_exts:
+            path = meta_dir / f"cover{ext}"
+            if path.exists():
+                logger.info(f"找到封面: {path}")
+                return path
+        logger.warning(f"未在 {meta_dir} 找到封面")
+        return None
+
+    def _extract_cover_colors(self, cover_path: Optional[Path]) -> str:
         """从封面图提取完整配色方案"""
-        if not cover_path.exists():
+        if not cover_path or not cover_path.exists():
             return ""
         try:
             from PIL import Image
@@ -165,9 +176,9 @@ class ImageGenerator:
             return html
         return html.replace("__COVER_PLACEHOLDER__", cover_base64)
 
-    def _load_cover_base64(self, cover_path: Path) -> str:
+    def _load_cover_base64(self, cover_path: Optional[Path]) -> str:
         """加载封面图并返回base64编码"""
-        if cover_path.exists():
+        if cover_path and cover_path.exists():
             with open(cover_path, "rb") as f:
                 return base64.b64encode(f.read()).decode("utf-8")
         return ""
