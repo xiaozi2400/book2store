@@ -451,3 +451,76 @@ def test_cultural_empty_text():
     checker = CulturalAdaptationChecker()
     result = checker.check("")
     assert result["score"] == 100
+
+
+"""tests/test_quality_checker.py — QualityChecker main class tests"""
+from automation.quality_checker import QualityChecker, QualityReport, DimensionResult
+from unittest.mock import patch, MagicMock
+import json
+
+
+def test_grade_excellent():
+    """90 分以上为优秀"""
+    checker = QualityChecker()
+    assert checker._determine_grade(95) == "优秀"
+    assert checker._determine_grade(90) == "优秀"
+
+
+def test_grade_good():
+    """75-89 分为良好"""
+    checker = QualityChecker()
+    assert checker._determine_grade(85) == "良好"
+    assert checker._determine_grade(75) == "良好"
+
+
+def test_grade_pass():
+    """60-74 分为合格"""
+    checker = QualityChecker()
+    assert checker._determine_grade(74) == "合格"
+    assert checker._determine_grade(60) == "合格"
+
+
+def test_grade_needs_improvement():
+    """60 分以下为需改进"""
+    checker = QualityChecker()
+    assert checker._determine_grade(59) == "需改进"
+    assert checker._determine_grade(0) == "需改进"
+
+
+def test_overall_score_average():
+    """综合评分为各维度评分的加权平均"""
+    checker = QualityChecker()
+    dimensions = {
+        "fidelity": DimensionResult(score=100, issues=[]),
+        "fluency": DimensionResult(score=80, issues=[]),
+        "format": DimensionResult(score=60, issues=[]),
+    }
+    score = checker._calc_overall_score(dimensions)
+    # (100 + 80 + 60) / 3 = 80.0
+    assert score == 80.0
+
+
+def test_report_to_json():
+    """报告可正确序列化为 JSON"""
+    dimensions = {
+        "fidelity": DimensionResult(score=90, issues=[]),
+        "completeness": DimensionResult(
+            score=95,
+            issues=[],
+            details={"translated_paragraphs": 10, "missing_count": 0}
+        )
+    }
+    report = QualityReport(
+        book_title="Test Book",
+        overall_score=92.5,
+        overall_grade="优秀",
+        dimensions=dimensions,
+        summary="整体质量高",
+        recommendation="可直接发布"
+    )
+    json_str = report.to_json()
+    parsed = json.loads(json_str)
+    assert parsed["book_title"] == "Test Book"
+    assert parsed["overall_score"] == 92.5
+    assert parsed["dimensions"]["fidelity"]["score"] == 90
+    assert parsed["dimensions"]["completeness"]["details"]["translated_paragraphs"] == 10

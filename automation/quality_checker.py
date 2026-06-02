@@ -484,3 +484,229 @@ class CulturalAdaptationChecker:
             "imperial_units": imperial_count, "western_currency": currency_count,
             "issues": issues
         }
+
+
+class QualityChecker:
+    """翻译质量检查主类——协调各维度检查并生成报告"""
+
+    def __init__(self):
+        self.enabled = config.get_quality_check_enabled()
+        # 维度 1-6：程序化检查器
+        self.fidelity_checker = FidelityChecker()
+        self.fluency_checker = FluencyChecker()
+        self.consistency_checker = ConsistencyChecker()
+        self.format_checker = FormatIntegrityChecker()
+        self.terminology_checker = TerminologyChecker()
+        self.cultural_checker = CulturalAdaptationChecker()
+        # 维度 7-8
+        self.completeness_checker = CompletenessChecker()
+        self.pdf_toc_checker = PdfTocLinkChecker()
+
+    def check(self, book_title: str, book_id: str, output_dir: str,
+              bilingual_pdf_path: Optional[str] = None,
+              chinese_pdf_path: Optional[str] = None,
+              cache_data: Optional[Dict] = None,
+              source_paragraphs: Optional[List[str]] = None,
+              translated_paragraphs: Optional[List[str]] = None) -> QualityReport:
+        """执行全维度质量检查"""
+        dimensions = {}
+        all_scores = []
+
+        # 维度 1：忠实度
+        if cache_data is not None and source_paragraphs is not None:
+            fidelity_result = self.fidelity_checker.check(cache_data, source_paragraphs)
+            dimensions["fidelity"] = DimensionResult(
+                score=fidelity_result["score"],
+                issues=fidelity_result["issues"],
+                details={
+                    "missing_count": fidelity_result["missing_count"],
+                    "empty_count": fidelity_result["empty_count"],
+                    "avg_length_ratio": fidelity_result["avg_length_ratio"]
+                }
+            )
+            all_scores.append(fidelity_result["score"])
+
+        # 维度 2：流畅度
+        if translated_paragraphs:
+            full_text = "\n".join(translated_paragraphs)
+            fluency_result = self.fluency_checker.check(full_text)
+            dimensions["fluency"] = DimensionResult(
+                score=fluency_result["score"],
+                issues=fluency_result["issues"],
+                details={
+                    "chinese_ratio": fluency_result["chinese_ratio"],
+                    "english_word_count": fluency_result["english_word_count"]
+                }
+            )
+            all_scores.append(fluency_result["score"])
+
+        # 维度 3：一致性
+        if cache_data:
+            consistency_result = self.consistency_checker.check(cache_data)
+            dimensions["consistency"] = DimensionResult(
+                score=consistency_result["score"],
+                issues=consistency_result["issues"],
+                details={
+                    "total_terms": consistency_result["total_terms"],
+                    "inconsistent_terms": consistency_result["inconsistent_terms"]
+                }
+            )
+            all_scores.append(consistency_result["score"])
+
+        # 维度 4：格式完整性
+        if source_paragraphs is not None and translated_paragraphs is not None:
+            format_result = self.format_checker.check(source_paragraphs, translated_paragraphs)
+            dimensions["format"] = DimensionResult(
+                score=format_result["score"],
+                issues=format_result["issues"],
+                details={
+                    "para_count_match": format_result["para_count_match"],
+                    "source_paragraphs": format_result["source_paragraphs"],
+                    "translated_paragraphs": format_result["translated_paragraphs"]
+                }
+            )
+            all_scores.append(format_result["score"])
+
+        # 维度 5：术语准确性
+        if cache_data:
+            term_result = self.terminology_checker.check(cache_data)
+            dimensions["terminology"] = DimensionResult(
+                score=term_result["score"],
+                issues=term_result["issues"],
+                details={
+                    "matched_count": term_result["matched_count"],
+                    "incorrect_count": term_result["incorrect_count"]
+                }
+            )
+            all_scores.append(term_result["score"])
+
+        # 维度 6：文化适配
+        if translated_paragraphs:
+            full_text = "\n".join(translated_paragraphs)
+            cultural_result = self.cultural_checker.check(full_text)
+            dimensions["cultural"] = DimensionResult(
+                score=cultural_result["score"],
+                issues=cultural_result["issues"],
+                details={
+                    "western_date_count": cultural_result["western_date_count"],
+                    "imperial_units": cultural_result["imperial_units"]
+                }
+            )
+            all_scores.append(cultural_result["score"])
+
+        # 维度 7：翻译完整性
+        if cache_data is not None and source_paragraphs is not None:
+            completeness_result = self.completeness_checker.check(
+                cache_data, source_paragraphs
+            )
+            dimensions["completeness"] = DimensionResult(
+                score=completeness_result["score"],
+                issues=completeness_result["issues"],
+                details={
+                    "source_paragraphs": completeness_result["source_paragraphs"],
+                    "translated_paragraphs": completeness_result["translated_paragraphs"],
+                    "missing_count": completeness_result["missing_count"],
+                    "empty_paragraphs": completeness_result["empty_paragraphs"]
+                }
+            )
+            all_scores.append(completeness_result["score"])
+
+        # 维度 8：PDF 目录链接检查
+        pdf_paths = [p for p in [bilingual_pdf_path, chinese_pdf_path] if p]
+        if pdf_paths:
+            pdf_scores = []
+            for pdf_path in pdf_paths:
+                toc_result = self.pdf_toc_checker.check(pdf_path)
+                pdf_scores.append(toc_result["score"])
+
+            pdf_toc_details = {
+                "checked_pdfs": pdf_paths,
+                "scores_per_pdf": dict(zip(pdf_paths, pdf_scores))
+            }
+            avg_pdf_score = sum(pdf_scores) / len(pdf_scores) if pdf_scores else 0
+            dimensions["pdf_toc_links"] = DimensionResult(
+                score=avg_pdf_score,
+                issues=[],
+                details=pdf_toc_details
+            )
+            all_scores.append(avg_pdf_score)
+
+        # 如果没有任何维度被评分，返回默认报告
+        if not all_scores:
+            return self._create_default_report(book_title, "无可用数据，无法完成质量评估")
+
+        overall_score = self._calc_overall_score(dimensions)
+        overall_grade = self._determine_grade(overall_score)
+
+        # 生成总结和建议
+        summary, recommendation = self._generate_summary_and_recommendation(
+            overall_score, dimensions
+        )
+
+        return QualityReport(
+            book_title=book_title,
+            overall_score=overall_score,
+            overall_grade=overall_grade,
+            dimensions=dimensions,
+            summary=summary,
+            recommendation=recommendation
+        )
+
+    def _calc_overall_score(self, dimensions: Dict[str, "DimensionResult"]) -> float:
+        """计算加权综合评分（目前等权平均）"""
+        scores = [dim.score for dim in dimensions.values()]
+        if not scores:
+            return 0.0
+        return round(sum(scores) / len(scores), 1)
+
+    def _determine_grade(self, score: float) -> str:
+        """根据分数确定等级"""
+        excellent = config.get_quality_check_threshold("excellent", 90)
+        good = config.get_quality_check_threshold("good", 75)
+        passing = config.get_quality_check_threshold("pass", 60)
+
+        if score >= excellent:
+            return "优秀"
+        elif score >= good:
+            return "良好"
+        elif score >= passing:
+            return "合格"
+        else:
+            return "需改进"
+
+    def _generate_summary_and_recommendation(self, overall_score: float,
+                                              dimensions: Dict[str, "DimensionResult"]) -> tuple:
+        """生成总结和建议"""
+        all_issues = []
+        for dim_name, dim_result in dimensions.items():
+            if dim_result.issues:
+                all_issues.extend(dim_result.issues)
+
+        if overall_score >= 90:
+            summary = "整体翻译质量优秀"
+            recommendation = "可直接发布"
+        elif overall_score >= 75:
+            summary = f"整体翻译质量良好，存在 {len(all_issues)} 个可优化点"
+            recommendation = "建议修复明显问题后发布"
+        elif overall_score >= 60:
+            summary = f"整体翻译质量合格，但有 {len(all_issues)} 个需要关注的问题"
+            recommendation = "建议人工校对后发布"
+        else:
+            summary = f"整体翻译质量需要改进，发现 {len(all_issues)} 个问题"
+            recommendation = "建议重新翻译或人工全面校对"
+
+        if all_issues:
+            summary += f"：{'；'.join(all_issues[:3])}"
+
+        return summary, recommendation
+
+    def _create_default_report(self, book_title: str, reason: str) -> QualityReport:
+        """创建默认报告（无法评估时使用）"""
+        return QualityReport(
+            book_title=book_title,
+            overall_score=0,
+            overall_grade="无法评估",
+            dimensions={},
+            summary=f"质量检查无法完成: {reason}",
+            recommendation="请检查翻译数据完整性后重试"
+        )
