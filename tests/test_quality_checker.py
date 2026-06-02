@@ -79,3 +79,69 @@ def test_quality_check_enabled_by_default():
     from automation.config import config
     enabled = config.get_quality_check_enabled()
     assert enabled is True
+
+
+# ============================================================
+# CompletenessChecker 测试（维度 7：翻译完整性）
+# ============================================================
+
+from automation.quality_checker import CompletenessChecker
+
+
+def test_completeness_all_translated():
+    """所有段落都翻译完成"""
+    cache_data = {
+        "hash1": {"source": "Hello", "translated": "你好"},
+        "hash2": {"source": "World", "translated": "世界"},
+    }
+    source_paragraphs = ["Hello", "World"]
+    checker = CompletenessChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] == 100
+    assert result["translated_paragraphs"] == 2
+    assert result["missing_count"] == 0
+
+
+def test_completeness_partial_missing():
+    """部分段落缺失翻译"""
+    cache_data = {
+        "hash1": {"source": "Hello", "translated": "你好"},
+    }
+    source_paragraphs = ["Hello", "World", "Test"]
+    checker = CompletenessChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["missing_count"] == 2
+    assert result["translated_paragraphs"] == 1
+    assert result["score"] < 100
+
+
+def test_completeness_empty_translated():
+    """译文为空字符串的情况"""
+    cache_data = {
+        "hash1": {"source": "Hello", "translated": ""},
+    }
+    source_paragraphs = ["Hello"]
+    checker = CompletenessChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["empty_paragraphs"] == 1
+    assert result["score"] < 100
+
+
+def test_completeness_no_cache():
+    """没有缓存数据"""
+    cache_data = {}
+    source_paragraphs = ["Hello"]
+    checker = CompletenessChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] == 0
+    assert result["missing_count"] == 1
+
+
+def test_completeness_empty_source():
+    """源文档没有段落"""
+    cache_data = {}
+    source_paragraphs = []
+    checker = CompletenessChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] == 100
+    assert result["missing_count"] == 0
