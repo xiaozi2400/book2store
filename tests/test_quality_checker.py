@@ -524,3 +524,73 @@ def test_report_to_json():
     assert parsed["overall_score"] == 92.5
     assert parsed["dimensions"]["fidelity"]["score"] == 90
     assert parsed["dimensions"]["completeness"]["details"]["translated_paragraphs"] == 10
+
+
+# ============================================================
+# Integration tests — 质量检查集成到翻译流水线
+# ============================================================
+
+
+@patch.object(QualityChecker, 'check')
+def test_quality_checker_called_after_translation(mock_check):
+    """验证质量检查在翻译完成后被调用"""
+    mock_check.return_value = MagicMock(
+        to_json=lambda: '{"overall_score": 85}',
+        to_dict=lambda: {"overall_score": 85},
+        overall_score=85,
+        overall_grade="良好",
+        summary="良好",
+        recommendation="可直接发布"
+    )
+
+    checker = QualityChecker()
+    report = checker.check(
+        book_title="Test Book",
+        book_id="test-id",
+        output_dir="/tmp/output",
+        source_paragraphs=["Hello World"],
+        translated_paragraphs=["你好世界"]
+    )
+
+    mock_check.assert_called_once()
+    assert report.overall_score == 85
+
+
+@patch('automation.quality_checker.QualityChecker.check')
+def test_quality_check_saves_report_to_db(mock_check):
+    """验证质量报告保存到数据库"""
+    mock_report = MagicMock(
+        to_json=lambda: '{"overall_score": 90, "overall_grade": "优秀"}',
+        to_dict=lambda: {"overall_score": 90, "overall_grade": "优秀"},
+        overall_score=90,
+        overall_grade="优秀",
+        summary="优秀",
+        recommendation="可直接发布"
+    )
+    mock_check.return_value = mock_report
+
+    from automation.database import DatabaseManager, init_database
+    from automation.models import BookOutput
+
+    init_database()
+    db = DatabaseManager()
+    book = db.create_book("test_quality.epub", "Test Quality")
+
+    # 创建 BookOutput
+    from automation.database import get_session, close_session
+    session = get_session()
+    try:
+        output = BookOutput(book_id=book.id)
+        session.add(output)
+        session.commit()
+        output.quality_report = mock_report.to_json()
+        session.commit()
+
+        retrieved = session.query(BookOutput).filter(
+            BookOutput.book_id == book.id
+        ).first()
+        import json
+        report = json.loads(retrieved.quality_report)
+        assert report["overall_score"] == 90
+    finally:
+        close_session(session)

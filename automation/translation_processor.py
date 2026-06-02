@@ -35,9 +35,10 @@ class TranslationProcessor:
             self.db.add_log(book_id, "translating", "start", "开始翻译")
 
             # 准备输出目录
-            base_name = Path(epub_path).stem
+            base_name = Path(epub_path).stem.strip()
             short_name = base_name.split('_')[0].strip()
             output_root = self.output_dir / base_name
+            output_root.mkdir(parents=True, exist_ok=True)
 
             # 并行执行：翻译 + 英文 PDF 转换
             with ThreadPoolExecutor(max_workers=2) as executor:
@@ -78,6 +79,17 @@ class TranslationProcessor:
 
             # 记录 Token 使用
             self._record_token_stats(book_id, translation_result)
+
+            # 翻译质量自动检查（Story 6）
+            try:
+                self._run_quality_check(
+                    book_id=book_id,
+                    base_name=base_name,
+                    translation_result=translation_result,
+                    output_root=output_root
+                )
+            except Exception as qe:
+                logger.warning(f"翻译质量检查失败（不影响发布）: {qe}")
 
             self.db.add_log(book_id, "translating", "success", "翻译完成")
             logger.info(f"翻译处理完成: {book_id}")
@@ -156,6 +168,45 @@ class TranslationProcessor:
                 f"翻译Token消耗: 输入={stats.get('prompt_tokens', 0)}, "
                 f"输出={stats.get('completion_tokens', 0)}"
             )
+
+    def _run_quality_check(self, book_id, base_name, translation_result, output_root):
+        """执行翻译质量检查"""
+        from .quality_checker import QualityChecker
+
+        checker = QualityChecker()
+        if not checker.enabled:
+            logger.info("翻译质量检查已禁用")
+            return
+
+        book = self.db.get_book_by_id(book_id)
+        book_title = book.title if book else base_name
+
+        bilingual_pdf = translation_result.get("bilingual_pdf")
+        chinese_pdf = translation_result.get("chinese_pdf")
+
+        cache_data = translation_result.get("cache_data", {})
+        source_paragraphs = translation_result.get("source_paragraphs", [])
+        translated_paragraphs = translation_result.get("translated_paragraphs", [])
+
+        logger.info(f"开始翻译质量检查: {book_title}")
+        report = checker.check(
+            book_title=book_title,
+            book_id=book_id,
+            output_dir=str(output_root),
+            bilingual_pdf_path=bilingual_pdf,
+            chinese_pdf_path=chinese_pdf,
+            cache_data=cache_data,
+            source_paragraphs=source_paragraphs,
+            translated_paragraphs=translated_paragraphs
+        )
+
+        report_path = output_root / f"质量报告-{base_name}.json"
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(report.to_json())
+        logger.info(f"质量报告已保存: {report_path}")
+
+        self.db.update_book_quality_report(book_id, report.to_json())
+        logger.info(f"翻译质量检查完成: {book_title} — {report.overall_grade} ({report.overall_score}分)")
 
 
 def translate_book(book_id, epub_path, skip_cache=False):

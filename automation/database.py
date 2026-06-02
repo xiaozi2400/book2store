@@ -221,6 +221,24 @@ class DatabaseManager:
         finally:
             close_session(session)
 
+    def update_book_quality_report(self, book_id: str, report_json: str):
+        """更新书籍的质量检查报告"""
+        from .models import BookOutput
+        session = get_session()
+        try:
+            output = session.query(BookOutput).filter(
+                BookOutput.book_id == book_id
+            ).first()
+            if output:
+                output.quality_report = report_json
+                session.commit()
+                logger.info(f"质量报告已更新到数据库: {book_id}")
+        except Exception as e:
+            logger.error(f"更新质量报告失败: {e}")
+            session.rollback()
+        finally:
+            close_session(session)
+
     def add_log(self, book_id: str, stage: str, status: str, message: str = None):
         """添加处理日志"""
         from .models import ProcessingLog
