@@ -232,3 +232,222 @@ def test_pdf_toc_checker_broken_links(tmp_path):
     assert result["valid_links"] == 1
     assert result["broken_links"] == 1
     assert result["score"] == 50
+
+
+# ===== 维度 1：忠实度检查器 =====
+from automation.quality_checker import FidelityChecker
+
+
+def test_fidelity_all_translated():
+    """所有段落完整翻译，译文长度合理"""
+    cache_data = {
+        "h1": {"source": "Hello World", "translated": "你好世界"},
+        "h2": {"source": "Good Morning", "translated": "早上好"},
+    }
+    source_paragraphs = ["Hello World", "Good Morning"]
+    checker = FidelityChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] >= 90
+    assert result["missing_count"] == 0
+
+
+def test_fidelity_partial_missing():
+    """部分段落缺失翻译"""
+    cache_data = {
+        "h1": {"source": "Hello", "translated": "你好"},
+    }
+    source_paragraphs = ["Hello", "World", "Test"]
+    checker = FidelityChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] < 100
+    assert result["missing_count"] == 2
+
+
+def test_fidelity_empty_translation():
+    """译文为空字符串"""
+    cache_data = {
+        "h1": {"source": "Hello", "translated": ""},
+    }
+    source_paragraphs = ["Hello"]
+    checker = FidelityChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] < 50
+    assert result["empty_count"] == 1
+
+
+# ===== 维度 2：流畅度检查器 =====
+from automation.quality_checker import FluencyChecker
+
+
+def test_fluency_good_chinese():
+    """优质中文翻译"""
+    text = "今天天气很好，适合出去散步。我们一起去公园吧！"
+    checker = FluencyChecker()
+    result = checker.check(text)
+    assert result["score"] >= 90
+    assert result["chinese_ratio"] > 0.9
+    assert result["english_word_count"] == 0
+
+
+def test_fluency_mixed_english():
+    """包含遗留英文单词"""
+    text = "这个功能需要 review 一下，然后 deploy 到 server"
+    checker = FluencyChecker()
+    result = checker.check(text)
+    assert result["score"] < 100
+    assert result["english_word_count"] > 0
+
+
+def test_fluency_no_chinese():
+    """完全没有中文"""
+    text = "Hello world, this is English text."
+    checker = FluencyChecker()
+    result = checker.check(text)
+    assert result["score"] == 0
+    assert result["chinese_ratio"] == 0
+
+
+def test_fluency_empty_text():
+    """空文本"""
+    checker = FluencyChecker()
+    result = checker.check("")
+    assert result["score"] == 100
+
+
+# ===== 维度 3：一致性检查器 =====
+from automation.quality_checker import ConsistencyChecker
+
+
+def test_consistency_perfect():
+    """同一英文术语始终翻译一致"""
+    cache_data = {
+        "h1": {"source": "Apple", "translated": "苹果"},
+        "h2": {"source": "Apple", "translated": "苹果"},
+        "h3": {"source": "Banana", "translated": "香蕉"},
+    }
+    checker = ConsistencyChecker()
+    result = checker.check(cache_data)
+    assert result["score"] == 100
+    assert result["inconsistent_terms"] == 0
+
+
+def test_consistency_inconsistent():
+    """同一英文术语出现不一致翻译"""
+    cache_data = {
+        "h1": {"source": "Apple", "translated": "苹果"},
+        "h2": {"source": "Apple", "translated": "苹果公司"},
+        "h3": {"source": "Banana", "translated": "香蕉"},
+    }
+    checker = ConsistencyChecker()
+    result = checker.check(cache_data)
+    assert result["score"] < 100
+    assert result["inconsistent_terms"] > 0
+
+
+def test_consistency_empty_cache():
+    """空缓存"""
+    checker = ConsistencyChecker()
+    result = checker.check({})
+    assert result["score"] == 100
+
+
+# ===== 维度 4：格式完整性检查器 =====
+from automation.quality_checker import FormatIntegrityChecker
+
+
+def test_format_paragraphs_preserved():
+    """段落结构完整保留"""
+    source = ["Heading 1", "This is a paragraph.", "Item 1", "Item 2"]
+    translated = ["标题 1", "这是一个段落。", "项目 1", "项目 2"]
+    checker = FormatIntegrityChecker()
+    result = checker.check(source, translated)
+    assert result["score"] == 100
+    assert result["para_count_match"] is True
+
+
+def test_format_paragraphs_mismatch():
+    """段落数量不匹配"""
+    source = ["P1", "P2", "P3"]
+    translated = ["T1", "T2"]
+    checker = FormatIntegrityChecker()
+    result = checker.check(source, translated)
+    assert result["score"] < 100
+    assert result["para_count_match"] is False
+
+
+def test_format_empty_lists():
+    """空列表"""
+    checker = FormatIntegrityChecker()
+    result = checker.check([], [])
+    assert result["score"] == 100
+
+
+# ===== 维度 5：术语准确性检查器 =====
+from automation.quality_checker import TerminologyChecker
+
+
+def test_terminology_all_correct():
+    """所有术语翻译正确"""
+    cache_data = {
+        "h1": {"source": "API", "translated": "API"},
+        "h2": {"source": "database", "translated": "数据库"},
+    }
+    checker = TerminologyChecker()
+    result = checker.check(cache_data)
+    assert result["score"] >= 90
+    assert result["matched_count"] > 0
+
+
+def test_terminology_wrong():
+    """术语翻译错误"""
+    cache_data = {
+        "h1": {"source": "API", "translated": "应用程序"},
+        "h2": {"source": "database", "translated": "数据库"},
+    }
+    checker = TerminologyChecker()
+    result = checker.check(cache_data)
+    assert result["incorrect_count"] > 0
+
+
+def test_terminology_empty_cache():
+    """空缓存"""
+    checker = TerminologyChecker()
+    result = checker.check({})
+    assert result["score"] == 100
+
+
+# ===== 维度 6：文化适配检查器 =====
+from automation.quality_checker import CulturalAdaptationChecker
+
+
+def test_cultural_well_adapted():
+    """日期格式已适配中文"""
+    text = "2024年1月15日，我们在北京召开了会议。"
+    checker = CulturalAdaptationChecker()
+    result = checker.check(text)
+    assert result["score"] >= 90
+    assert result["western_date_count"] == 0
+
+
+def test_cultural_western_dates():
+    """存在英文日期格式"""
+    text = "The event is on 01/15/2024, please join us."
+    checker = CulturalAdaptationChecker()
+    result = checker.check(text)
+    assert result["western_date_count"] > 0
+    assert result["score"] < 100
+
+
+def test_cultural_measurement_units():
+    """存在英制度量衡"""
+    text = "The screen is 15 inches and weighs 2 pounds."
+    checker = CulturalAdaptationChecker()
+    result = checker.check(text)
+    assert result["imperial_units"] > 0
+
+
+def test_cultural_empty_text():
+    """空文本"""
+    checker = CulturalAdaptationChecker()
+    result = checker.check("")
+    assert result["score"] == 100
