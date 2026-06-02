@@ -57,6 +57,7 @@ class BookOutput(Base):
     toc_preview_image = Column(String)
     other_images = Column(JSON)
     main_image_count = Column(Integer, default=0)
+    quality_report = Column(Text)  # 翻译质量检查报告（JSON 格式）
 
     xianyu_title = Column(String)
     xianyu_description = Column(Text)

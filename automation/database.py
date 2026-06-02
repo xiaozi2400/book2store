@@ -65,6 +65,13 @@ def _migrate_database(engine):
             conn.execute(text("ALTER TABLE book_outputs ADD COLUMN main_image_count INTEGER DEFAULT 0"))
             conn.commit()
 
+    # quality_report 字段迁移
+    output_columns2 = [col['name'] for col in inspector.get_columns('book_outputs')]
+    if 'quality_report' not in output_columns2:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE book_outputs ADD COLUMN quality_report TEXT"))
+            conn.commit()
+
 
 def get_session() -> Session:
     """获取数据库会话"""
