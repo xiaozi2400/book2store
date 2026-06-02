@@ -103,3 +103,89 @@ class CompletenessChecker:
             "empty_paragraphs": empty_count,
             "issues": issues
         }
+
+
+# ============================================================
+# 维度 8：PDF 目录链接检查
+# ============================================================
+
+class PdfTocLinkChecker:
+    """检查 PDF 目录链接——解析 TOC 树并验证每个链接目标页是否存在"""
+
+    def check(self, pdf_path: str) -> Dict:
+        if not pdf_path or not Path(pdf_path).exists():
+            return {
+                "score": 0,
+                "toc_entries": 0,
+                "valid_links": 0,
+                "broken_links": 0,
+                "issues": ["PDF 文件不存在"]
+            }
+
+        try:
+            import fitz
+        except ImportError:
+            return {
+                "score": 0,
+                "toc_entries": 0,
+                "valid_links": 0,
+                "broken_links": 0,
+                "issues": ["pymupdf 库未安装，无法检查 PDF 目录"]
+            }
+
+        try:
+            doc = fitz.open(pdf_path)
+            total_pages = doc.page_count
+            toc = doc.get_toc()
+
+            if not toc:
+                doc.close()
+                return {
+                    "score": 0,
+                    "toc_entries": 0,
+                    "valid_links": 0,
+                    "broken_links": 0,
+                    "issues": ["PDF 没有目录结构"]
+                }
+
+            valid = 0
+            broken = 0
+            broken_items = []
+
+            for item in toc:
+                level = item[0]
+                title = item[1]
+                page = item[2]
+
+                if isinstance(page, int) and 1 <= page <= total_pages:
+                    valid += 1
+                else:
+                    broken += 1
+                    broken_items.append(f"'{title}' 目标页 {page} 超出范围 (1-{total_pages})")
+
+            doc.close()
+
+            total = valid + broken
+            score = round((valid / total) * 100, 1) if total > 0 else 0
+
+            issues = []
+            if broken > 0:
+                issues.append(f"有 {broken} 个目录链接目标页不存在")
+                issues.extend(broken_items[:5])
+
+            return {
+                "score": score,
+                "toc_entries": total,
+                "valid_links": valid,
+                "broken_links": broken,
+                "issues": issues
+            }
+
+        except Exception as e:
+            return {
+                "score": 0,
+                "toc_entries": 0,
+                "valid_links": 0,
+                "broken_links": 0,
+                "issues": [f"PDF 解析失败: {str(e)}"]
+            }

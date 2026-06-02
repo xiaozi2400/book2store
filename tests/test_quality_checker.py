@@ -145,3 +145,90 @@ def test_completeness_empty_source():
     result = checker.check(cache_data, source_paragraphs)
     assert result["score"] == 100
     assert result["missing_count"] == 0
+
+
+# ============================================================
+# PdfTocLinkChecker 测试（维度 8：PDF 目录链接检查）
+# ============================================================
+
+import os
+from automation.quality_checker import PdfTocLinkChecker
+
+
+def test_pdf_toc_checker_no_pdf():
+    """PDF 文件不存在"""
+    checker = PdfTocLinkChecker()
+    result = checker.check("non_existent.pdf")
+    assert result["score"] == 0
+    assert "PDF 文件不存在" in str(result["issues"])
+
+
+def test_pdf_toc_checker_not_pdf():
+    """非 PDF 文件"""
+    checker = PdfTocLinkChecker()
+    result = checker.check(__file__)
+    assert result["score"] == 0
+    assert result["toc_entries"] == 0
+
+
+def test_pdf_toc_checker_simple_pdf(tmp_path):
+    """生成一个简单 PDF 并检查其目录链接"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    pdf_path = os.path.join(tmp_path, "test_toc.pdf")
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+    c.drawString(100, 700, "Chapter 1")
+    c.showPage()
+    c.drawString(100, 700, "Chapter 2")
+    c.showPage()
+    c.drawString(100, 700, "Chapter 3")
+    c.showPage()
+    c.save()
+
+    import fitz
+    doc = fitz.open(pdf_path)
+    toc = [
+        [1, "Chapter 1", 1],
+        [1, "Chapter 2", 2],
+        [1, "Chapter 3", 3],
+    ]
+    doc.set_toc(toc)
+    doc.save(pdf_path, incremental=True, encryption=0)
+    doc.close()
+
+    checker = PdfTocLinkChecker()
+    result = checker.check(pdf_path)
+    assert result["toc_entries"] == 3
+    assert result["valid_links"] == 3
+    assert result["broken_links"] == 0
+    assert result["score"] == 100
+
+
+def test_pdf_toc_checker_broken_links(tmp_path):
+    """目录链接指向不存在的页码"""
+    import fitz
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    pdf_path = os.path.join(tmp_path, "test_broken_toc.pdf")
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+    c.drawString(100, 700, "Page 1")
+    c.showPage()
+    c.save()
+
+    doc = fitz.open(pdf_path)
+    toc = [
+        [1, "Chapter 1", 1],
+        [1, "Missing Chapter", -1],
+    ]
+    doc.set_toc(toc)
+    doc.save(pdf_path, incremental=True, encryption=0)
+    doc.close()
+
+    checker = PdfTocLinkChecker()
+    result = checker.check(pdf_path)
+    assert result["toc_entries"] == 2
+    assert result["valid_links"] == 1
+    assert result["broken_links"] == 1
+    assert result["score"] == 50
