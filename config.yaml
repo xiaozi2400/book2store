@@ -220,6 +220,23 @@ summarizer:
     
     [适用人群说明]
 
+# 质量检查配置
+quality_check:
+  enabled: true
+  thresholds:
+    excellent: 90
+    good: 75
+    pass: 60
+  dimensions:
+    fidelity: true
+    fluency: true
+    consistency: true
+    format: true
+    terminology: true
+    cultural: true
+    completeness: true
+    pdf_toc_links: true
+
 # 文案生成配置
 copywriting:
   xianyu_listing_prompt: |
@@ -261,7 +278,7 @@ copywriting:
 
     两种版本可选：
     1、英文原版；
-    2、英文+中译+双语+精简版；（精简版为原书核心内容概括以及章节摘要）
+    2、英文+中译+双语；
 
     【注意】
     虚拟商品、发货后不支持退换，有问题随时私聊
@@ -342,8 +359,7 @@ image_generator:
       - 整体内容居中显示（上下、左右均居中）
 
       布局方案从以下选择（图2、图3、图4必须使用不同的布局方案）：
-      - 居中大图：封面居中，占整个画面30%，文字上下分布（仅用于图1）
-      - 卡片列表：标题+多个独立卡片，卡片横向或纵向排列
+      - 居中大图：封面居中，占整个画面50%，文字上下分布（仅用于图1）
       - 标签展示：标题+多个标签/区块，水平排列,左侧打勾
       - 双栏对比：左右分栏，左列标题/图标，右列说明文字
       - 中心辐射：中心主题，四周环绕子项，用线条连接
@@ -366,8 +382,8 @@ image_generator:
 
       ### 第一张图：封面展示
       - 封面图会在后续用真实数据替换，请在HTML中使用以下格式引用：
-        <img src="data:image/jpeg;base64,__COVER_PLACEHOLDER__" alt="封面" style="height:320px;width:auto;border-radius:0;">
-      - 布局和背景：封面高度固定260px（即画面高度的1/3），保持封面原始比例不变形，其它按设计方案确定
+        <img src="data:image/jpeg;base64,__COVER_PLACEHOLDER__" alt="封面" style="height:400px;width:auto;border-radius:0;">
+      - 布局和背景：封面高度固定400px（即画面高度的1/2），保持封面原始比例不变形，其它按设计方案确定
       - 书名：翻译成中文展示（特大字号50-60px，从封面提取的深色主色调加粗），居中显示
       - 作者：中等字号，位于书名下方，居中显示，示例：xxx 编著
       - 一句话卖点：从摘要中提炼一句核心卖点（大字号40-45px，从封面提取的深色主色调加粗），位于封面下方，居中显示，必须包含

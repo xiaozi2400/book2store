@@ -61,3 +61,21 @@ def test_quality_report_defaults_to_none():
         assert retrieved.quality_report is None
     finally:
         close_session(session)
+
+
+def test_quality_check_default_config():
+    """验证质量检查默认配置存在"""
+    from automation.config import config
+    qc_config = config.get("quality_check", {})
+    assert isinstance(qc_config, dict)
+    assert "enabled" in qc_config
+    assert "thresholds" in qc_config
+    assert "dimensions" in qc_config
+    assert "model" not in qc_config  # 纯程序化检查，无模型配置
+
+
+def test_quality_check_enabled_by_default():
+    """验证质量检查默认开启"""
+    from automation.config import config
+    enabled = config.get_quality_check_enabled()
+    assert enabled is True

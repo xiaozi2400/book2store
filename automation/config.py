@@ -92,6 +92,24 @@ class Config:
                 "max_quotes": 15,
                 "max_content_length": 10000,
                 "prompt": "你是一位专业的书籍摘要专家..."
+            },
+            "quality_check": {
+                "enabled": True,            # 纯程序化检查，零 API 成本
+                "thresholds": {
+                    "excellent": 90,        # 优秀
+                    "good": 75,             # 良好
+                    "pass": 60              # 合格
+                },
+                "dimensions": {
+                    "fidelity": True,
+                    "fluency": True,
+                    "consistency": True,
+                    "format": True,
+                    "terminology": True,
+                    "cultural": True,
+                    "completeness": True,
+                    "pdf_toc_links": True
+                }
             }
         }
 
@@ -224,6 +242,14 @@ class Config:
             if sku.get("name") == sku_name:
                 return sku.get("includes", [])
         return []
+
+    def get_quality_check_enabled(self) -> bool:
+        """获取质量检查是否启用"""
+        return self.get("quality_check.enabled", True)
+
+    def get_quality_check_threshold(self, key: str, default=60) -> int:
+        """获取质量检查阈值"""
+        return self.get(f"quality_check.thresholds.{key}", default)
 
 
 config = Config()
