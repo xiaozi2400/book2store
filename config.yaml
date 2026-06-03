@@ -13,7 +13,7 @@ sku:
     price: 1.99
     includes:
       - "english_pdf"
-  - name: "英文+双语+中译+精简版"
+  - name: "英文+双语+中译"
     price: 5.99
     includes:
       - "english_pdf"
