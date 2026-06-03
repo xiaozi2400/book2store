@@ -221,14 +221,14 @@ EXTRACTION_CONFIG = {
     ],
     # 排除的class/id模式
     'exclude_patterns': [
-        r'nav', r'menu', r'navbar',
-        r'header', r'footer',
-        r'sidebar', r'index',
-        r'pagination', r'prev', r'next',
+        r'nav\b', r'\bmenu\b', r'navbar',
+        r'\bheader\b', r'\bfooter\b',
+        r'\bindex\b',
+        r'pagination', r'\bprev\b', r'\bnext\b',
     ],
     # 内容标签（按优先级）
     'content_tags': [
-        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
         'li', 'dt', 'dd', 'blockquote', 'a',
         'figcaption', 'td', 'th', 'caption'
     ],

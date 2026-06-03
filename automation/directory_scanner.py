@@ -30,6 +30,9 @@ class DirectoryScanner:
             logger.warning(f"输入目录不存在: {self.input_dir}")
             return []
 
+        # 先统一修复物理文件名（去除 stem 部分的尾随空格），确保路径一致
+        self._fix_filenames()
+
         books = []
         for epub_file in self.input_dir.glob("*.epub"):
             if not self._should_process(epub_file):
@@ -42,16 +45,33 @@ class DirectoryScanner:
         logger.info(f"扫描完成，发现 {len(books)} 本新书籍")
         return books
 
+    @staticmethod
+    def _clean_filename(name: str) -> str:
+        """清理文件名：去除 stem 部分的头尾空格"""
+        stem, ext = os.path.splitext(name)
+        return stem.strip() + ext
+
+    def _fix_filenames(self):
+        """修复输入目录中文件名 stem 部分带有尾随空格的文件（重命名物理文件）"""
+        for epub_file in list(self.input_dir.glob("*.epub")):
+            stem, ext = os.path.splitext(epub_file.name)
+            if stem != stem.strip():
+                new_name = stem.strip() + ext
+                new_path = epub_file.with_name(new_name)
+                epub_file.rename(new_path)
+                logger.warning(f"重命名文件: '{epub_file.name}' -> '{new_name}'")
+
     def _should_process(self, epub_path: Path) -> bool:
         """检查是否应该处理该文件"""
         if not is_valid_epub(str(epub_path)):
             logger.warning(f"无效的EPUB文件: {epub_path}")
             return False
 
-        existing_book = self.db.get_book_by_filename(epub_path.name)
+        clean_name = self._clean_filename(epub_path.name)
+        existing_book = self.db.get_book_by_filename(clean_name)
         if existing_book:
             output_dir = Path(config.output_dir)
-            base_name = epub_path.stem
+            base_name = Path(clean_name).stem.strip()
             short_name = base_name.split('_')[0].strip()
 
             output_patterns = [
@@ -81,14 +101,15 @@ class DirectoryScanner:
 
             metadata = self._extract_metadata(book)
 
-            existing_book = self.db.get_book_by_filename(epub_path.name)
+            clean_name = self._clean_filename(epub_path.name)
+            existing_book = self.db.get_book_by_filename(clean_name)
             if existing_book:
                 db_book = existing_book
                 logger.info(f"复用已有书籍记录: {db_book.title}")
             else:
                 db_book = self.db.create_book(
-                    filename=epub_path.name,
-                    title=metadata.get('title', extract_title_from_filename(epub_path.name)),
+                    filename=clean_name,
+                    title=metadata.get('title', extract_title_from_filename(clean_name)),
                     author=metadata.get('author')
                 )
                 self.db.create_book_output(db_book.id)

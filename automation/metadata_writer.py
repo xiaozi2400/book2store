@@ -27,7 +27,7 @@ class MetadataWriter:
             logger.warning(f"书籍不存在: {book_id}")
             return False
 
-        base_name = Path(book.filename).stem
+        base_name = Path(book.filename).stem.strip()
         meta_dir = ensure_dir(self.output_dir / f"{base_name}_metadata")
 
         xianyu_path = meta_dir / "xianyu_listing.txt"

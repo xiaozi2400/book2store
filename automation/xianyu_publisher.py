@@ -4,6 +4,7 @@
 """
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -76,6 +77,7 @@ class XianyuPublisher:
             self.db.add_log(book_id, "publishing", "success", "发布成功: %s" % listing_url)
             logger.info("=== 发布成功: %s ===" % book_id)
 
+            self._cleanup_meta_dir(book_id)
             self._close()
             return True
 
@@ -89,8 +91,18 @@ class XianyuPublisher:
     def _get_meta_dir(self, book_id):
         """获取 metadata 目录路径"""
         book = self.db.get_book_by_id(book_id)
-        base_name = Path(book.filename).stem
+        base_name = Path(book.filename).stem.strip()
         return self.output_dir / ("%s_metadata" % base_name)
+
+    def _cleanup_meta_dir(self, book_id):
+        """发布成功后删除 meta 文件夹"""
+        try:
+            meta_dir = self._get_meta_dir(book_id)
+            if meta_dir.exists():
+                shutil.rmtree(str(meta_dir))
+                logger.info("meta 文件夹已删除: %s" % meta_dir)
+        except Exception as e:
+            logger.warning("删除 meta 文件夹失败（不影响发布结果）: %s" % str(e))
 
     def _start_browser(self):
         """启动浏览器"""

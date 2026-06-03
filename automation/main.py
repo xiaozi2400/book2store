@@ -186,7 +186,7 @@ def process(
         generate_main_image(book_id)
 
         progress.update(task, description="提取图片...")
-        base_name = Path(input_path).stem
+        base_name = Path(input_path).stem.strip()
         pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
         extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
 
@@ -279,6 +279,7 @@ def auto(
     skip_summarize: bool = typer.Option(False, help="跳过生成精简版"),
     skip_images: bool = typer.Option(False, help="跳过图片提取"),
     skip_copywriting: bool = typer.Option(False, help="跳过文案生成"),
+    skip_cache: bool = typer.Option(False, help="跳过翻译缓存，强制重新翻译"),
 ):
     """一键处理：扫描输入目录，自动处理所有新书籍"""
     from automation.directory_scanner import scan_input_directory
@@ -319,7 +320,7 @@ def auto(
 
             if not skip_translate:
                 console.print(f"[dim]翻译并生成PDF...[/dim]")
-                if not translate_book(book_id, str(input_path)):
+                if not translate_book(book_id, str(input_path), skip_cache=skip_cache):
                     raise Exception("翻译失败")
             else:
                 console.print(f"[dim]跳过翻译步骤[/dim]")

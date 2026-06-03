@@ -37,7 +37,7 @@ class ImageGenerator:
         author = book.author or "Unknown"
         summary = book.summary_text
 
-        base_name = Path(book.filename).stem
+        base_name = Path(book.filename).stem.strip()
         meta_dir = self.output_dir / f"{base_name}_metadata"
 
         # 1. 查找封面（支持多个扩展名）
