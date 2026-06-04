@@ -21,6 +21,7 @@ class DirectoryScanner:
     def __init__(self):
         self.db = DatabaseManager()
         self.input_dir = Path(config.input_dir)
+        self.logger = logger
 
     def scan(self) -> List[Dict]:
         """扫描输入目录，返回待处理书籍列表"""
@@ -52,14 +53,24 @@ class DirectoryScanner:
         return stem.strip() + ext
 
     def _fix_filenames(self):
-        """修复输入目录中文件名 stem 部分带有尾随空格的文件（重命名物理文件）"""
+        """修复输入目录中文件名的问题：尾随空格 + 长度截断 + --拆分"""
         for epub_file in list(self.input_dir.glob("*.epub")):
             stem, ext = os.path.splitext(epub_file.name)
-            if stem != stem.strip():
-                new_name = stem.strip() + ext
+            new_stem = stem.strip()
+
+            # 1. 如果有 "--"，只保留前面部分
+            if "--" in new_stem:
+                new_stem = new_stem.split("--")[0].strip()
+
+            # 2. 超过60字符截断末尾
+            if len(new_stem) > 60:
+                new_stem = new_stem[:60].strip()
+
+            new_name = new_stem + ext
+            if new_name != epub_file.name:
                 new_path = epub_file.with_name(new_name)
                 epub_file.rename(new_path)
-                logger.warning(f"重命名文件: '{epub_file.name}' -> '{new_name}'")
+                self.logger.warning(f"重命名文件: '{epub_file.name}' -> '{new_name}'")
 
     def _should_process(self, epub_path: Path) -> bool:
         """检查是否应该处理该文件"""
