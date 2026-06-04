@@ -3,6 +3,8 @@
 """
 import os
 import sys
+import json
+import shutil
 import typer
 from pathlib import Path
 from typing import Optional
@@ -174,7 +176,7 @@ def process(
         task = progress.add_task("处理中...", total=None)
 
         progress.update(task, description="翻译并生成PDF...")
-        if not translate_book(book_id, str(input_path)):
+        if not translate_book(book_obj.id, str(input_path)):
             console.print("[bold red]翻译失败，停止处理[/bold red]")
             raise typer.Exit(1)
 
@@ -209,24 +211,28 @@ def process(
         console.print(format_token_summary(steps))
 
     # 展示质量报告
-    report_data = db.get_book_quality_report(book_obj.id)
-    if report_data:
-        import json
-        report = json.loads(report_data)
-        console.print("\n[bold]===== 翻译质量报告 =====[/bold]")
-        report_table = Table(title="翻译质量报告")
-        report_table.add_column("维度", style="cyan")
-        report_table.add_column("得分", justify="right")
-        report_table.add_column("问题")
+    try:
+        report_data = db.get_book_quality_report(book_obj.id)
+        if report_data:
+            report = json.loads(report_data)
+            console.print("\n[bold]===== 翻译质量报告 =====[/bold]")
+            report_table = Table(title="翻译质量报告")
+            report_table.add_column("维度", style="cyan")
+            report_table.add_column("得分", justify="right")
+            report_table.add_column("问题")
 
-        for dim_name, dim_result in report.get("dimensions", {}).items():
-            issues = dim_result.get("issues", [])
-            main_issues = "；".join(issues[:3]) if issues else "无"
-            score = dim_result.get("score", "")
-            report_table.add_row(dim_name, str(score), main_issues)
+            for dim_name, dim_result in report.get("dimensions", {}).items():
+                issues = dim_result.get("issues", [])
+                main_issues = "；".join(issues[:3]) if issues else "无"
+                score = dim_result.get("score", "")
+                report_table.add_row(dim_name, str(score), main_issues)
 
-        console.print(report_table)
-        console.print(f"总体评分: {report.get('overall_grade', '')} ({report.get('overall_score', '')}分)")
+            console.print(report_table)
+            grade = report.get('overall_grade', '')
+            score = report.get('overall_score', '')
+            console.print(f"总体评分: {grade} ({score}分)" if grade or score else "")
+    except Exception as e:
+        console.print(f"[dim]质量报告加载失败: {e}[/dim]")
 
 
 @app.command()
@@ -410,7 +416,6 @@ def auto(
         for book in processed_books:
             report_data = db.get_book_quality_report(book.id)
             if report_data:
-                import json
                 report = json.loads(report_data)
                 issues = []
                 for dim_name, dim_result in report.get("dimensions", {}).items():
