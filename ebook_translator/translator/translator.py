@@ -53,7 +53,7 @@ class Translator:
         self.temperature = TEMPERATURE
 
         if not self.api_key:
-            print(f"警告：未设置 {self.provider.upper()} API 密钥")
+            logger.warning(f"未设置 {self.provider.upper()} API 密钥")
 
         self.headers = {
             "Content-Type": "application/json",
@@ -87,7 +87,7 @@ class Translator:
 
         while retry_count < max_retries:
             if getattr(sys, 'interrupted', False) or (os.environ.get('INTERRUPTED') == '1'):
-                print("翻译被中断")
+                logger.info("翻译被中断")
                 return ""
 
             try:
@@ -233,7 +233,7 @@ class Translator:
         if not tier_config.get('batch_translate', True):
             return self._translate_individually(paragraphs)
 
-        print(f"批量翻译 {len(paragraphs)} 个 {tier} 段落")
+        logger.info(f"批量翻译 {len(paragraphs)} 个 {tier} 段落")
 
         numbered_texts = []
         for i, para in enumerate(paragraphs):
@@ -256,13 +256,13 @@ class Translator:
         translated = self.translate(prompt, max_retries=5, max_tokens=dynamic_max_tokens)
 
         if not translated:
-            print(f"批量翻译失败，转为单条翻译")
+            logger.warning("批量翻译失败，转为单条翻译")
             return self._translate_individually(paragraphs)
 
         results = self._parse_batch_result(translated, paragraphs)
 
         if len(results) != len(paragraphs):
-            print(f"批量解析失败（期望{len(paragraphs)}，实际{len(results)}），转为单条")
+            logger.warning(f"批量解析失败（期望{len(paragraphs)}，实际{len(results)}），转为单条")
             return self._translate_individually(paragraphs)
 
         return results
@@ -318,7 +318,7 @@ class Translator:
         if not paragraphs:
             return []
 
-        print(f"\n开始智能分层翻译，共 {len(paragraphs)} 个段落")
+        logger.info(f"开始智能分层翻译，共 {len(paragraphs)} 个段落")
 
         tier_groups = {
             'tier1_short_repeatable': [],
@@ -341,7 +341,7 @@ class Translator:
         batch_config = self.opt_config['batch']
 
         if tier_groups['tier1_short_repeatable']:
-            print(f"\n[Tier 1] 翻译 {len(tier_groups['tier1_short_repeatable'])} 个短文本...")
+            logger.info(f"[Tier 1] 翻译 {len(tier_groups['tier1_short_repeatable'])} 个短文本...")
             tier1_results = self._translate_tier(
                 tier_groups['tier1_short_repeatable'],
                 'tier1_short_repeatable',
@@ -350,7 +350,7 @@ class Translator:
             all_results.update(tier1_results)
 
         if tier_groups['tier2_normal']:
-            print(f"\n[Tier 2] 翻译 {len(tier_groups['tier2_normal'])} 个普通文本...")
+            logger.info(f"[Tier 2] 翻译 {len(tier_groups['tier2_normal'])} 个普通文本...")
             tier2_results = self._translate_tier(
                 tier_groups['tier2_normal'],
                 'tier2_normal',
@@ -359,7 +359,7 @@ class Translator:
             all_results.update(tier2_results)
 
         if tier_groups['tier3_long_complex']:
-            print(f"\n[Tier 3] 翻译 {len(tier_groups['tier3_long_complex'])} 个长文本...")
+            logger.info(f"[Tier 3] 翻译 {len(tier_groups['tier3_long_complex'])} 个长文本...")
             tier3_results = self._translate_tier(
                 tier_groups['tier3_long_complex'],
                 'tier3_long_complex',
@@ -374,14 +374,14 @@ class Translator:
                 dup_result['id'] = dup['id']
                 dup_result['is_duplicate'] = True
                 all_results[dup['id']] = dup_result
-                print(f"  复用翻译: {dup['text'][:30]}...")
+                logger.info(f"  复用翻译: {dup['text'][:30]}...")
 
         ordered_results = []
         for para in paragraphs:
             if para['id'] in all_results:
                 ordered_results.append(all_results[para['id']])
 
-        print(f"\n翻译完成: {len(ordered_results)}/{len(paragraphs)}")
+        logger.info(f"翻译完成: {len(ordered_results)}/{len(paragraphs)}")
         return ordered_results
 
     def _split_batches_by_chars(self, paragraphs, max_chars=1800):
@@ -419,10 +419,10 @@ class Translator:
         if self.opt_config['batch'].get('use_char_based_batching', False):
             max_chars = self.opt_config['batch'].get('max_chars_per_batch', 1800)
             batches = self._split_batches_by_chars(paragraphs, max_chars)
-            print(f"  [{tier}] 按字符数策略切分: {len(batches)} 批次 (最大 {max_chars} 字符/批次)")
+            logger.info(f"  [{tier}] 按字符数策略切分: {len(batches)} 批次 (最大 {max_chars} 字符/批次)")
         else:
             batches = [paragraphs[i:i+batch_size] for i in range(0, len(paragraphs), batch_size)]
-            print(f"  [{tier}] 按段落数策略切分: {len(batches)} 批次 ({batch_size} 段落/批次)")
+            logger.info(f"  [{tier}] 按段落数策略切分: {len(batches)} 批次 ({batch_size} 段落/批次)")
 
         max_workers = self.opt_config['batch']['max_workers']
 
@@ -447,13 +447,21 @@ class Translator:
 
                     completed += len(batch)
                     progress = completed / len(paragraphs) * 100
-                    print(f"  进度: {completed}/{len(paragraphs)} ({progress:.1f}%)")
+                    # 单行动态进度条：使用 \r 回到行首覆盖上一行，避免日志刷屏
+                    bar_width = 30
+                    filled = int(bar_width * completed / len(paragraphs))
+                    bar = "█" * filled + "░" * (bar_width - filled)
+                    print(f"\r  翻译进度: [{bar}] {completed}/{len(paragraphs)} ({progress:.1f}%)", end="", flush=True)
+                    logger.info(f"  进度: {completed}/{len(paragraphs)} ({progress:.1f}%)")
 
                 except Exception as e:
-                    print(f"  批次翻译出错: {e}")
+                    logger.warning(f"  批次翻译出错: {e}")
                     for para in batch:
                         result = self._translate_single_with_retry(para)
                         results[result['id']] = result
+
+        # 进度条结束换行，避免覆盖下一行内容
+        print()
 
         return results
 
@@ -482,21 +490,27 @@ class Translator:
         translated = result['translated']
 
         issues = []
+        should_keep_original = False  # 保留原文（仅空翻译时使用）
+        should_skip_retry = False     # 不重试
 
+        # 空翻译：保留原文，不重试
         if not translated or not translated.strip():
             issues.append("空翻译")
+            should_keep_original = True
+            should_skip_retry = True
 
         orig_len = len(original)
         trans_len = len(translated)
         short_threshold = self.opt_config['quality_check'].get('short_text_min_length', 30)
 
-        if orig_len > 0:
+        if orig_len > 0 and translated and translated.strip():
             ratio = trans_len / orig_len
 
             if orig_len <= short_threshold:
                 min_absolute = self.opt_config['quality_check'].get('short_text_min_absolute', 3)
                 if trans_len < min_absolute:
                     issues.append(f"翻译过短 (绝对长度 {trans_len} < {min_absolute})")
+                    should_skip_retry = True
                 if tier != 'tier3_long_complex' and ratio > self.opt_config['quality_check']['max_translation_ratio']:
                     issues.append(f"翻译过长 ({ratio:.2f})")
             else:
@@ -509,31 +523,47 @@ class Translator:
 
                 if ratio < min_ratio:
                     issues.append(f"翻译过短 ({ratio:.2f})")
+                    should_skip_retry = True
                 if ratio > max_ratio:
                     issues.append(f"翻译过长 ({ratio:.2f})")
 
-        has_code_chars = any(c in original for c in ['{', '(', '[', '=', '<', '>', '\\', '`', '|', '&'])
-        if not has_code_chars:
-            if '===' in translated or '[段落' in translated:
-                issues.append("分隔符残留")
+            has_code_chars = any(c in original for c in ['{', '(', '[', '=', '<', '>', '\\', '`', '|', '&'])
+            if not has_code_chars:
+                if '===' in translated or '[段落' in translated:
+                    issues.append("分隔符残留")
 
-        if issues and self.opt_config['quality_check']['retry_empty']:
-            if tier == 'tier3_long_complex':
-                if "空翻译" not in issues:
-                    issues = []
+        # 空翻译：保留原文
+        if should_keep_original:
+            logger.info(f"  质量问题 ({', '.join(issues)}): {original[:50]}...")
+            logger.info(f"  跳过重试，保留原文")
+            result['translated'] = original
+            self.stats['failed'] += 1
+            return result
+
+        # 翻译过短：保留翻译，不重试
+        if should_skip_retry:
+            logger.info(f"  质量问题 ({', '.join(issues)}): {original[:50]}...")
+            logger.info(f"  跳过重试，保留翻译")
+            self.stats['failed'] += 1
+            return result
 
         if issues:
-            print(f"  质量问题 ({', '.join(issues)}): {original[:50]}...")
-            print(f"  尝试重译...")
+            logger.info(f"  质量问题 ({', '.join(issues)}): {original[:50]}...")
 
-            self.stats['retried'] += 1
-            retry_result = self.translate(original, max_retries=2)
+            # 仅对长文本（> 50 字符）重试，最多 1 次
+            if len(original) > 50:
+                logger.info(f"  尝试重译...")
+                self.stats['retried'] += 1
+                retry_result = self.translate(original, max_retries=1)
 
-            if retry_result and len(retry_result) > len(translated) * 0.5:
-                result['translated'] = retry_result
-                print(f"  重译成功")
+                if retry_result and len(retry_result) > len(translated) * 0.5:
+                    result['translated'] = retry_result
+                    logger.info(f"  重译成功")
+                else:
+                    logger.info(f"  重译失败或质量无改善，保留原结果")
+                    self.stats['failed'] += 1
             else:
-                print(f"  重译失败，保留原结果")
+                logger.info(f"  短文本质量异常，跳过重试")
                 self.stats['failed'] += 1
 
         return result
@@ -544,18 +574,18 @@ class Translator:
 
     def print_translation_report(self):
         """打印翻译报告"""
-        print(f"\n=== {self.provider.upper()} 翻译统计报告 ===")
-        print(f"API 调用次数: {self.stats['api_calls']}")
-        print(f"总 Token 消耗: {self.stats['total_tokens']}")
-        print(f"翻译段落数: {self.stats['translated_paragraphs']}")
-        print(f"重试次数: {self.stats['retried']}")
-        print(f"失败次数: {self.stats['failed']}")
-        print(f"\n分层统计:")
+        logger.info(f"=== {self.provider.upper()} 翻译统计报告 ===")
+        logger.info(f"API 调用次数: {self.stats['api_calls']}")
+        logger.info(f"总 Token 消耗: {self.stats['total_tokens']}")
+        logger.info(f"翻译段落数: {self.stats['translated_paragraphs']}")
+        logger.info(f"重试次数: {self.stats['retried']}")
+        logger.info(f"失败次数: {self.stats['failed']}")
+        logger.info(f"分层统计:")
         for tier, count in self.stats['by_tier'].items():
             tier_name = {
                 'tier1_short_repeatable': '短文本(可重复)',
                 'tier2_normal': '普通文本',
                 'tier3_long_complex': '长文本(复杂)'
             }.get(tier, tier)
-            print(f"  {tier_name}: {count}")
-        print("====================\n")
+            logger.info(f"  {tier_name}: {count}")
+        logger.info("====================")

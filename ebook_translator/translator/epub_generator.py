@@ -1,11 +1,14 @@
 import os
 import re
+import logging
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup, Tag, NavigableString
 import shutil
 import tempfile
 import zipfile
+
+logger = logging.getLogger(__name__)
 
 def normalize_text(text):
     """标准化文本：去除多余空格，统一Unicode特殊字符"""
@@ -494,10 +497,10 @@ class EPUBGenerator:
             
             # 统计日志
             if unmatched_samples:
-                print(f"[{mode}] [NAV] Total tags: {total_checked}, Matched: {total_matched}, "
+                logger.info(f"[{mode}] [NAV] Total tags: {total_checked}, Matched: {total_matched}, "
                       f"Unmatched: {total_checked - total_matched} "
                       f"({(total_matched / total_checked * 100):.1f}%)")
-                print(f"[{mode}] [NAV] Unmatched samples: {unmatched_samples[:3]}")
+                logger.info(f"[{mode}] [NAV] Unmatched samples: {unmatched_samples[:3]}")
             
             return str(soup)
         
@@ -716,10 +719,10 @@ class EPUBGenerator:
 
         # 统计日志
         if unmatched_samples:
-            print(f"[{mode}] Total tags: {total_checked}, Matched: {total_matched}, "
+            logger.info(f"[{mode}] Total tags: {total_checked}, Matched: {total_matched}, "
                   f"Unmatched: {total_checked - total_matched} "
                   f"({(total_matched / total_checked * 100):.1f}%)")
-            print(f"[{mode}] Unmatched samples: {unmatched_samples[:3]}")
+            logger.info(f"[{mode}] Unmatched samples: {unmatched_samples[:3]}")
 
         return str(soup)
 
@@ -810,10 +813,10 @@ class EPUBGenerator:
         
         # 统计日志
         if unmatched_samples:
-            print(f"[{mode}] [NCX] Total tags: {total_checked}, Matched: {total_matched}, "
+            logger.info(f"[{mode}] [NCX] Total tags: {total_checked}, Matched: {total_matched}, "
                   f"Unmatched: {total_checked - total_matched} "
                   f"({(total_matched / total_checked * 100):.1f}%)")
-            print(f"[{mode}] [NCX] Unmatched samples: {unmatched_samples[:3]}")
+            logger.info(f"[{mode}] [NCX] Unmatched samples: {unmatched_samples[:3]}")
         
         return str(soup)
 
@@ -827,7 +830,7 @@ class EPUBGenerator:
 
                 # 创建翻译映射
                 translation_map = self._create_translation_map(translated_paragraphs)
-                print(f"翻译映射包含 {len(translation_map)} 个段落")
+                logger.info(f"翻译映射包含 {len(translation_map)} 个段落")
 
                 # 处理所有 HTML/XHTML 文件（包括导航文件和.htm文件）
                 for root, dirs, files in os.walk(temp_dir):
@@ -845,7 +848,7 @@ class EPUBGenerator:
                                 with open(file_path, 'w', encoding='utf-8') as f:
                                     f.write(processed_content)
                             except Exception as e:
-                                print(f"处理文件 {file} 时出错: {e}")
+                                logger.warning(f"处理文件 {file} 时出错: {e}")
                         elif file.endswith('.ncx'):
                             file_path = os.path.join(root, file)
                             try:
@@ -855,7 +858,7 @@ class EPUBGenerator:
                                 with open(file_path, 'w', encoding='utf-8') as f:
                                     f.write(processed_content)
                             except Exception as e:
-                                print(f"处理NCX文件 {file} 时出错: {e}")
+                                logger.warning(f"处理NCX文件 {file} 时出错: {e}")
 
                 # 添加 CSS
                 css_dir = os.path.join(temp_dir, 'styles')
@@ -932,12 +935,12 @@ div {{
                                         with open(file_path, 'w', encoding='utf-8') as f:
                                             f.write(str(html_soup))
                                     except Exception as e:
-                                        print(f"添加CSS到 {file} 时出错: {e}")
+                                        logger.warning(f"添加CSS到 {file} 时出错: {e}")
                         
                         with open(opf_path, 'w', encoding='utf-8') as f:
                             f.write(str(soup))
                     except Exception as e:
-                        print(f"更新 OPF 时出错: {e}")
+                        logger.warning(f"更新 OPF 时出错: {e}")
 
                 # 重新打包
                 with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
@@ -947,11 +950,11 @@ div {{
                             arcname = os.path.relpath(file_path, temp_dir)
                             zip_ref.write(file_path, arcname)
 
-                print(f"成功生成 EPUB 文件: {output_path}")
+                logger.info(f"成功生成 EPUB 文件: {output_path}")
                 return True
 
         except Exception as e:
-            print(f"生成中英对照 EPUB 时出错: {e}")
+            logger.error(f"生成中英对照 EPUB 时出错: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -983,7 +986,7 @@ div {{
                                 with open(file_path, 'w', encoding='utf-8') as f:
                                     f.write(processed_content)
                             except Exception as e:
-                                print(f"处理文件 {file} 时出错: {e}")
+                                logger.warning(f"处理文件 {file} 时出错: {e}")
                         elif file.endswith('.ncx'):
                             file_path = os.path.join(root, file)
                             try:
@@ -993,7 +996,7 @@ div {{
                                 with open(file_path, 'w', encoding='utf-8') as f:
                                     f.write(processed_content)
                             except Exception as e:
-                                print(f"处理NCX文件 {file} 时出错: {e}")
+                                logger.warning(f"处理NCX文件 {file} 时出错: {e}")
 
                 # 添加 CSS
                 css_dir = os.path.join(temp_dir, 'styles')
@@ -1081,12 +1084,12 @@ blockquote {{
                                         with open(file_path, 'w', encoding='utf-8') as f:
                                             f.write(str(html_soup))
                                     except Exception as e:
-                                        print(f"添加CSS到 {file} 时出错: {e}")
+                                        logger.warning(f"添加CSS到 {file} 时出错: {e}")
                         
                         with open(opf_path, 'w', encoding='utf-8') as f:
                             f.write(str(soup))
                     except Exception as e:
-                        print(f"更新 OPF 时出错: {e}")
+                        logger.warning(f"更新 OPF 时出错: {e}")
 
                 # 重新打包
                 with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
@@ -1096,11 +1099,11 @@ blockquote {{
                             arcname = os.path.relpath(file_path, temp_dir)
                             zip_ref.write(file_path, arcname)
 
-                print(f"成功生成 EPUB 文件: {output_path}")
+                logger.info(f"成功生成 EPUB 文件: {output_path}")
                 return True
 
         except Exception as e:
-            print(f"生成纯中文 EPUB 时出错: {e}")
+            logger.error(f"生成纯中文 EPUB 时出错: {e}")
             import traceback
             traceback.print_exc()
             return False

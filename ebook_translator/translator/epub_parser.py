@@ -1,9 +1,15 @@
 import os
 import re
+import logging
+import warnings
 import ebooklib
 from ebooklib import epub
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 from config import TIER_CONFIG, EXTRACTION_CONFIG
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
+logger = logging.getLogger(__name__)
 
 def normalize_text(text):
     """标准化文本：去除多余空格，保留换行"""
@@ -90,7 +96,7 @@ class EPUBParser:
             self._extract_content_items()
             return True
         except Exception as e:
-            print(f"解析 EPUB 文件时出错: {e}")
+            logger.error(f"解析 EPUB 文件时出错: {e}")
             return False
     
     def _extract_content_items(self):
@@ -206,7 +212,7 @@ class EPUBParser:
             
             return paragraphs
         except Exception as e:
-            print(f"提取段落时出错: {e}")
+            logger.warning(f"提取段落时出错: {e}")
             return []
     
     def get_content_items(self):
@@ -224,16 +230,16 @@ class EPUBParser:
     def print_extraction_report(self):
         """打印提取报告"""
         stats = self.extraction_stats
-        print("\n=== EPUB 提取报告 ===")
-        print(f"总标签数: {stats['total_tags']}")
-        print(f"排除标签: {stats['excluded_tags']}")
-        print(f"去重节省: {stats['duplicates']} 个段落")
-        print(f"\n分层统计:")
+        logger.info("=== EPUB 提取报告 ===")
+        logger.info(f"总标签数: {stats['total_tags']}")
+        logger.info(f"排除标签: {stats['excluded_tags']}")
+        logger.info(f"去重节省: {stats['duplicates']} 个段落")
+        logger.info(f"分层统计:")
         for tier, count in stats['by_tier'].items():
             tier_name = {
                 'tier1_short_repeatable': '短文本(可重复)',
                 'tier2_normal': '普通文本',
                 'tier3_long_complex': '长文本(复杂)'
             }.get(tier, tier)
-            print(f"  {tier_name}: {count}")
-        print("====================\n")
+            logger.info(f"  {tier_name}: {count}")
+        logger.info("====================")

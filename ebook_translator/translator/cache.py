@@ -2,9 +2,12 @@ import json
 import os
 import hashlib
 import time
+import logging
 from typing import Optional
 from config import CACHE_FILE, CACHE_EXPIRY
 from .cache_interface import TranslationCache
+
+logger = logging.getLogger(__name__)
 
 
 class CacheManager(TranslationCache):
@@ -25,7 +28,7 @@ class CacheManager(TranslationCache):
                     self._clean_expired_cache(data)
                     return data
             except Exception as e:
-                print(f"加载缓存时出错: {e}")
+                logger.warning(f"加载缓存时出错: {e}")
                 return {"cache": {}}
         return {"cache": {}}
     
@@ -48,7 +51,7 @@ class CacheManager(TranslationCache):
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.cache, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存缓存时出错: {e}")
+            logger.warning(f"保存缓存时出错: {e}")
     
     def get_hash_key(self, text):
         """生成文本的哈希键"""

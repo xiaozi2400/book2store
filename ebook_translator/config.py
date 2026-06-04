@@ -1,6 +1,9 @@
 # 配置文件
 import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 # DeepSeek API 配置
 # 从环境变量读取 API 密钥
@@ -163,13 +166,13 @@ def load_pdf_config():
                     return result
                 
                 merged_config = merge_config(default_config, external_config)
-                print(f"[配置] 已从 {config_path} 加载PDF排版配置")
+                logger.info(f"已从 {config_path} 加载PDF排版配置")
                 return merged_config
             except Exception as e:
-                print(f"[警告] 加载配置文件 {config_path} 失败: {e}")
+                logger.warning(f"加载配置文件 {config_path} 失败: {e}")
                 continue
     
-    print("[配置] 使用默认PDF排版配置")
+    logger.info("使用默认PDF排版配置")
     return default_config
 
 
@@ -250,7 +253,7 @@ TRANSLATION_OPTIMIZATION = {
     # 质量检查配置
     'quality_check': {
         'enabled': True,
-        'min_translation_ratio': 0.3,   # 翻译长度最小比例（Tier1/2 默认）
+        'min_translation_ratio': 0.2,   # 翻译长度最小比例（Tier1/2 默认）— 原 0.3，放宽为 0.2
         'max_translation_ratio': 3.0,   # 翻译长度最大比例（Tier1/2 默认）
         'tier3_min_ratio': 0.1,         # Tier3（长文本/代码）最小比例
         'tier3_max_ratio': 5.0,         # Tier3（长文本/代码）最大比例

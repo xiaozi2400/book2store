@@ -217,6 +217,7 @@ class ContentSummarizer:
 
     def summarize(self, book_id: str, epub_path: str) -> bool:
         """生成书籍精简版"""
+        from automation.progress import event
         logger.info(f"开始生成精简版: {book_id}")
 
         try:
@@ -254,6 +255,7 @@ class ContentSummarizer:
                 logger.info(f"精简版已存在，将重新生成: {output_path}")
                 output_path.unlink()
 
+            event("评估书籍适合度")
             suitability_result = self._check_suitability(book_info)
             self.db.add_log(book_id, "suitability", suitability_result.label, 
                           f"适合度: {suitability_result.score}分 - {suitability_result.recommendation}")
@@ -267,8 +269,10 @@ class ContentSummarizer:
 
             logger.info(f"书籍适合度评估通过: {suitability_result.label}({suitability_result.score}分)")
 
+            event("提取章节内容")
             chapters = self._extract_chapters(book_id, epub_path)
 
+            event("调用 AI 生成摘要")
             summary_content = self._generate_summary(book_id, book_info, chapters, suitability_result)
 
             if summary_content is None:
@@ -277,6 +281,7 @@ class ContentSummarizer:
                 return False
 
             # 提取封面 - 只保存到 metadata 目录
+            event("提取封面图片")
             cover_path = None
             extracted_cover_path = self._extract_cover_from_epub(epub_path)
             if extracted_cover_path:
@@ -299,6 +304,7 @@ class ContentSummarizer:
             summary_text = self._format_summary_to_text(summary_content)
             self.db.update_book_summary(book_id, summary_text)
 
+            event("生成精简版 PDF")
             self._create_pdf(summary_content, str(output_path), str(cover_path) if cover_path else None)
 
             self.db.update_book_output(book_id, summary_pdf=str(output_path))

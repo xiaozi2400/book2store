@@ -32,6 +32,8 @@ class AIClient:
 
     def chat(self, prompt: str, max_retries: int = None, max_tokens: int = None) -> tuple:
         """通用对话，返回 (text, usage)"""
+        from automation.progress import event
+        event(f"调用 DeepSeek Chat ({len(prompt)} 字符)")
         retries = max_retries or self.ai_config.get("retry_times", 3)
         result = self.translator.chat_raw(prompt, max_retries=retries, max_tokens=max_tokens)
         text = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()

@@ -24,6 +24,7 @@ class AICopywriter:
 
     def generate(self, book_id: str, book_info: Dict = None) -> bool:
         """生成文案"""
+        from automation.progress import event
         logger.info(f"开始生成文案: {book_id}")
 
         try:
@@ -37,6 +38,7 @@ class AICopywriter:
                     'summary': ''
                 }
 
+            event("生成闲鱼文案")
             xianyu_result, xianyu_usage = self.ai.generate_xianyu_listing(book_info)
             if xianyu_usage:
                 self.db.record_token_usage(
@@ -46,6 +48,7 @@ class AICopywriter:
                 )
             logger.info(f"闲鱼文案生成结果: {xianyu_result[:200] if xianyu_result else 'None'}...")
 
+            event("生成小红书笔记")
             xiaohongshu_result, xiaohongshu_usage = self.ai.generate_xiaohongshu_note(book_info)
             if xiaohongshu_usage:
                 self.db.record_token_usage(

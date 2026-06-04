@@ -28,6 +28,7 @@ class TranslationProcessor:
 
     def process(self, book_id, epub_path, skip_cache=False):
         """处理书籍：翻译 + 并行 PDF 转换"""
+        from automation.progress import event
         logger.info(f"开始翻译处理: {book_id}")
 
         try:
@@ -42,6 +43,7 @@ class TranslationProcessor:
 
             # 并行执行：翻译 + 英文 PDF 转换
             with ThreadPoolExecutor(max_workers=2) as executor:
+                event("启动翻译线程（中英双语 + 中文版本）")
                 # 任务 1：翻译（后台线程）
                 future_translate = executor.submit(
                     self._do_translate,
@@ -51,6 +53,7 @@ class TranslationProcessor:
                     skip_cache
                 )
 
+                event("启动英文 PDF 转换线程")
                 # 任务 2：英文 PDF 转换（立即开始）
                 future_english_pdf = executor.submit(
                     convert_english_pdf_only,
@@ -64,6 +67,7 @@ class TranslationProcessor:
                 # 获取英文 PDF 结果
                 try:
                     english_pdf_path = future_english_pdf.result()
+                    event("英文 PDF 转换完成")
                 except Exception as e:
                     logger.warning(f"英文 PDF 并行转换失败: {e}")
                     english_pdf_path = None

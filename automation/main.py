@@ -23,6 +23,7 @@ from automation.link_importer import import_links
 from automation.xianyu_publisher import publish_to_xianyu
 from automation.config import config
 from automation.utils import extract_title_from_filename, move_processed_epubs
+from automation.progress import phase, event
 
 app = typer.Typer(help="电子书自动化处理系统")
 console = Console()
@@ -168,42 +169,33 @@ def process(
         console.print(f"[bold red]文件不存在: {input_path}[/bold red]")
         raise typer.Exit(1)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console
-    ) as progress:
-        task = progress.add_task("处理中...", total=None)
-
-        progress.update(task, description="翻译并生成PDF...")
+    with phase("翻译并生成 PDF"):
         if not translate_book(book_obj.id, str(input_path)):
             console.print("[bold red]翻译失败，停止处理[/bold red]")
             raise typer.Exit(1)
 
-        progress.update(task, description="生成精简版...")
+    with phase("生成精简版"):
         generate_summary(book_id, str(input_path))
 
-        progress.update(task, description="生成主图...")
+    with phase("生成主图"):
         from automation.image_generator import generate_main_image
         generate_main_image(book_id)
 
-        progress.update(task, description="提取图片...")
+    with phase("提取图片"):
         base_name = Path(input_path).stem.strip()
         pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
         extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
 
-        progress.update(task, description="生成文案...")
+    with phase("生成文案"):
         generate_copywriting(book_id, {
             'title': book_obj.title,
             'author': book_obj.author,
             'summary': book_obj.summary_text or ''
         })
 
-        if not skip_publish:
-            progress.update(task, description="发布到闲鱼...")
+    if not skip_publish:
+        with phase("发布到闲鱼"):
             publish_to_xianyu(book_id)
-
-        progress.update(task, description="完成!", completed=True)
 
     console.print(f"[bold green]处理完成: {book_id}[/bold green]")
     steps = db.get_token_summary(book_id)
@@ -346,44 +338,44 @@ def auto(
             db.create_book_output(book_id)
 
             if not skip_translate:
-                console.print(f"[dim]翻译并生成PDF...[/dim]")
-                if not translate_book(book_id, str(input_path), skip_cache=skip_cache):
-                    raise Exception("翻译失败")
+                with phase("翻译并生成 PDF"):
+                    if not translate_book(book_id, str(input_path), skip_cache=skip_cache):
+                        raise Exception("翻译失败")
             else:
                 console.print(f"[dim]跳过翻译步骤[/dim]")
 
             if not skip_summarize:
-                console.print(f"[dim]生成精简版...[/dim]")
-                generate_summary(book_id, str(input_path))
+                with phase("生成精简版"):
+                    generate_summary(book_id, str(input_path))
             else:
                 console.print(f"[dim]跳过精简版步骤[/dim]")
 
             if not skip_images:
-                console.print(f"[dim]生成主图...[/dim]")
-                from automation.image_generator import generate_main_image
-                generate_main_image(book_id)
+                with phase("生成主图"):
+                    from automation.image_generator import generate_main_image
+                    generate_main_image(book_id)
 
-                console.print(f"[dim]提取图片...[/dim]")
-                base_name = Path(input_path).stem
-                pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
-                extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
+                with phase("提取图片"):
+                    base_name = Path(input_path).stem
+                    pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
+                    extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
             else:
                 console.print(f"[dim]跳过图片提取步骤[/dim]")
 
             if not skip_copywriting:
-                console.print(f"[dim]生成文案...[/dim]")
-                book_obj = db.get_book_by_id(book_id)
-                generate_copywriting(book_id, {
-                    'title': book_obj.title,
-                    'author': book_obj.author,
-                    'summary': book_obj.summary_text or ''
-                })
+                with phase("生成文案"):
+                    book_obj = db.get_book_by_id(book_id)
+                    generate_copywriting(book_id, {
+                        'title': book_obj.title,
+                        'author': book_obj.author,
+                        'summary': book_obj.summary_text or ''
+                    })
             else:
                 console.print(f"[dim]跳过文案生成步骤[/dim]")
 
             if not skip_publish:
-                console.print(f"[dim]发布到闲鱼...[/dim]")
-                publish_to_xianyu(book_id)
+                with phase("发布到闲鱼"):
+                    publish_to_xianyu(book_id)
 
             elapsed = time.time() - start_time
             db.update_book_status(book_id, "completed")

@@ -23,6 +23,7 @@ class ImageGenerator:
 
     def generate(self, book_id: str) -> bool:
         """生成商品主图"""
+        from automation.progress import event
         img_cfg = config.image_generator_config
         if not img_cfg.get("enabled", True):
             logger.info("主图生成已禁用")
@@ -43,12 +44,15 @@ class ImageGenerator:
         # 1. 查找封面（支持多个扩展名）
         cover_path = self._find_cover_path(meta_dir)
         cover_colors = self._extract_cover_colors(cover_path)
+        event("封面配色提取完成")
 
         # 2. 设计分析（Chain-of-Thought）
+        event("AI 设计分析")
         design_plan = self._design_analysis(title, author, summary, cover_colors)
 
         # 3. 生成HTML提示词（含设计分析结果）
         prompt = self._format_html_prompt(title, author, summary, cover_colors, design_plan)
+        event("调用 AI 生成主图 HTML")
         # 2. 调用 AI 生成 HTML
         html = self._call_ai(prompt)
         if not html:
@@ -63,6 +67,7 @@ class ImageGenerator:
             logger.warning("未找到封面图，HTML中无封面")
 
         # 4. 截图
+        event("截图生成主图")
         page_count = self._screenshot_html(html, meta_dir, img_cfg)
         if page_count > 0:
             self._update_db(book_id, page_count)

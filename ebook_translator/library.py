@@ -6,7 +6,10 @@ import os
 import sys
 import time
 import shutil
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Add the current directory to path for relative imports
 if __name__ != "__main__":
@@ -139,7 +142,7 @@ def translate_epub(
                 not r.get('translated') or not r['translated'].strip()
                 for r in fresh_results
             ):
-                print("翻译 API 返回全部为空，翻译失败")
+                logger.error("翻译 API 返回全部为空，翻译失败")
                 return {
                     "success": False,
                     "error": "翻译 API 返回全部为空，翻译失败",
@@ -201,7 +204,7 @@ def translate_epub(
     try:
         shutil.copy2(epub_path, english_epub)
     except Exception as e:
-        print(f"复制英文原版 EPUB 失败: {e}")
+        logger.warning(f"复制英文原版 EPUB 失败: {e}")
     
     phase_times["生成 EPUB"] = time.time() - phase_start
     
@@ -284,7 +287,7 @@ def convert_english_pdf_only(
     try:
         shutil.copy2(epub_path, english_epub)
     except Exception as e:
-        print(f"复制英文原版 EPUB 失败: {e}")
+        logger.warning(f"复制英文原版 EPUB 失败: {e}")
         return None
     
     # 转换 PDF

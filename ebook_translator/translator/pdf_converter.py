@@ -1,7 +1,10 @@
 import os
 import subprocess
 import tempfile
+import logging
 from config import CALIBRE_PATH, PDF_CONFIG
+
+logger = logging.getLogger(__name__)
 
 class PDFConverter:
     """专业级 PDF 转换器 - 针对电脑阅读优化（大字体+窄边距）"""
@@ -134,11 +137,11 @@ class PDFConverter:
             is_bilingual: 是否为中英双语版本
         """
         if not self.ebook_convert_path:
-            print("错误：未找到 ebook-convert 工具，请安装 Calibre 或设置 CALIBRE_PATH")
+            logger.error("未找到 ebook-convert 工具，请安装 Calibre 或设置 CALIBRE_PATH")
             return False
 
         if not os.path.exists(epub_path):
-            print(f"EPUB 文件不存在: {epub_path}")
+            logger.warning(f"EPUB 文件不存在: {epub_path}")
             return False
 
         # 确保输出目录存在
@@ -151,12 +154,12 @@ class PDFConverter:
         pdf_path = os.path.abspath(pdf_path)
 
         try:
-            print(f"正在转换 {epub_path} 到 {pdf_path}")
+            logger.info(f"正在转换 {epub_path} 到 {pdf_path}")
 
             # 构建专业级转换命令
             cmd = self._build_professional_cmd(epub_path, pdf_path, is_bilingual)
             
-            print(f"执行命令: {' '.join(cmd[:12])}...")
+            logger.info(f"执行命令: {' '.join(cmd[:12])}...")
 
             # 执行命令
             result = subprocess.run(
@@ -168,17 +171,17 @@ class PDFConverter:
 
             if result.returncode == 0:
                 if os.path.exists(pdf_path):
-                    print(f"PDF 转换成功: {pdf_path}")
+                    logger.info(f"PDF 转换成功: {pdf_path}")
                     # 添加书签增强
                     self._enhance_pdf_with_bookmarks(pdf_path)
                     return True
                 else:
-                    print(f"PDF 转换命令成功，但文件未生成: {pdf_path}")
+                    logger.warning(f"PDF 转换命令成功，但文件未生成: {pdf_path}")
             else:
-                print(f"PDF 转换失败: {result.stderr}")
+                logger.error(f"PDF 转换失败: {result.stderr}")
             
             # 尝试以管理员身份运行
-            print("\n尝试以管理员身份运行...")
+            logger.info("尝试以管理员身份运行...")
             
             # 构建 PowerShell 命令
             ps_cmd = self._build_ps_command(epub_path, pdf_path, is_bilingual)
@@ -200,16 +203,16 @@ class PDFConverter:
                 )
                 
                 if os.path.exists(pdf_path):
-                    print(f"PDF 转换成功: {pdf_path}")
+                    logger.info(f"PDF 转换成功: {pdf_path}")
                     # 添加书签增强
                     self._enhance_pdf_with_bookmarks(pdf_path)
                     return True
                 else:
-                    print(f"以管理员身份运行后文件仍未生成: {pdf_path}")
-                    print(f"PowerShell 输出: {result.stdout}")
-                    print(f"PowerShell 错误: {result.stderr}")
+                    logger.warning(f"以管理员身份运行后文件仍未生成: {pdf_path}")
+                    logger.info(f"PowerShell 输出: {result.stdout}")
+                    logger.warning(f"PowerShell 错误: {result.stderr}")
             except Exception as e:
-                print(f"以管理员身份运行出错: {e}")
+                logger.warning(f"以管理员身份运行出错: {e}")
             finally:
                 if os.path.exists(temp_script):
                     try:
@@ -217,12 +220,12 @@ class PDFConverter:
                     except:
                         pass
             
-            print("\n建议：请手动使用 Calibre 转换 EPUB 到 PDF")
+            logger.info("建议：请手动使用 Calibre 转换 EPUB 到 PDF")
             return False
 
         except Exception as e:
-            print(f"转换过程出错: {e}")
-            print("\n建议：请手动使用 Calibre 转换 EPUB 到 PDF")
+            logger.error(f"转换过程出错: {e}")
+            logger.info("建议：请手动使用 Calibre 转换 EPUB 到 PDF")
             return False
 
     def _enhance_pdf_with_bookmarks(self, pdf_path):
@@ -241,13 +244,13 @@ class PDFConverter:
             try:
                 root_obj = reader.trailer.get('/Root')
                 if hasattr(root_obj, 'get') and root_obj.get('/Outlines') is not None:
-                    print("PDF已包含书签")
+                    logger.info("PDF已包含书签")
                     return
             except Exception:
                 pass
             
             # 如果没有书签，尝试从内容生成简单书签
-            print("尝试添加书签...")
+            logger.info("尝试添加书签...")
             page_count = len(reader.pages)
             
             # 添加基本书签结构
@@ -262,15 +265,15 @@ class PDFConverter:
             # 写回PDF
             with open(pdf_path, 'wb') as f:
                 writer.write(f)
-            print("书签添加完成")
+            logger.info("书签添加完成")
             
         except ImportError:
-            print("PyPDF2 未安装，跳过书签增强")
+            logger.info("PyPDF2 未安装，跳过书签增强")
         except Exception as e:
-            print(f"书签增强失败: {e}")
+            logger.warning(f"书签增强失败: {e}")
 
     def optimize_for_screen_reading(self, epub_path, pdf_path, is_bilingual=False):
         """专门针对屏幕阅读优化的转换方法"""
-        print("\n=== 屏幕阅读优化模式 ===")
-        print("使用优化配置：大字体(18pt)、窄边距(10mm)、舒适行距")
+        logger.info("=== 屏幕阅读优化模式 ===")
+        logger.info("使用优化配置：大字体(18pt)、窄边距(10mm)、舒适行距")
         return self.convert_to_pdf(epub_path, pdf_path, is_bilingual)
