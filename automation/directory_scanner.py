@@ -55,7 +55,8 @@ class DirectoryScanner:
     def _fix_filenames(self):
         """修复输入目录中文件名的问题：尾随空格 + 长度截断 + --拆分"""
         for epub_file in list(self.input_dir.glob("*.epub")):
-            stem, ext = os.path.splitext(epub_file.name)
+            stem = epub_file.stem
+            ext = epub_file.suffix
             new_stem = stem.strip()
 
             # 1. 如果有 "--"，只保留前面部分
@@ -69,8 +70,12 @@ class DirectoryScanner:
             new_name = new_stem + ext
             if new_name != epub_file.name:
                 new_path = epub_file.with_name(new_name)
+                # 避免同名文件冲突（例如 Book--A.epub 和 Book.epub）
+                if new_path.exists():
+                    self.logger.warning(f"目标文件名已存在，跳过重命名: '{new_name}'")
+                    continue
                 epub_file.rename(new_path)
-                self.logger.warning(f"重命名文件: '{epub_file.name}' -> '{new_name}'")
+                self.logger.info(f"重命名文件: '{epub_file.name}' -> '{new_name}'")
 
     def _should_process(self, epub_path: Path) -> bool:
         """检查是否应该处理该文件"""
