@@ -430,6 +430,18 @@ def auto(
 
         console.print(report_table)
 
+    # 所有书处理完后，将 input 目录中的 epub 文件移到 "已处理" 文件夹
+    processed_dir = Path(config.input_dir) / "已处理"
+    processed_dir.mkdir(exist_ok=True)
+
+    moved_count = 0
+    for epub_file in Path(config.input_dir).glob("*.epub"):
+        shutil.move(str(epub_file), str(processed_dir / epub_file.name))
+        moved_count += 1
+
+    if moved_count > 0:
+        console.print(f"[dim]已将 {moved_count} 个文件移至 '已处理' 文件夹[/dim]")
+
 
 @app.command()
 def test(
