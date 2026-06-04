@@ -196,6 +196,5 @@ def move_processed_epubs(input_dir: str) -> int:
             shutil.move(str(epub_file), str(dest))
             moved += 1
         except Exception as e:
-            logger = logging.getLogger(__name__)
             logger.warning(f"移动文件失败: '{epub_file.name}' -> {e}")
     return moved
