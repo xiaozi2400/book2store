@@ -208,6 +208,26 @@ def process(
     if steps:
         console.print(format_token_summary(steps))
 
+    # 展示质量报告
+    report_data = db.get_book_quality_report(book_obj.id)
+    if report_data:
+        import json
+        report = json.loads(report_data)
+        console.print("\n[bold]===== 翻译质量报告 =====[/bold]")
+        report_table = Table(title="翻译质量报告")
+        report_table.add_column("维度", style="cyan")
+        report_table.add_column("得分", justify="right")
+        report_table.add_column("问题")
+
+        for dim_name, dim_result in report.get("dimensions", {}).items():
+            issues = dim_result.get("issues", [])
+            main_issues = "；".join(issues[:3]) if issues else "无"
+            score = dim_result.get("score", "")
+            report_table.add_row(dim_name, str(score), main_issues)
+
+        console.print(report_table)
+        console.print(f"总体评分: {report.get('overall_grade', '')} ({report.get('overall_score', '')}分)")
+
 
 @app.command()
 def import_links(
@@ -303,6 +323,7 @@ def auto(
     db = DatabaseManager()
     success_count = 0
     fail_count = 0
+    processed_books = []
 
     for i, book in enumerate(books, 1):
         title = book.get('title', 'Unknown')
@@ -365,6 +386,8 @@ def auto(
             if steps:
                 console.print(format_token_summary(steps))
             success_count += 1
+            book_obj = db.get_book_by_id(book_id)
+            processed_books.append(book_obj)
 
         except Exception as e:
             db.update_book_status(book_id, "failed", str(e))
@@ -375,6 +398,32 @@ def auto(
     console.print(f"[green]成功: {success_count}[/green]")
     if fail_count > 0:
         console.print(f"[red]失败: {fail_count}[/red]")
+
+    if success_count > 0:
+        console.print("\n[bold]===== 翻译质量报告汇总 =====[/bold]")
+        report_table = Table(title="翻译质量报告")
+        report_table.add_column("书名", style="cyan")
+        report_table.add_column("总分", justify="right")
+        report_table.add_column("等级", style="yellow")
+        report_table.add_column("主要问题")
+
+        for book in processed_books:
+            report_data = db.get_book_quality_report(book.id)
+            if report_data:
+                import json
+                report = json.loads(report_data)
+                issues = []
+                for dim_name, dim_result in report.get("dimensions", {}).items():
+                    issues.extend(dim_result.get("issues", []))
+                main_issues = "；".join(issues[:3]) if issues else "无"
+                report_table.add_row(
+                    book.title or "Unknown",
+                    str(report.get("overall_score", "")),
+                    report.get("overall_grade", ""),
+                    main_issues
+                )
+
+        console.print(report_table)
 
 
 @app.command()

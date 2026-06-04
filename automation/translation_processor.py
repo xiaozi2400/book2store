@@ -200,11 +200,6 @@ class TranslationProcessor:
             translated_paragraphs=translated_paragraphs
         )
 
-        report_path = output_root / f"质量报告-{base_name}.json"
-        with open(report_path, 'w', encoding='utf-8') as f:
-            f.write(report.to_json())
-        logger.info(f"质量报告已保存: {report_path}")
-
         self.db.update_book_quality_report(book_id, report.to_json())
         logger.info(f"翻译质量检查完成: {book_title} — {report.overall_grade} ({report.overall_score}分)")
 

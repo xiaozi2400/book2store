@@ -224,6 +224,7 @@ class DatabaseManager:
     def update_book_quality_report(self, book_id: str, report_json: str):
         """更新书籍的质量检查报告"""
         from .models import BookOutput
+
         session = get_session()
         try:
             output = session.query(BookOutput).filter(
@@ -236,6 +237,24 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"更新质量报告失败: {e}")
             session.rollback()
+        finally:
+            close_session(session)
+
+    def get_book_quality_report(self, book_id: str) -> str | None:
+        """获取书籍的质量检查报告（JSON 字符串）"""
+        from .models import BookOutput
+
+        session = get_session()
+        try:
+            output = session.query(BookOutput).filter(
+                BookOutput.book_id == book_id
+            ).first()
+            if output:
+                return output.quality_report
+            return None
+        except Exception as e:
+            logger.error(f"获取质量报告失败: {e}")
+            return None
         finally:
             close_session(session)
 
