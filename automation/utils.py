@@ -26,6 +26,10 @@ def setup_logging(log_dir: str = "./logs"):
             logging.StreamHandler()
         ]
     )
+    # 仅终端输出 WARNING 及以上（保留错误和警告），细节日志只写入文件
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            handler.setLevel(logging.WARNING)
 
     return logging.getLogger(__name__)
 
