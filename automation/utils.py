@@ -6,6 +6,7 @@ import re
 import json
 import hashlib
 import logging
+import shutil
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -170,3 +171,31 @@ class Result:
         if self.success:
             return f"<Result success=True, data={self.data}>"
         return f"<Result success=False, error={self.error}>"
+
+
+def move_processed_epubs(input_dir: str) -> int:
+    """将 input_dir 中的 epub 文件移到 '已处理' 子目录
+
+    Args:
+        input_dir: 输入目录路径
+
+    Returns:
+        成功移动的文件数量
+    """
+    processed_dir = Path(input_dir) / "已处理"
+    processed_dir.mkdir(exist_ok=True)
+
+    moved = 0
+    for epub_file in Path(input_dir).glob("*.epub"):
+        dest = processed_dir / epub_file.name
+        # 避免同名覆盖，追加时间戳
+        if dest.exists():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dest = processed_dir / f"{epub_file.stem}_{timestamp}{epub_file.suffix}"
+        try:
+            shutil.move(str(epub_file), str(dest))
+            moved += 1
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"移动文件失败: '{epub_file.name}' -> {e}")
+    return moved
