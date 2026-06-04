@@ -97,6 +97,48 @@ for epub_file in Path(config.input_dir).glob("*.epub"):
 
 ---
 
+---
+
+## 4. 测试方案
+
+### 4.1 质量报告终端输出测试
+
+创建测试脚本 `test_quality_report.py`，验证以下场景：
+
+| 测试项 | 方法 | 预期结果 |
+|--------|------|----------|
+| JSON 文件不再写入 | 创建临时输出目录，运行 `auto` 后检查 | `output_dir` 下无 `质量报告-*.json` 文件 |
+| 数据库仍保存报告 | 运行后查询 `db.get_book_quality_report()` | 返回非空 JSON 字符串 |
+| 终端表格格式正确 | 捕获 `console.print` 输出 | 包含"质量报告"、"书名"、"总分"、"等级"等字段 |
+
+### 4.2 文件名规范化测试
+
+创建测试脚本 `test_filename_normalization.py`，直接调用 `_fix_filenames()`：
+
+创建临时 input 目录，放入以下文件后运行规范化：
+
+| 测试场景 | 原始文件名 | 预期规范化结果 |
+|----------|-----------|---------------|
+| 含 `--` | `Book-Title--Some-Extra-Description.epub` | `Book-Title.epub` |
+| 超长无 `--` | `A very long book title with many words in it and keeps going more than sixty characters.epub` | 截断至60字符 |
+| 含 `--` 且前面超60字符 | `This is a really long book title that goes well beyond sixty characters--and extra.epub` | `--` 前部分截断60字符 |
+| `--` 后有空格 | `Title  --  Extra.epub` | `Title.epub` |
+| 正常文件名 | `Normal Book.epub` | 不变 |
+| 仅尾随空格 | `Trailing Space .epub` | `Trailing Space.epub`（现有逻辑） |
+
+### 4.3 文件转移测试
+
+创建测试脚本 `test_file_moving.py`，验证 `auto()` 末尾的文件移动逻辑：
+
+| 测试项 | 方法 | 预期结果 |
+|--------|------|----------|
+| 移动 EPUB 文件 | 创建临时 input 目录放 3 个 `.epub`，运行移动逻辑 | 3 个文件在 `已处理/` 目录下 |
+| 不移动非 EPUB | 在 input 目录放 `.pdf`、`.txt` 各一个 | 这些文件不被移动 |
+| 目录不存在时自动创建 | 删除 `已处理/` 目录后运行 | 目录自动创建成功 |
+| 重复运行不报错 | 再次运行移动逻辑 | 第二次不移动（无可移动文件），无报错 |
+
+---
+
 ## 改动文件清单
 
 | 文件 | 改动内容 |
@@ -104,3 +146,6 @@ for epub_file in Path(config.input_dir).glob("*.epub"):
 | `automation/directory_scanner.py` | `_fix_filenames()` 增加长度截断和 `--` 拆分 |
 | `automation/translation_processor.py` | `_run_quality_check()` 移除 JSON 文件写入 |
 | `automation/main.py` | `auto()` 末尾增加质量报告终端展示 + 文件转移到"已处理"；`process()` 末尾增加质量报告展示 |
+| `test_quality_report.py` | 新增测试：质量报告终端输出 |
+| `test_filename_normalization.py` | 新增测试：文件名规范化 |
+| `test_file_moving.py` | 新增测试：文件转移 |
