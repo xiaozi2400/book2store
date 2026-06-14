@@ -73,3 +73,29 @@ def test_publish_failure_writes_publish_status_failed(monkeypatch, tmp_path):
         assert book.status == "completed"  # 关键：Book.status 保持 completed
     finally:
         close_session(session)
+
+
+def test_list_failed_command_shows_failed_books(monkeypatch):
+    """list-failed 命令输出含失败书名 + 提示运行 republish-failed"""
+    from typer.testing import CliRunner
+    from automation.main import app
+
+    monkeypatch.setattr("automation.database.get_database_url", lambda: "sqlite:///:memory:")
+
+    session = get_session()
+    try:
+        session.add(Book(id="book-failed-1", filename="f1.epub", title="失败的书", status="completed"))
+        session.add(BookOutput(book_id="book-failed-1", publish_status="failed", publish_error="登录超时，请重试"))
+        session.add(ProcessingLog(book_id="book-failed-1", stage="publishing", status="error", message="登录超时，请重试"))
+        session.commit()
+    finally:
+        close_session(session)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["list-failed"])
+
+    assert result.exit_code == 0
+    assert "失败的书" in result.stdout
+    assert "book-failed-1" in result.stdout
+    assert "登录超时" in result.stdout
+    assert "republish-failed" in result.stdout

@@ -291,6 +291,66 @@ def generate_list(
 
 
 @app.command()
+def list_failed():
+    """列出所有发布失败的书籍"""
+    from rich.table import Table
+    from sqlalchemy.orm import joinedload
+    from .models import Book, BookOutput, ProcessingLog
+    from .database import get_session, close_session
+
+    # 用 joinedload eager load outputs 避免 detached instance
+    session = get_session()
+    try:
+        failed_books = session.query(Book).join(
+            BookOutput, Book.id == BookOutput.book_id
+        ).options(
+            joinedload(Book.outputs)
+        ).filter(
+            BookOutput.publish_status == "failed"
+        ).order_by(Book.updated_at.desc()).all()
+    finally:
+        close_session(session)
+
+    if not failed_books:
+        console.print("[green]没有发布失败的书籍[/green]")
+        return
+
+    table = Table(title=f"发布失败的书籍 (共 {len(failed_books)} 本)")
+    table.add_column("ID", style="cyan", no_wrap=True)
+    table.add_column("书名", style="white")
+    table.add_column("作者", style="green")
+    table.add_column("失败原因", style="red")
+    table.add_column("失败时间", style="dim")
+
+    db = DatabaseManager()
+    for book in failed_books:
+        output = book.outputs
+        error_full = output.publish_error or ""
+        error = error_full[:80] + ("..." if len(error_full) > 80 else "")
+
+        # 查最近一条 publishing error 的时间
+        logs = db.get_logs(book.id)
+        last_pub_err = None
+        for log in reversed(logs):
+            if log.stage == "publishing" and log.status == "error":
+                last_pub_err = log
+                break
+        ts = last_pub_err.created_at.strftime("%Y-%m-%d %H:%M") if last_pub_err else "-"
+
+        table.add_row(
+            book.id,
+            book.title or "Unknown",
+            book.author or "Unknown",
+            error,
+            ts,
+        )
+
+    console.print(table)
+    console.print(f"\n[red]共 {len(failed_books)} 本发布失败[/red]")
+    console.print("[dim]运行 python -m automation.main republish-failed --all 重新发布[/dim]")
+
+
+@app.command()
 def auto(
     skip_publish: bool = typer.Option(False, help="跳过发布步骤"),
     skip_translate: bool = typer.Option(False, help="跳过翻译步骤"),
