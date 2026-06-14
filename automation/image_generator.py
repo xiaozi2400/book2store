@@ -189,11 +189,13 @@ class ImageGenerator:
         return ""
 
     def _screenshot_html(self, html: str, output_dir: Path, img_cfg: dict) -> int:
-        """将HTML逐页截图保存为JPG"""
+        """将HTML逐页截图保存为JPG(物理像素 2×,quality=92)"""
         from playwright.sync_api import sync_playwright
 
         width = img_cfg.get("width", 800)
         height = img_cfg.get("height", 800)
+        device_scale_factor = img_cfg.get("device_scale_factor", 2)
+        jpeg_quality = img_cfg.get("screenshot_quality", 92)
         temp_html = output_dir / "_main_image_temp.html"
 
         try:
@@ -203,19 +205,31 @@ class ImageGenerator:
 
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
-                page = browser.new_page(viewport={"width": width, "height": height})
+                page = browser.new_page(
+                    viewport={"width": width, "height": height},
+                    device_scale_factor=device_scale_factor,
+                )
                 page.goto(temp_html.resolve().as_uri())
                 page.wait_for_load_state("networkidle")
 
                 containers = page.query_selector_all(".page")
                 if not containers:
-                    page.screenshot(path=str(output_dir / "main_image_01.jpg"), full_page=True)
+                    page.screenshot(
+                        path=str(output_dir / "main_image_01.jpg"),
+                        type="jpeg",
+                        quality=jpeg_quality,
+                        full_page=True,
+                    )
                     browser.close()
                     return 1
 
                 for i, container in enumerate(containers, 1):
                     out_path = output_dir / f"main_image_{i:02d}.jpg"
-                    container.screenshot(path=str(out_path))
+                    container.screenshot(
+                        path=str(out_path),
+                        type="jpeg",
+                        quality=jpeg_quality,
+                    )
                     logger.info(f"  已保存: {out_path.name}")
 
                 browser.close()
