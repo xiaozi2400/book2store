@@ -339,6 +339,10 @@ image_generator:
   enabled: true
   width: 800
   height: 800
+  # 截图物理像素密度倍率(对应 CSS 800×800 → 输出 1600×1600 物理像素)
+  device_scale_factor: 2
+  # 容器截图的 JPEG 质量(0-100),Playwright 默认 80 偏低
+  screenshot_quality: 92
   design_prompt: |
       你是一个电商主图设计专家。根据以下书籍信息，输出4张商品主图的具体设计方案。
 
