@@ -366,3 +366,20 @@ class DatabaseManager:
             steps[step]["cost"] += r.cost
 
         return steps
+
+    def get_books_by_publish_status(self, status: str) -> list:
+        """获取指定发布状态的书籍（join BookOutput）
+
+        返回 Book 对象列表，按 updated_at DESC 排序（最近失败/成功的在前）
+        """
+        from .models import Book, BookOutput
+
+        session = get_session()
+        try:
+            return session.query(Book).join(
+                BookOutput, Book.id == BookOutput.book_id
+            ).filter(
+                BookOutput.publish_status == status
+            ).order_by(Book.updated_at.desc()).all()
+        finally:
+            close_session(session)
