@@ -151,6 +151,27 @@ python -m automation.main publish <book_id>
 python -m automation.main generate_list <book_id>
 ```
 
+#### 查看与重试发布失败
+
+```bash
+# 列出所有发布失败的书籍（完整 ID + 失败原因 + 失败时间）
+python -m automation.main list-failed
+
+# 重新发布所有失败的书籍（带确认提示）
+python -m automation.main republish-failed --all
+
+# 重新发布指定 ID（可多次）
+python -m automation.main republish-failed --book-id <id1> --book-id <id2>
+
+# 跳过确认提示
+python -m automation.main republish-failed --all --auto
+
+# 回填历史发布失败状态（幂等；启动时若有未回填会自动提示）
+python -m automation.main backfill-publish-status
+```
+
+发布失败的书籍在数据库中由 `BookOutput.publish_status='failed'` 标识。`list-failed` 输出完整 UUID,`republish-failed` 接受完整 ID 作为参数。
+
 #### 分享链接导入
 
 ```bash
