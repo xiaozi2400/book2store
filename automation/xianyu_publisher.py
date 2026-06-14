@@ -82,8 +82,16 @@ class XianyuPublisher:
             return True
 
         except Exception as e:
-            logger.error("发布失败: %s, 错误: %s" % (book_id, str(e)))
-            self.db.add_log(book_id, "publishing", "error", str(e))
+            error_msg = str(e)[:1000]  # 防止异常信息过长撑爆数据库
+            logger.error("发布失败: %s, 错误: %s" % (book_id, error_msg))
+            self.db.update_book_output(
+                book_id,
+                publish_status="failed",
+                publish_error=error_msg,
+            )
+            # 翻译/摘要/图片/文案都已完成，不算"整本失败"
+            self.db.update_book_status(book_id, "completed")
+            self.db.add_log(book_id, "publishing", "error", error_msg)
             self._capture_error_screenshot(book_id)
             self._close()
             return False
