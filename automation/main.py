@@ -7,7 +7,7 @@ import json
 import shutil
 import typer
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -348,6 +348,86 @@ def list_failed():
     console.print(table)
     console.print(f"\n[red]共 {len(failed_books)} 本发布失败[/red]")
     console.print("[dim]运行 python -m automation.main republish-failed --all 重新发布[/dim]")
+
+
+@app.command()
+def republish_failed(
+    all_: bool = typer.Option(False, "--all", help="重试所有发布失败的书籍"),
+    book_id: Optional[List[str]] = typer.Option(None, "--book-id", help="重试指定 book_id（可多次）"),
+    auto: bool = typer.Option(False, "--auto", help="跳过执行前的确认"),
+):
+    """重新发布失败的书籍"""
+    from automation.xianyu_publisher import publish_to_xianyu
+    from rich.table import Table
+
+    db = DatabaseManager()
+
+    # 1. 筛选目标书
+    if book_id:
+        target_books = []
+        for bid in book_id:
+            book = db.get_book_by_id(bid)
+            if book is None:
+                console.print(f"[yellow]未找到书籍: {bid}，跳过[/yellow]")
+                continue
+            target_books.append(book)
+    elif all_:
+        target_books = db.get_books_by_publish_status("failed")
+    else:
+        console.print("[yellow]请指定 --all 或 --book-id <id>。先列出失败书籍：[/yellow]\n")
+        list_failed()
+        return
+
+    if not target_books:
+        console.print("[green]没有需要重新发布的书籍[/green]")
+        return
+
+    # 2. 确认
+    if not auto:
+        table = Table(title=f"待重新发布 ({len(target_books)} 本)")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("书名", style="white")
+        for book in target_books:
+            table.add_row(book.id, book.title or "Unknown")
+        console.print(table)
+
+        confirm = typer.confirm(f"确认重新发布 {len(target_books)} 本书籍?")
+        if not confirm:
+            console.print("[yellow]已取消[/yellow]")
+            return
+
+    # 3. 逐本执行
+    success_count = 0
+    fail_count = 0
+    failed_books = []
+
+    for book in target_books:
+        with phase(f"重新发布 {book.title or book.id}"):
+            ok = publish_to_xianyu(book.id)
+            if ok:
+                success_count += 1
+            else:
+                fail_count += 1
+                failed_books.append(book)
+
+    # 4. 汇总
+    console.print(f"\n[bold]===== 重新发布完成 =====[/bold]")
+    console.print(f"[green]成功: {success_count}[/green]")
+    if fail_count > 0:
+        console.print(f"[red]失败: {fail_count}[/red]")
+
+    if failed_books:
+        fail_table = Table(title="失败明细")
+        fail_table.add_column("ID", style="cyan", no_wrap=True)
+        fail_table.add_column("书名", style="white")
+        fail_table.add_column("失败原因", style="red")
+        for book in failed_books:
+            output = db.get_book_output(book.id)
+            err_full = output.publish_error if output else ""
+            err = (err_full or "")[:80]
+            fail_table.add_row(book.id, book.title or "Unknown", err)
+        console.print(fail_table)
+        console.print("[dim]查看 logs/publish_error_<id>_<ts>.png 截图或 logs/automation_YYYYMMDD.log 详细日志[/dim]")
 
 
 @app.command()

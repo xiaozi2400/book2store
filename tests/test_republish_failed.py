@@ -99,3 +99,61 @@ def test_list_failed_command_shows_failed_books(monkeypatch):
     assert "book-failed-1" in result.stdout
     assert "登录超时" in result.stdout
     assert "republish-failed" in result.stdout
+
+
+def test_republish_failed_command_retries_all(monkeypatch):
+    """republish-failed --all --auto 重新发布所有失败书籍"""
+    from typer.testing import CliRunner
+    from automation.main import app
+    from automation.xianyu_publisher import XianyuPublisher
+
+    monkeypatch.setattr("automation.database.get_database_url", lambda: "sqlite:///:memory:")
+
+    session = get_session()
+    try:
+        session.add(Book(id="book-failed-1", filename="f1.epub", title="失败1", status="completed"))
+        session.add(Book(id="book-failed-2", filename="f2.epub", title="失败2", status="completed"))
+        session.add(BookOutput(book_id="book-failed-1", publish_status="failed", publish_error="登录超时"))
+        session.add(BookOutput(book_id="book-failed-2", publish_status="failed", publish_error="扫码失败"))
+        session.commit()
+    finally:
+        close_session(session)
+
+    # Mock publish: 第 1 本仍失败，第 2 本成功
+    def mock_publish(self, book_id):
+        if book_id == "book-failed-1":
+            self.db.update_book_output(book_id, publish_status="failed", publish_error="再次登录超时")
+            return False
+        else:
+            self.db.update_book_output(book_id, publish_status="published", xianyu_listing_url="https://example.com/2")
+            self.db.update_book_status(book_id, "published")
+            return True
+    monkeypatch.setattr(XianyuPublisher, "publish", mock_publish)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["republish-failed", "--all", "--auto"])
+
+    assert result.exit_code == 0
+
+    session = get_session()
+    try:
+        out1 = session.query(BookOutput).filter(BookOutput.book_id == "book-failed-1").first()
+        out2 = session.query(BookOutput).filter(BookOutput.book_id == "book-failed-2").first()
+        assert out1.publish_status == "failed"
+        assert out2.publish_status == "published"
+    finally:
+        close_session(session)
+
+
+def test_republish_failed_book_id_not_found_warns(monkeypatch):
+    """republish-failed --book-id <not_found> 警告并跳过"""
+    from typer.testing import CliRunner
+    from automation.main import app
+
+    monkeypatch.setattr("automation.database.get_database_url", lambda: "sqlite:///:memory:")
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["republish-failed", "--book-id", "nonexistent-uuid-xxx", "--auto"])
+
+    assert result.exit_code == 0
+    assert ("未找到" in result.stdout) or ("跳过" in result.stdout)
