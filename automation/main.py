@@ -431,6 +431,19 @@ def republish_failed(
 
 
 @app.command()
+def backfill_publish_status():
+    """回填历史发布失败状态：把日志中曾发布失败但 publish_status 仍 pending 的书标记为 failed。幂等。"""
+    db = DatabaseManager()
+    count = db.backfill_failed_publish_status()
+
+    if count == 0:
+        console.print("[green]没有需要回填的书籍[/green]")
+    else:
+        console.print(f"[bold green]回填完成：{count} 本书籍的 publish_status 标记为 failed[/bold green]")
+        console.print("[dim]运行 python -m automation.main list-failed 查看[/dim]")
+
+
+@app.command()
 def auto(
     skip_publish: bool = typer.Option(False, help="跳过发布步骤"),
     skip_translate: bool = typer.Option(False, help="跳过翻译步骤"),

@@ -235,3 +235,26 @@ def test_count_unbackfilled_failed(monkeypatch):
 
     db = DatabaseManager()
     assert db.count_unbackfilled_failed() == 1
+
+
+def test_backfill_publish_status_command_runs(monkeypatch):
+    """backfill-publish-status 命令回填并打印数量"""
+    from typer.testing import CliRunner
+    from automation.main import app
+
+    monkeypatch.setattr("automation.database.get_database_url", lambda: "sqlite:///:memory:")
+
+    session = get_session()
+    try:
+        session.add(Book(id="book-bf-1", filename="b1.epub", title="BF1", status="completed"))
+        session.add(BookOutput(book_id="book-bf-1", publish_status="pending"))
+        session.add(ProcessingLog(book_id="book-bf-1", stage="publishing", status="error", message="历史失败"))
+        session.commit()
+    finally:
+        close_session(session)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["backfill-publish-status"])
+
+    assert result.exit_code == 0
+    assert "1" in result.stdout
