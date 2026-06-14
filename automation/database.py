@@ -383,3 +383,59 @@ class DatabaseManager:
             ).order_by(Book.updated_at.desc()).all()
         finally:
             close_session(session)
+
+    def backfill_failed_publish_status(self) -> int:
+        """回填历史发布失败状态：把 processing_logs 里 publishing 阶段失败、但 publish_status 仍为 pending 的书标记为 failed。
+
+        返回回填的数量。幂等：重复运行返回 0。
+        """
+        from .models import Book, BookOutput, ProcessingLog
+
+        session = get_session()
+        try:
+            failed_book_ids_subq = session.query(ProcessingLog.book_id).filter(
+                ProcessingLog.stage == "publishing",
+                ProcessingLog.status == "error",
+            ).distinct().subquery()
+
+            targets = session.query(BookOutput).join(
+                failed_book_ids_subq, BookOutput.book_id == failed_book_ids_subq.c.book_id
+            ).filter(
+                BookOutput.publish_status.in_(["pending", None])
+            ).all()
+
+            for output in targets:
+                last_err = session.query(ProcessingLog).filter(
+                    ProcessingLog.book_id == output.book_id,
+                    ProcessingLog.stage == "publishing",
+                    ProcessingLog.status == "error",
+                ).order_by(ProcessingLog.created_at.desc()).first()
+
+                output.publish_status = "failed"
+                if last_err:
+                    output.publish_error = (last_err.message or "")[:1000]
+                # Book.status 保持不变（历史状态不动，避免误判）
+
+            session.commit()
+            return len(targets)
+        finally:
+            close_session(session)
+
+    def count_unbackfilled_failed(self) -> int:
+        """统计未回填的失败书数量（用于启动时提示）"""
+        from .models import BookOutput, ProcessingLog
+
+        session = get_session()
+        try:
+            failed_book_ids_subq = session.query(ProcessingLog.book_id).filter(
+                ProcessingLog.stage == "publishing",
+                ProcessingLog.status == "error",
+            ).distinct().subquery()
+
+            return session.query(BookOutput).join(
+                failed_book_ids_subq, BookOutput.book_id == failed_book_ids_subq.c.book_id
+            ).filter(
+                BookOutput.publish_status.in_(["pending", None])
+            ).count()
+        finally:
+            close_session(session)
