@@ -202,3 +202,16 @@ def move_processed_epubs(input_dir: str) -> int:
         except Exception as e:
             logger.warning(f"移动文件失败: '{epub_file.name}' -> {e}")
     return moved
+
+
+def check_unbackfilled_failed_books():
+    """启动时静默检测：若有历史发布失败未回填则打印黄色提示。不修改数据。"""
+    from .database import DatabaseManager
+    try:
+        db = DatabaseManager()
+        count = db.count_unbackfilled_failed()
+        if count > 0:
+            print("\n[yellow]⚠ 检测到 %d 本历史发布失败未标记 publish_status='failed'[/yellow]" % count)
+            print("[yellow]  运行 python -m automation.main backfill-publish-status 一次性回填[/yellow]\n")
+    except Exception:
+        pass  # 启动检测失败不应阻塞主流程

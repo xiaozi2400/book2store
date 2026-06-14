@@ -258,3 +258,25 @@ def test_backfill_publish_status_command_runs(monkeypatch):
 
     assert result.exit_code == 0
     assert "1" in result.stdout
+
+
+def test_check_unbackfilled_prints_warning(monkeypatch, capsys):
+    """check_unbackfilled_failed_books 检测到未回填时打印黄色提示"""
+    from automation.utils import check_unbackfilled_failed_books
+
+    monkeypatch.setattr("automation.database.get_database_url", lambda: "sqlite:///:memory:")
+
+    session = get_session()
+    try:
+        session.add(Book(id="book-warn-1", filename="w1.epub", title="W1", status="completed"))
+        session.add(BookOutput(book_id="book-warn-1", publish_status="pending"))
+        session.add(ProcessingLog(book_id="book-warn-1", stage="publishing", status="error", message="err"))
+        session.commit()
+    finally:
+        close_session(session)
+
+    check_unbackfilled_failed_books()
+
+    captured = capsys.readouterr()
+    assert "1" in captured.out
+    assert "backfill-publish-status" in captured.out

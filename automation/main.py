@@ -830,4 +830,6 @@ def regenerate_images(
 
 
 if __name__ == "__main__":
+    from automation.utils import check_unbackfilled_failed_books
+    check_unbackfilled_failed_books()
     app()
