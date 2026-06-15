@@ -544,7 +544,7 @@ def _resolve_epubcheck_cmd(config: Config) -> list[str]:
     """定位 epubcheck 命令。返回完整的命令行前缀。
 
     优先级：
-    1. config.epubcheck_path 指向 .jar → 返回 ["java", "-jar", "<jar>"]
+    1. config.epubcheck_path 指向 .jar → 返回 ["java", *config.java_opts, "-jar", "<jar>"]
        其它情况 → 返回 ["<path>"]
     2. PATH 中的 epubcheck（POSIX）
     3. PATH 中的 epubcheck.bat（Windows）
