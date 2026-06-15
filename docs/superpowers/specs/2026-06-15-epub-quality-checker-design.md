@@ -255,6 +255,8 @@ epub_checker:
 4. PATH 中 `epubcheck.bat`（Windows）
 5. 都找不到 → `EpubCheckNotFound`，退出 4，提示安装
 
+**Java 假设**：工具不负责发现 `java` 命令。如果 `config.epubcheck_path` 是 jar 文件（绝对路径），会拼成 `["java", "-jar", "<jar>", ...]`，依赖系统 PATH 中的 `java`；如果 `epubcheck_path` 指向一个可执行包装脚本（brew/scoop 装的 `epubcheck`），就当成单命令调用，不再前置 `java`。两种形态都受支持。
+
 ---
 
 ## 9. 与 EPUBCheck 的对接
@@ -380,7 +382,7 @@ def parse_epubcheck_output(json_text: str, epub_path: Path) -> CheckResult:
 | epubcheck 崩溃（returncode 2+） | 把 stderr 拼到报告，标 `passed=False` |
 | JSON 解析失败 | `raw_output` 保留原文，报告里注明"无法解析" |
 | 超时（>300s） | 终止子进程，提示用户调大 `timeout_seconds`，退出 4 |
-| 输入是目录 | 扫描 `*.epub`，逐个跑 `check`，最后一个失败决定退出码（不打断） |
+| 输入是目录 | 扫描 `*.epub`，逐个跑 `check`，**任一失败即整批失败**（退出码取最大严重等级） |
 
 ---
 
