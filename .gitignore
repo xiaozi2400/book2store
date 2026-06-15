@@ -35,6 +35,7 @@ pytest_cache/
 
 # File processing
 test*
+!test_*/
 !test_*.py
 *.pdf
 *.epub
