@@ -2,22 +2,40 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 实现一个独立 CLI 工具 `epub_checker.py`，通过调用外部 EPUBCheck 验证 EPUB 文件是否符合 EPUB 3.3 出版社标准。
+**Goal:** 实现独立子项目 `epub_checker/`，通过调用外部 EPUBCheck 验证 EPUB 文件是否符合 EPUB 3.3 出版社标准。
 
-**Architecture:** 单文件 Python 脚本（约 350 行），内部 7 个区块用 `# ===` 分割：常量配置、数据模型、命令发现、子进程运行、JSON 解析、报告渲染、Typer CLI。EPUBCheck 作为外部黑盒引擎，Python 层只做参数拼装、JSON 解析、报告渲染——零校验规则复写。报告支持 Rich 控制台 / JSON / Markdown 三种格式，4 档退出码支持 CI 集成。
+**Architecture:** 自包含 Python 子项目（类似 `ebook_translator/`），含 7 个职责单一的模块（main/config/models/discovery/runner/parser/report）。EPUBCheck 作为外部黑盒引擎，Python 层只做参数拼装、JSON 解析、报告渲染——零校验规则复写。报告支持 Rich 控制台 / JSON / Markdown 三种格式，4 档退出码支持 CI 集成。完全独立于 `automation/` 流水线。
 
-**Tech Stack:** Python 3.11+、Typer（CLI）、Rich（终端输出）、PyYAML（可选配置）、subprocess（EPUBCheck 调用）、pytest + pytest-monkeypatch（测试）
+**Tech Stack:** Python 3.11+、Typer（CLI）、Rich（终端输出）、PyYAML（可选配置）、subprocess（EPUBCheck 调用）、pytest + typer.testing（测试）
 
 ---
 
 ## File Structure
 
-| 文件 | 状态 | 职责 |
-|---|---|---|
-| `epub_checker.py` | 新建 | 单文件 CLI 工具（约 350 行） |
-| `tests/test_epub_checker.py` | 新建 | 单元测试，mock subprocess |
-| `tests/fixtures/epubcheck_sample.json` | 新建 | EPUBCheck 5.x JSON 样本 |
-| `docs/epub_checker.md` | 新建 | 用户文档：装 Java → 装 epubcheck → 跑 CLI |
+```
+epub_checker/
+├── __init__.py                  # 包标识 + __version__
+├── main.py                      # Typer CLI: check / version
+├── config.py                    # Config dataclass + from_yaml
+├── models.py                    # Severity, Issue, CheckResult
+├── discovery.py                 # _resolve_epubcheck_cmd + EpubCheckNotFound
+├── runner.py                    # run_epubcheck (subprocess)
+├── parser.py                    # parse_epubcheck_output
+├── report.py                    # render_console/json/markdown
+├── README.md                    # 用户文档
+└── tests/
+    ├── __init__.py
+    ├── conftest.py              # 共享 fixture
+    ├── fixtures/
+    │   └── epubcheck_sample.json
+    ├── test_models.py
+    ├── test_discovery.py
+    ├── test_runner.py
+    ├── test_parser.py
+    ├── test_report.py
+    ├── test_cli.py
+    └── test_e2e.py
+```
 
 **不** 修改任何现有文件、不改 `requirements-automation.txt`、不动数据库 schema。
 
@@ -26,21 +44,22 @@
 ## Task 1: 项目骨架与基础数据模型
 
 **Files:**
-- Create: `epub_checker.py`
-- Create: `tests/test_epub_checker.py`
-- Create: `tests/__init__.py`（如不存在）
+- Create: `epub_checker/__init__.py`
+- Create: `epub_checker/models.py`
+- Create: `epub_checker/tests/__init__.py`
+- Create: `epub_checker/tests/conftest.py`
+- Create: `epub_checker/tests/test_models.py`
 
-### 1.1 写失败测试：Severity 枚举与 Issue dataclass
+### 1.1 写失败测试：Severity 枚举与 Issue/CheckResult dataclass
 
 **Files:**
-- Create: `tests/test_epub_checker.py`
+- Create: `epub_checker/tests/test_models.py`
 
 ```python
-"""EPUB 质量检查工具的单元测试。所有测试 mock subprocess，不依赖真实 epubcheck。"""
+"""数据模型单元测试。"""
 from pathlib import Path
-import json
 
-from epub_checker import Severity, Issue, CheckResult
+from epub_checker.models import Severity, Issue, CheckResult
 
 
 def test_severity_enum_values():
@@ -65,17 +84,13 @@ def test_issue_dataclass_fields():
     assert issue.suggestion == "Add manifest item"
 
 
-def test_issue_optional_fields():
-    issue = Issue(
-        severity=Severity.USAGE,
-        message="msg",
-        location="loc",
-    )
+def test_issue_optional_fields_default_none():
+    issue = Issue(severity=Severity.USAGE, message="msg", location="loc")
     assert issue.rule_id is None
     assert issue.suggestion is None
 
 
-def test_checkresult_passed_no_errors():
+def test_checkresult_passed_when_clean():
     result = CheckResult(
         epub_path=Path("book.epub"),
         epub_version="3.3",
@@ -114,7 +129,7 @@ def test_checkresult_passed_fails_on_fatal():
     assert result.passed is False
 
 
-def test_checkresult_by_severity_groups():
+def test_checkresult_by_severity_groups_correctly():
     issues = [
         Issue(severity=Severity.ERROR, message="e1", location="l"),
         Issue(severity=Severity.WARNING, message="w1", location="l"),
@@ -134,94 +149,84 @@ def test_checkresult_by_severity_groups():
     assert len(grouped[Severity.WARNING]) == 1
     assert len(grouped[Severity.FATAL]) == 0
     assert len(grouped[Severity.USAGE]) == 0
+
+
+def test_checkresult_to_dict_serializes():
+    result = CheckResult(
+        epub_path=Path("/tmp/book.epub"),
+        epub_version="3.3",
+        checker_version="5.0.0",
+        issues=[Issue(severity=Severity.ERROR, message="m", location="l",
+                      rule_id="R-1", suggestion="fix")],
+        counts={"FATAL": 0, "ERROR": 1, "WARNING": 0, "USAGE": 0},
+        duration_ms=42,
+        raw_output=None,
+    )
+    d = result.to_dict()
+    assert d["epub_path"] == "/tmp/book.epub"
+    assert d["epub_version"] == "3.3"
+    assert d["issues"][0]["severity"] == "ERROR"
+    assert d["issues"][0]["rule_id"] == "R-1"
 ```
 
-- [ ] **Step 1.1.1: 写失败测试**
+- [ ] **Step 1.1.1: 创建包与测试目录**
 
-把上面的代码写入 `tests/test_epub_checker.py`。
+```bash
+mkdir -p D:/project/bookfile_bat/epub_checker/tests/fixtures
+```
 
-- [ ] **Step 1.1.2: 跑测试确认失败**
+- [ ] **Step 1.1.2: 写失败测试**
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker'`
+写入 `epub_checker/tests/test_models.py`（内容如上）。
 
-### 1.2 实现最小代码：常量与数据模型
+- [ ] **Step 1.1.3: 写 conftest 让 pytest 找到包**
 
 **Files:**
-- Create: `epub_checker.py`
+- Create: `epub_checker/tests/__init__.py`（空文件）
+- Create: `epub_checker/tests/conftest.py`
 
 ```python
+"""epub_checker 测试的共享 fixture。"""
+import sys
+from pathlib import Path
+
+# 让 pytest 能 import epub_checker，无需安装
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+```
+
+- [ ] **Step 1.1.4: 跑测试确认失败**
+
+Run: `pytest epub_checker/tests/test_models.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker'`
+
+### 1.2 实现包标识与数据模型
+
+**Files:**
+- Create: `epub_checker/__init__.py`
+- Create: `epub_checker/models.py`
+
+```python
+# epub_checker/__init__.py
 """EPUB 文件质量检查工具。
 
-一个独立 CLI，调用外部 EPUBCheck（Java）验证 EPUB 文件是否符合 EPUB 3.3 出版社标准。
+一个独立子项目，调用外部 EPUBCheck（Java）验证 EPUB 文件是否符合 EPUB 3.3 出版社标准。
 本工具只做胶水代码：参数拼装、JSON 解析、报告渲染、CLI 编排。所有校验规则由 EPUBCheck 提供。
 """
+__version__ = "0.1.0"
+```
+
+```python
+# epub_checker/models.py
+"""数据模型。"""
 from __future__ import annotations
 
-import json
-import logging
-import shutil
-import subprocess
-import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
-
-# ============================================================
-# 区块 1：常量与配置
-# ============================================================
-
-DEFAULT_TIMEOUT_SECONDS = 300
-DEFAULT_JAVA_OPTS = ["-Xmx1g"]
-DEFAULT_PROFILE = "default"
-DEFAULT_MODE = "exp"
-EXIT_OK = 0
-EXIT_WARNING_STRICT = 1
-EXIT_ERROR = 2
-EXIT_FATAL = 3
-EXIT_TOOL_ERROR = 4
-
-logger = logging.getLogger("epub_checker")
-
-
-@dataclass
-class Config:
-    """工具配置。所有字段都有默认值，可被 config.yaml 的 epub_checker 段覆盖。"""
-    epubcheck_path: str | None = None  # None = 走 PATH
-    java_opts: list[str] = field(default_factory=lambda: list(DEFAULT_JAVA_OPTS))
-    default_profile: str = DEFAULT_PROFILE
-    default_mode: str = DEFAULT_MODE
-    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
-
-    @classmethod
-    def from_yaml(cls, yaml_path: Path) -> "Config":
-        """从 config.yaml 读取 epub_checker 段。读不到或文件不存在时返回默认配置。"""
-        if not yaml_path.exists():
-            return cls()
-        try:
-            import yaml  # 延迟导入，避免硬依赖
-        except ImportError:
-            return cls()
-        try:
-            data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
-        except Exception as e:
-            logger.warning("无法解析 %s: %s，使用默认配置", yaml_path, e)
-            return cls()
-        section = data.get("epub_checker", {}) or {}
-        return cls(
-            epubcheck_path=section.get("epubcheck_path"),
-            java_opts=section.get("java_opts", list(DEFAULT_JAVA_OPTS)),
-            default_profile=section.get("default_profile", DEFAULT_PROFILE),
-            default_mode=section.get("default_mode", DEFAULT_MODE),
-            timeout_seconds=section.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS),
-        )
-
-
-# ============================================================
-# 区块 2：数据模型
-# ============================================================
 
 class Severity(str, Enum):
     """问题严重等级。EPUBCheck 的 FATAL > ERROR > WARNING > USAGE。"""
@@ -275,66 +280,222 @@ class CheckResult:
         return d
 ```
 
-- [ ] **Step 1.2.1: 实现区块 1+2**
-
-把上面的代码写入 `epub_checker.py`。
+- [ ] **Step 1.2.1: 实现 `__init__.py` 和 `models.py`**
 
 - [ ] **Step 1.2.2: 跑测试确认通过**
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: PASS（7 个测试全绿）
+Run: `pytest epub_checker/tests/test_models.py -v`
+Expected: PASS（8 个测试全绿）
 
 - [ ] **Step 1.2.3: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add epub_checker.py tests/test_epub_checker.py
+git add epub_checker/
 git commit -m "feat(epub-checker): 骨架与数据模型（Severity/Issue/CheckResult）"
 ```
 
 ---
 
-## Task 2: 命令发现（epubcheck 可执行文件定位）
+## Task 2: 配置模块（Config dataclass + from_yaml）
 
 **Files:**
-- Modify: `epub_checker.py`（新增区块 3）
-- Modify: `tests/test_epub_checker.py`
+- Create: `epub_checker/config.py`
+- Create: `epub_checker/tests/test_config.py`
 
-### 2.1 写失败测试：命令发现
+### 2.1 写失败测试
 
 **Files:**
-- Modify: `tests/test_epub_checker.py`
-
-在文件末尾追加：
+- Create: `epub_checker/tests/test_config.py`
 
 ```python
-from epub_checker import Config, EpubCheckNotFound, _resolve_epubcheck_cmd
+"""Config 单元测试。"""
+from pathlib import Path
+
+from epub_checker.config import Config, DEFAULT_JAVA_OPTS
 
 
-def test_resolve_uses_config_path_when_set(tmp_path, monkeypatch):
-    fake_epubcheck = tmp_path / "my-epubcheck"
-    fake_epubcheck.write_text("#!/bin/sh\necho ok\n")
-    cfg = Config(epubcheck_path=str(fake_epubcheck))
+def test_default_config():
+    cfg = Config()
+    assert cfg.epubcheck_path is None
+    assert cfg.java_opts == DEFAULT_JAVA_OPTS
+    assert cfg.default_profile == "default"
+    assert cfg.default_mode == "exp"
+    assert cfg.timeout_seconds == 300
+
+
+def test_config_from_missing_yaml_returns_defaults(tmp_path):
+    cfg = Config.from_yaml(tmp_path / "nonexistent.yaml")
+    assert cfg.epubcheck_path is None
+    assert cfg.default_profile == "default"
+
+
+def test_config_from_yaml_reads_section(tmp_path):
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text(
+        "epub_checker:\n"
+        "  epubcheck_path: /opt/epubcheck.jar\n"
+        "  java_opts: ['-Xmx2g']\n"
+        "  default_profile: dict\n"
+        "  timeout_seconds: 600\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(yaml_path)
+    assert cfg.epubcheck_path == "/opt/epubcheck.jar"
+    assert cfg.java_opts == ["-Xmx2g"]
+    assert cfg.default_profile == "dict"
+    assert cfg.timeout_seconds == 600
+
+
+def test_config_from_yaml_handles_missing_section(tmp_path):
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("other_section:\n  foo: bar\n", encoding="utf-8")
+    cfg = Config.from_yaml(yaml_path)
+    # 没有 epub_checker 段时返回默认
+    assert cfg.default_profile == "default"
+
+
+def test_config_from_yaml_handles_invalid_yaml(tmp_path):
+    yaml_path = tmp_path / "bad.yaml"
+    yaml_path.write_text(":\n:\n  - [unbalanced", encoding="utf-8")
+    cfg = Config.from_yaml(yaml_path)
+    # 解析失败时返回默认
+    assert cfg.epubcheck_path is None
+```
+
+- [ ] **Step 2.1.1: 写失败测试**
+
+写入 `epub_checker/tests/test_config.py`。
+
+- [ ] **Step 2.1.2: 跑测试确认失败**
+
+Run: `pytest epub_checker/tests/test_config.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker.config'`
+
+### 2.2 实现 Config
+
+**Files:**
+- Create: `epub_checker/config.py`
+
+```python
+"""配置：dataclass + 从 config.yaml 读取。"""
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+DEFAULT_TIMEOUT_SECONDS = 300
+DEFAULT_JAVA_OPTS = ["-Xmx1g"]
+DEFAULT_PROFILE = "default"
+DEFAULT_MODE = "exp"
+
+logger = logging.getLogger("epub_checker.config")
+
+
+@dataclass
+class Config:
+    """工具配置。所有字段都有默认值，可被 config.yaml 的 epub_checker 段覆盖。"""
+    epubcheck_path: str | None = None  # None = 走 PATH
+    java_opts: list[str] = field(default_factory=lambda: list(DEFAULT_JAVA_OPTS))
+    default_profile: str = DEFAULT_PROFILE
+    default_mode: str = DEFAULT_MODE
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
+
+    @classmethod
+    def from_yaml(cls, yaml_path: Path) -> "Config":
+        """从 config.yaml 读取 epub_checker 段。读不到或文件不存在时返回默认配置。"""
+        if not yaml_path.exists():
+            return cls()
+        try:
+            import yaml  # 延迟导入，避免硬依赖
+        except ImportError:
+            return cls()
+        try:
+            data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+        except Exception as e:
+            logger.warning("无法解析 %s: %s，使用默认配置", yaml_path, e)
+            return cls()
+        section = data.get("epub_checker", {}) or {}
+        return cls(
+            epubcheck_path=section.get("epubcheck_path"),
+            java_opts=section.get("java_opts", list(DEFAULT_JAVA_OPTS)),
+            default_profile=section.get("default_profile", DEFAULT_PROFILE),
+            default_mode=section.get("default_mode", DEFAULT_MODE),
+            timeout_seconds=section.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS),
+        )
+```
+
+- [ ] **Step 2.2.1: 实现 `config.py`**
+
+- [ ] **Step 2.2.2: 跑测试确认通过**
+
+Run: `pytest epub_checker/tests/test_config.py -v`
+Expected: PASS（5 个测试全绿）
+
+- [ ] **Step 2.2.3: 提交**
+
+```bash
+cd D:/project/bookfile_bat
+git add epub_checker/
+git commit -m "feat(epub-checker): 配置模块（Config + yaml 读取）"
+```
+
+---
+
+## Task 3: 命令发现（discovery.py）
+
+**Files:**
+- Create: `epub_checker/discovery.py`
+- Create: `epub_checker/tests/test_discovery.py`
+
+### 3.1 写失败测试
+
+**Files:**
+- Create: `epub_checker/tests/test_discovery.py`
+
+```python
+"""命令发现单元测试。"""
+import sys
+
+import pytest
+
+from epub_checker.config import Config
+from epub_checker.discovery import EpubCheckNotFound, _resolve_epubcheck_cmd
+
+
+def test_resolve_uses_jar_config(tmp_path):
+    jar = tmp_path / "ec.jar"
+    jar.write_bytes(b"")
+    cfg = Config(epubcheck_path=str(jar))
     cmd = _resolve_epubcheck_cmd(cfg)
-    # 当 epubcheck_path 指向 .jar 时应该包成 java -jar
     assert cmd[0] == "java"
     assert cmd[1] == "-jar"
-    assert cmd[2] == str(fake_epubcheck)
+    assert cmd[2] == str(jar)
 
 
-def test_resolve_falls_back_to_path_unix(tmp_path, monkeypatch):
+def test_resolve_uses_executable_config(tmp_path):
+    exe = tmp_path / "my-epubcheck"
+    exe.write_text("#!/bin/sh\n")
+    cfg = Config(epubcheck_path=str(exe))
+    cmd = _resolve_epubcheck_cmd(cfg)
+    # .jar 后缀才会包成 java -jar，其它直接用
+    assert cmd == [str(exe)]
+
+
+def test_resolve_falls_back_to_path(tmp_path, monkeypatch):
     fake = tmp_path / "epubcheck"
-    fake.write_text("#!/bin/sh\necho ok\n")
+    fake.write_text("#!/bin/sh\n")
     monkeypatch.setenv("PATH", str(tmp_path))
     cfg = Config()
     cmd = _resolve_epubcheck_cmd(cfg)
-    # PATH 上有可执行文件，直接用它
-    assert cmd == [str(fake)] or cmd[-1] == "epubcheck"
+    assert cmd[-1] == "epubcheck"
 
 
-def test_resolve_finds_epubcheck_bat(tmp_path, monkeypatch):
+def test_resolve_finds_bat_on_windows(tmp_path, monkeypatch):
     bat = tmp_path / "epubcheck.bat"
-    bat.write_text("@echo off\necho ok\n")
+    bat.write_text("@echo off\n")
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setattr("sys.platform", "win32")
     cfg = Config()
@@ -345,34 +506,35 @@ def test_resolve_finds_epubcheck_bat(tmp_path, monkeypatch):
 def test_resolve_raises_when_not_found(monkeypatch, tmp_path):
     monkeypatch.setenv("PATH", str(tmp_path))  # 空目录
     cfg = Config()
-    try:
+    with pytest.raises(EpubCheckNotFound) as exc_info:
         _resolve_epubcheck_cmd(cfg)
-    except EpubCheckNotFound as e:
-        assert "epubcheck" in str(e).lower()
-    else:
-        raise AssertionError("应该抛出 EpubCheckNotFound")
+    assert "epubcheck" in str(exc_info.value).lower()
 ```
 
-- [ ] **Step 2.1.1: 写失败测试**
+- [ ] **Step 3.1.1: 写失败测试**
 
-追加到 `tests/test_epub_checker.py`。
+写入 `epub_checker/tests/test_discovery.py`。
 
-- [ ] **Step 2.1.2: 跑测试确认失败**
+- [ ] **Step 3.1.2: 跑测试确认失败**
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: FAIL with `ImportError: cannot import name 'EpubCheckNotFound'`
+Run: `pytest epub_checker/tests/test_discovery.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker.discovery'`
 
-### 2.2 实现命令发现
+### 3.2 实现 discovery
 
 **Files:**
-- Modify: `epub_checker.py`
-
-在区块 2 后面追加区块 3：
+- Create: `epub_checker/discovery.py`
 
 ```python
-# ============================================================
-# 区块 3：命令发现
-# ============================================================
+"""epubcheck 可执行文件定位。"""
+from __future__ import annotations
+
+import shutil
+import sys
+from pathlib import Path
+
+from .config import Config
+
 
 class EpubCheckNotFound(Exception):
     """找不到 epubcheck 可执行文件时抛出。"""
@@ -403,7 +565,6 @@ def _resolve_epubcheck_cmd(config: Config) -> list[str]:
     for name in candidates:
         found = shutil.which(name)
         if found:
-            # 如果 PATH 找到的是 jar 后缀（罕见），也包成 java -jar
             if found.lower().endswith(".jar"):
                 return ["java", *config.java_opts, "-jar", found]
             return [found]
@@ -417,65 +578,67 @@ def _resolve_epubcheck_cmd(config: Config) -> list[str]:
     )
 ```
 
-- [ ] **Step 2.2.1: 实现区块 3**
+- [ ] **Step 3.2.1: 实现 `discovery.py`**
 
-追加到 `epub_checker.py`。
+- [ ] **Step 3.2.2: 跑测试确认通过**
 
-- [ ] **Step 2.2.2: 跑测试确认通过**
+Run: `pytest epub_checker/tests/test_discovery.py -v`
+Expected: PASS（5 个测试全绿）
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: PASS（11 个测试全绿）
-
-- [ ] **Step 2.2.3: 提交**
+- [ ] **Step 3.2.3: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add epub_checker.py tests/test_epub_checker.py
+git add epub_checker/
 git commit -m "feat(epub-checker): epubcheck 命令发现（PATH + 配置覆盖）"
 ```
 
 ---
 
-## Task 3: 子进程运行
+## Task 4: 子进程运行（runner.py）
 
 **Files:**
-- Modify: `epub_checker.py`（新增区块 4）
-- Modify: `tests/test_epub_checker.py`
+- Create: `epub_checker/runner.py`
+- Create: `epub_checker/tests/test_runner.py`
 
-### 3.1 写失败测试
+### 4.1 写失败测试
 
 **Files:**
-- Modify: `tests/test_epub_checker.py`
-
-在末尾追加：
+- Create: `epub_checker/tests/test_runner.py`
 
 ```python
+"""subprocess 运行单元测试。所有 subprocess.run 都通过 monkeypatch mock。"""
 import subprocess
-from epub_checker import run_epubcheck, _resolve_epubcheck_cmd as _resolve  # noqa
+from pathlib import Path
+
+import pytest
+
+from epub_checker.config import Config
+from epub_checker.runner import run_epubcheck
 
 
-def _make_completed_process(returncode: int, stdout: str = "", stderr: str = ""):
+def _completed(returncode: int, stdout: str = "", stderr: str = ""):
     return subprocess.CompletedProcess(
         args=[], returncode=returncode, stdout=stdout, stderr=stderr
     )
 
 
-def test_run_epubcheck_calls_with_correct_args(tmp_path, monkeypatch):
-    """验证命令拼装：epubcheck 命令前缀 + epub 路径 + mode + profile + --json + -v 0"""
-    fake_epubcheck = tmp_path / "ec"
-    fake_epubcheck.write_text("#!/bin/sh\n")
-    cfg = Config(epubcheck_path=str(fake_epubcheck))
+def test_run_epubcheck_command_assembly(tmp_path, monkeypatch):
+    """验证命令拼装：epubcheck 前缀 + epub 路径 + mode + profile + --json + -v 0"""
+    fake = tmp_path / "ec"
+    fake.write_text("#!/bin/sh\n")
+    cfg = Config(epubcheck_path=str(fake))
 
-    captured: dict = {}
+    captured = {}
 
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
         captured["timeout"] = kwargs.get("timeout")
         captured["text"] = kwargs.get("text")
         captured["capture_output"] = kwargs.get("capture_output")
-        return _make_completed_process(0, stdout='{"messages": []}')
+        return _completed(0, stdout='{"messages": []}')
 
-    monkeypatch.setattr("epub_checker.subprocess.run", fake_run)
+    monkeypatch.setattr("epub_checker.runner.subprocess.run", fake_run)
 
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04dummy")
@@ -483,7 +646,7 @@ def test_run_epubcheck_calls_with_correct_args(tmp_path, monkeypatch):
 
     assert rc == 0
     assert out == '{"messages": []}'
-    assert captured["cmd"][0:1] == [str(fake_epubcheck)]
+    assert captured["cmd"][0] == str(fake)
     assert str(book) in captured["cmd"]
     assert "--mode" in captured["cmd"]
     assert "mo" in captured["cmd"]
@@ -498,55 +661,78 @@ def test_run_epubcheck_calls_with_correct_args(tmp_path, monkeypatch):
 
 
 def test_run_epubcheck_returns_returncode_and_stdout(tmp_path, monkeypatch):
-    fake_epubcheck = tmp_path / "ec"
-    fake_epubcheck.write_text("")
-    cfg = Config(epubcheck_path=str(fake_epubcheck))
+    fake = tmp_path / "ec"
+    fake.write_text("")
+    cfg = Config(epubcheck_path=str(fake))
 
     def fake_run(cmd, **kwargs):
-        return _make_completed_process(1, stdout='{"messages": [{"severity":"ERROR"}]}')
+        return _completed(1, stdout='{"messages": [{"severity":"ERROR"}]}')
 
-    monkeypatch.setattr("epub_checker.subprocess.run", fake_run)
+    monkeypatch.setattr("epub_checker.runner.subprocess.run", fake_run)
 
     rc, out = run_epubcheck(tmp_path / "book.epub", cfg)
     assert rc == 1
     assert "ERROR" in out
 
 
-def test_run_epubcheck_timeout_raises_tool_error(tmp_path, monkeypatch):
-    fake_epubcheck = tmp_path / "ec"
-    fake_epubcheck.write_text("")
-    cfg = Config(epubcheck_path=str(fake_epubcheck))
+def test_run_epubcheck_timeout_propagates(tmp_path, monkeypatch):
+    fake = tmp_path / "ec"
+    fake.write_text("")
+    cfg = Config(epubcheck_path=str(fake))
 
     def fake_run(cmd, **kwargs):
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=10)
 
-    monkeypatch.setattr("epub_checker.subprocess.run", fake_run)
+    monkeypatch.setattr("epub_checker.runner.subprocess.run", fake_run)
 
-    import pytest
     with pytest.raises(subprocess.TimeoutExpired):
         run_epubcheck(tmp_path / "book.epub", cfg)
+
+
+def test_run_epubcheck_uses_config_defaults(tmp_path, monkeypatch):
+    """未传 profile/mode 时使用 config 默认值"""
+    fake = tmp_path / "ec"
+    fake.write_text("")
+    cfg = Config(epubcheck_path=str(fake), default_profile="edupub", default_mode="mo")
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return _completed(0, stdout="{}")
+
+    monkeypatch.setattr("epub_checker.runner.subprocess.run", fake_run)
+
+    run_epubcheck(tmp_path / "book.epub", cfg)
+
+    assert "edupub" in captured["cmd"]
+    assert "mo" in captured["cmd"]
 ```
 
-- [ ] **Step 3.1.1: 写失败测试**
+- [ ] **Step 4.1.1: 写失败测试**
 
-追加到 `tests/test_epub_checker.py`。
+写入 `epub_checker/tests/test_runner.py`。
 
-- [ ] **Step 3.1.2: 跑测试确认失败**
+- [ ] **Step 4.1.2: 跑测试确认失败**
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: FAIL with `ImportError: cannot import name 'run_epubcheck'`
+Run: `pytest epub_checker/tests/test_runner.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker.runner'`
 
-### 3.2 实现 run_epubcheck
+### 4.2 实现 runner
 
 **Files:**
-- Modify: `epub_checker.py`
-
-在区块 3 后追加区块 4：
+- Create: `epub_checker/runner.py`
 
 ```python
-# ============================================================
-# 区块 4：进程运行
-# ============================================================
+"""subprocess 封装。"""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from .config import Config
+from .discovery import _resolve_epubcheck_cmd
+
 
 def run_epubcheck(
     epub_path: Path,
@@ -577,36 +763,34 @@ def run_epubcheck(
     return proc.returncode, proc.stdout
 ```
 
-- [ ] **Step 3.2.1: 实现区块 4**
+- [ ] **Step 4.2.1: 实现 `runner.py`**
 
-追加到 `epub_checker.py`。
+- [ ] **Step 4.2.2: 跑测试确认通过**
 
-- [ ] **Step 3.2.2: 跑测试确认通过**
+Run: `pytest epub_checker/tests/test_runner.py -v`
+Expected: PASS（4 个测试全绿）
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: PASS（14 个测试全绿）
-
-- [ ] **Step 3.2.3: 提交**
+- [ ] **Step 4.2.3: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add epub_checker.py tests/test_epub_checker.py
+git add epub_checker/
 git commit -m "feat(epub-checker): subprocess 调用 EPUBCheck"
 ```
 
 ---
 
-## Task 4: JSON 解析
+## Task 5: JSON 解析（parser.py）
 
 **Files:**
-- Create: `tests/fixtures/epubcheck_sample.json`
-- Modify: `epub_checker.py`（新增区块 5）
-- Modify: `tests/test_epub_checker.py`
+- Create: `epub_checker/parser.py`
+- Create: `epub_checker/tests/fixtures/epubcheck_sample.json`
+- Create: `epub_checker/tests/test_parser.py`
 
-### 4.1 创建 EPUBCheck JSON 样本
+### 5.1 创建 EPUBCheck JSON 样本
 
 **Files:**
-- Create: `tests/fixtures/epubcheck_sample.json`
+- Create: `epub_checker/tests/fixtures/epubcheck_sample.json`
 
 ```json
 {
@@ -657,19 +841,20 @@ git commit -m "feat(epub-checker): subprocess 调用 EPUBCheck"
 }
 ```
 
-- [ ] **Step 4.1.1: 写入样本**
+- [ ] **Step 5.1.1: 写入样本**
 
-把上面的 JSON 写入 `tests/fixtures/epubcheck_sample.json`。
-
-### 4.2 写失败测试
+### 5.2 写失败测试
 
 **Files:**
-- Modify: `tests/test_epub_checker.py`
-
-在末尾追加：
+- Create: `epub_checker/tests/test_parser.py`
 
 ```python
-from epub_checker import parse_epubcheck_output
+"""JSON 解析单元测试。"""
+import json
+from pathlib import Path
+
+from epub_checker.models import Severity
+from epub_checker.parser import parse_epubcheck_output
 
 
 def test_parse_real_sample(tmp_path):
@@ -693,7 +878,7 @@ def test_parse_real_sample(tmp_path):
     # 字段映射
     opf018 = by_sev[Severity.ERROR][0]
     assert opf018.rule_id == "OPF-018"
-    assert "OPF" in opf018.message or "manifest" in opf018.message
+    assert "manifest" in opf018.message
     assert "OEBPS/package.opf" in opf018.location
     assert "@42" in opf018.location
     assert opf018.suggestion is not None
@@ -721,7 +906,7 @@ def test_parse_invalid_json_keeps_raw_output(tmp_path):
     result = parse_epubcheck_output(garbage, tmp_path / "b.epub")
     assert result.issues == []
     assert result.raw_output == garbage
-    assert result.passed is True  # 没有 issues 时算通过
+    assert result.passed is True
 
 
 def test_parse_missing_fields_use_defaults(tmp_path):
@@ -740,28 +925,41 @@ def test_parse_missing_fields_use_defaults(tmp_path):
     assert issue.location == ""
     assert issue.rule_id is None
     assert issue.suggestion is None
+
+
+def test_parse_unknown_severity_falls_back_to_usage(tmp_path):
+    text = json.dumps({
+        "epubVersion": "3.3", "checkerVersion": "5.0.0",
+        "messages": [{"severity": "BOGUS", "message": "x"}]
+    })
+    result = parse_epubcheck_output(text, tmp_path / "b.epub")
+    assert result.issues[0].severity == Severity.USAGE
+    assert result.counts["USAGE"] == 1
 ```
 
-- [ ] **Step 4.2.1: 写失败测试**
+- [ ] **Step 5.2.1: 写失败测试**
 
-追加到 `tests/test_epub_checker.py`。
+写入 `epub_checker/tests/test_parser.py`。
 
-- [ ] **Step 4.2.2: 跑测试确认失败**
+- [ ] **Step 5.2.2: 跑测试确认失败**
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: FAIL with `ImportError: cannot import name 'parse_epubcheck_output'`
+Run: `pytest epub_checker/tests/test_parser.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker.parser'`
 
-### 4.3 实现 parse_epubcheck_output
+### 5.3 实现 parser
 
 **Files:**
-- Modify: `epub_checker.py`
-
-在区块 4 后追加区块 5：
+- Create: `epub_checker/parser.py`
 
 ```python
-# ============================================================
-# 区块 5：JSON 解析
-# ============================================================
+"""EPUBCheck JSON 输出解析。"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from .models import CheckResult, Issue, Severity
+
 
 def parse_epubcheck_output(json_text: str, epub_path: Path) -> CheckResult:
     """把 EPUBCheck 的 --json 输出扁平化为 CheckResult。
@@ -770,7 +968,7 @@ def parse_epubcheck_output(json_text: str, epub_path: Path) -> CheckResult:
     - JSON 损坏 → 返回空结果 + 保留原文到 raw_output
     - locations 嵌套结构 → 扁平为 "path@line"
     - 缺失字段（rule_id, suggestion, locations）→ 用 None/空字符串
-    - 缺失 severity → 默认为 USAGE
+    - 缺失或非法 severity → 默认为 USAGE
     """
     base_counts = {s.value: 0 for s in Severity}
 
@@ -799,7 +997,6 @@ def parse_epubcheck_output(json_text: str, epub_path: Path) -> CheckResult:
         locs = m.get("locations") or {}
         location = ""
         if locs:
-            # 取第一组 context 的第一个位置
             first_list = next(iter(locs.values()), []) or []
             if first_list:
                 first_loc = first_list[0] or {}
@@ -830,45 +1027,47 @@ def parse_epubcheck_output(json_text: str, epub_path: Path) -> CheckResult:
     )
 ```
 
-- [ ] **Step 4.3.1: 实现区块 5**
+- [ ] **Step 5.3.1: 实现 `parser.py`**
 
-追加到 `epub_checker.py`。
+- [ ] **Step 5.3.2: 跑测试确认通过**
 
-- [ ] **Step 4.3.2: 跑测试确认通过**
+Run: `pytest epub_checker/tests/test_parser.py -v`
+Expected: PASS（5 个测试全绿）
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: PASS（18 个测试全绿）
-
-- [ ] **Step 4.3.3: 提交**
+- [ ] **Step 5.3.3: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add epub_checker.py tests/test_epub_checker.py tests/fixtures/epubcheck_sample.json
+git add epub_checker/
 git commit -m "feat(epub-checker): EPUBCheck JSON 解析"
 ```
 
 ---
 
-## Task 5: 报告渲染（Rich + JSON + Markdown）
+## Task 6: 报告渲染（report.py）
 
 **Files:**
-- Modify: `epub_checker.py`（新增区块 6）
-- Modify: `tests/test_epub_checker.py`
+- Create: `epub_checker/report.py`
+- Create: `epub_checker/tests/test_report.py`
 
-### 5.1 写失败测试
+### 6.1 写失败测试
 
 **Files:**
-- Modify: `tests/test_epub_checker.py`
-
-在末尾追加：
+- Create: `epub_checker/tests/test_report.py`
 
 ```python
+"""报告渲染单元测试。"""
 import io
+import json
+from pathlib import Path
+
 from rich.console import Console
-from epub_checker import render_console, render_json, render_markdown, Severity, Issue, CheckResult
+
+from epub_checker.models import CheckResult, Issue, Severity
+from epub_checker.report import render_console, render_json, render_markdown
 
 
-def _make_sample_result(tmp_path: Path, passed: bool = True) -> CheckResult:
+def _sample_result(tmp_path: Path, passed: bool = True) -> CheckResult:
     issues = [
         Issue(severity=Severity.ERROR, message="OPF problem", location="OEBPS/package.opf@42",
               rule_id="OPF-018", suggestion="Add manifest item"),
@@ -887,7 +1086,7 @@ def _make_sample_result(tmp_path: Path, passed: bool = True) -> CheckResult:
 
 
 def test_render_json_is_parseable(tmp_path):
-    result = _make_sample_result(tmp_path, passed=False)
+    result = _sample_result(tmp_path, passed=False)
     out = render_json(result)
     data = json.loads(out)
     assert data["epub_version"] == "3.3"
@@ -901,7 +1100,7 @@ def test_render_json_is_parseable(tmp_path):
 
 
 def test_render_markdown_contains_key_sections(tmp_path):
-    result = _make_sample_result(tmp_path, passed=False)
+    result = _sample_result(tmp_path, passed=False)
     md = render_markdown(result, strict=False)
     assert "# EPUB Quality Report" in md
     assert "EPUB 3.3" in md
@@ -915,14 +1114,14 @@ def test_render_markdown_contains_key_sections(tmp_path):
 
 
 def test_render_markdown_pass_banner(tmp_path):
-    result = _make_sample_result(tmp_path, passed=True)
+    result = _sample_result(tmp_path, passed=True)
     md = render_markdown(result, strict=False)
     assert "PASS" in md
     assert "FAIL" not in md
 
 
 def test_render_markdown_strict_warning(tmp_path):
-    """--strict 模式下，仅 WARNING 也算不通过"""
+    """--strict 模式下仅 WARNING 也算不通过"""
     result = CheckResult(
         epub_path=tmp_path / "book.epub",
         epub_version="3.3",
@@ -937,7 +1136,7 @@ def test_render_markdown_strict_warning(tmp_path):
 
 
 def test_render_console_contains_status(tmp_path):
-    result = _make_sample_result(tmp_path, passed=False)
+    result = _sample_result(tmp_path, passed=False)
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, width=120)
     render_console(result, strict=False, console=console)
@@ -946,33 +1145,42 @@ def test_render_console_contains_status(tmp_path):
     assert "ERROR" in output
     assert "WARNING" in output
     assert "FAIL" in output
+
+
+def test_render_console_pass_shows_pass(tmp_path):
+    result = _sample_result(tmp_path, passed=True)
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=120)
+    render_console(result, strict=False, console=console)
+    output = buf.getvalue()
+    assert "PASS" in output
 ```
 
-- [ ] **Step 5.1.1: 写失败测试**
+- [ ] **Step 6.1.1: 写失败测试**
 
-追加到 `tests/test_epub_checker.py`。
+写入 `epub_checker/tests/test_report.py`。
 
-- [ ] **Step 5.1.2: 跑测试确认失败**
+- [ ] **Step 6.1.2: 跑测试确认失败**
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: FAIL with `ImportError: cannot import name 'render_console'`
+Run: `pytest epub_checker/tests/test_report.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker.report'`
 
-### 5.2 实现渲染器
+### 6.2 实现 report
 
 **Files:**
-- Modify: `epub_checker.py`
-
-在区块 5 后追加区块 6：
+- Create: `epub_checker/report.py`
 
 ```python
-# ============================================================
-# 区块 6：报告渲染
-# ============================================================
+"""报告渲染：Rich 控制台 + JSON + Markdown。"""
+from __future__ import annotations
+
+import json
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
+
+from .models import CheckResult, Severity
 
 
 _SEV_STYLE: dict[Severity, str] = {
@@ -1004,7 +1212,6 @@ def render_console(
 
     ok = _passed_strict(result, strict)
 
-    # Header panel
     header = (
         f"Book:     {result.epub_path}\n"
         f"Version:  EPUB {result.epub_version}\n"
@@ -1013,7 +1220,6 @@ def render_console(
     )
     console.print(Panel(header, title="EPUB Quality Check", border_style="cyan"))
 
-    # Counts table
     counts_table = Table(title="Issues by Severity", show_header=True)
     counts_table.add_column("Severity", style="bold")
     counts_table.add_column("Count", justify="right")
@@ -1023,7 +1229,6 @@ def render_console(
         counts_table.add_row(f"[{style}]{sev.value}[/{style}]", str(n))
     console.print(counts_table)
 
-    # Banner
     if ok:
         console.print("[bold green]PASS[/bold green]")
     else:
@@ -1034,7 +1239,6 @@ def render_console(
         )
         console.print(f"[bold red]FAIL[/bold red] — {summary}")
 
-    # Top issues (前 20 条，避免洪水)
     if result.issues:
         console.print()
         console.print("[bold]Top issues:[/bold]")
@@ -1099,89 +1303,89 @@ def render_markdown(result: CheckResult, strict: bool) -> str:
     return "\n".join(lines) + "\n"
 ```
 
-- [ ] **Step 5.2.1: 实现区块 6**
+- [ ] **Step 6.2.1: 实现 `report.py`**
 
-追加到 `epub_checker.py`。
+- [ ] **Step 6.2.2: 跑测试确认通过**
 
-- [ ] **Step 5.2.2: 跑测试确认通过**
+Run: `pytest epub_checker/tests/test_report.py -v`
+Expected: PASS（6 个测试全绿）
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: PASS（23 个测试全绿）
-
-- [ ] **Step 5.2.3: 提交**
+- [ ] **Step 6.2.3: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add epub_checker.py tests/test_epub_checker.py
+git add epub_checker/
 git commit -m "feat(epub-checker): Rich/JSON/Markdown 三种报告渲染"
 ```
 
 ---
 
-## Task 6: Typer CLI（check / version 命令）
+## Task 7: Typer CLI（main.py）
 
 **Files:**
-- Modify: `epub_checker.py`（新增区块 7）
-- Modify: `tests/test_epub_checker.py`
+- Create: `epub_checker/main.py`
+- Create: `epub_checker/tests/test_cli.py`
 
-### 6.1 写失败测试
+### 7.1 写失败测试
 
 **Files:**
-- Modify: `tests/test_epub_checker.py`
-
-在末尾追加：
+- Create: `epub_checker/tests/test_cli.py`
 
 ```python
-import subprocess
+"""CLI 单元测试。所有 epubcheck 调用通过 monkeypatch mock。"""
+import json
+from pathlib import Path
+
+import pytest
 from typer.testing import CliRunner
-from epub_checker import app
+
+from epub_checker.config import Config
+from epub_checker.discovery import EpubCheckNotFound
+from epub_checker.main import app
 
 
 runner = CliRunner()
 
 
-def _stub_epubcheck(monkeypatch, json_path: Path, returncode: int = 0):
-    """让 run_epubcheck 返回样本 JSON 的内容。"""
+def _stub_run(monkeypatch, json_text: str, returncode: int = 0):
+    """让 runner.run_epubcheck 返回指定 JSON。"""
     def fake_run(epub_path, config, *, profile=None, mode=None):
-        return returncode, json_path.read_text(encoding="utf-8")
-    monkeypatch.setattr("epub_checker.run_epubcheck", fake_run)
+        return returncode, json_text
+    monkeypatch.setattr("epub_checker.main.run_epubcheck", fake_run)
+
+
+def _stub_resolve_ok(monkeypatch):
+    monkeypatch.setattr("epub_checker.main._resolve_epubcheck_cmd", lambda c: ["ec"])
 
 
 def test_cli_check_pass_exits_0(tmp_path, monkeypatch):
-    sample = Path(__file__).parent / "fixtures" / "epubcheck_sample.json"
-    # 用一份无错版本
-    clean = json.dumps({"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []})
-    clean_path = tmp_path / "clean.json"
-    clean_path.write_text(clean, encoding="utf-8")
-    _stub_epubcheck(monkeypatch, clean_path, returncode=0)
-
+    _stub_resolve_ok(monkeypatch)
+    _stub_run(monkeypatch, json.dumps(
+        {"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []}
+    ))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
     result = runner.invoke(app, ["check", str(book)])
     assert result.exit_code == 0
 
 
-def test_cli_check_error_exits_2(tmp_path, monkeypatch):
+def test_cli_check_fatal_exits_3(tmp_path, monkeypatch):
+    _stub_resolve_ok(monkeypatch)
     sample = Path(__file__).parent / "fixtures" / "epubcheck_sample.json"
-    _stub_epubcheck(monkeypatch, sample, returncode=1)
-
+    _stub_run(monkeypatch, sample.read_text(encoding="utf-8"), returncode=1)
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
     result = runner.invoke(app, ["check", str(book)])
-    # sample 里有 1 FATAL + 2 ERROR，取最大 = 3
+    # sample 含 1 FATAL + 2 ERROR，取最大 = 3
     assert result.exit_code == 3
 
 
 def test_cli_check_warning_only_strict_exits_1(tmp_path, monkeypatch):
-    text = json.dumps({
-        "epubVersion": "3.3",
-        "checkerVersion": "5.0.0",
+    _stub_resolve_ok(monkeypatch)
+    _stub_run(monkeypatch, json.dumps({
+        "epubVersion": "3.3", "checkerVersion": "5.0.0",
         "messages": [{"severity": "WARNING", "message": "w", "locations": {}}],
-    })
-    p = tmp_path / "warn.json"
-    p.write_text(text, encoding="utf-8")
-    _stub_epubcheck(monkeypatch, p, returncode=0)
-
+    }))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
     result = runner.invoke(app, ["check", str(book), "--strict"])
@@ -1189,15 +1393,11 @@ def test_cli_check_warning_only_strict_exits_1(tmp_path, monkeypatch):
 
 
 def test_cli_check_warning_only_non_strict_exits_0(tmp_path, monkeypatch):
-    text = json.dumps({
-        "epubVersion": "3.3",
-        "checkerVersion": "5.0.0",
+    _stub_resolve_ok(monkeypatch)
+    _stub_run(monkeypatch, json.dumps({
+        "epubVersion": "3.3", "checkerVersion": "5.0.0",
         "messages": [{"severity": "WARNING", "message": "w", "locations": {}}],
-    })
-    p = tmp_path / "warn.json"
-    p.write_text(text, encoding="utf-8")
-    _stub_epubcheck(monkeypatch, p, returncode=0)
-
+    }))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
     result = runner.invoke(app, ["check", str(book)])
@@ -1205,30 +1405,24 @@ def test_cli_check_warning_only_non_strict_exits_0(tmp_path, monkeypatch):
 
 
 def test_cli_check_json_output(tmp_path, monkeypatch):
-    text = json.dumps({
+    _stub_resolve_ok(monkeypatch)
+    _stub_run(monkeypatch, json.dumps({
         "epubVersion": "3.3", "checkerVersion": "5.0.0",
         "messages": [{"severity": "WARNING", "message": "w", "locations": {}}],
-    })
-    p = tmp_path / "warn.json"
-    p.write_text(text, encoding="utf-8")
-    _stub_epubcheck(monkeypatch, p, returncode=0)
-
+    }))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
     result = runner.invoke(app, ["check", str(book), "--json"])
-    # 退出码 0
     assert result.exit_code == 0
-    # stdout 是 JSON，可被解析
     data = json.loads(result.stdout)
     assert data["epub_version"] == "3.3"
 
 
 def test_cli_check_md_output_writes_file(tmp_path, monkeypatch):
-    text = json.dumps({"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []})
-    p = tmp_path / "ok.json"
-    p.write_text(text, encoding="utf-8")
-    _stub_epubcheck(monkeypatch, p, returncode=0)
-
+    _stub_resolve_ok(monkeypatch)
+    _stub_run(monkeypatch, json.dumps(
+        {"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []}
+    ))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
     out = tmp_path / "report.md"
@@ -1238,21 +1432,27 @@ def test_cli_check_md_output_writes_file(tmp_path, monkeypatch):
     assert "EPUB Quality Report" in out.read_text(encoding="utf-8")
 
 
-def test_cli_check_nonexistent_file(tmp_path):
+def test_cli_check_nonexistent_file(tmp_path, monkeypatch):
+    _stub_resolve_ok(monkeypatch)
     result = runner.invoke(app, ["check", str(tmp_path / "nope.epub")])
-    # Typer BadParameter → exit 4
+    assert result.exit_code == 4
+
+
+def test_cli_check_epubcheck_not_found(tmp_path, monkeypatch):
+    monkeypatch.setattr("epub_checker.main._resolve_epubcheck_cmd",
+                        lambda c: (_ for _ in ()).throw(EpubCheckNotFound("missing")))
+    book = tmp_path / "book.epub"
+    book.write_bytes(b"PK\x03\x04")
+    result = runner.invoke(app, ["check", str(book)])
     assert result.exit_code == 4
 
 
 def test_cli_check_directory_batch(tmp_path, monkeypatch):
     """目录扫描 *.epub，任一失败即整批失败"""
-    # 准备 2 个 epub
-    b1 = tmp_path / "a.epub"
-    b2 = tmp_path / "b.epub"
-    b1.write_bytes(b"PK\x03\x04")
-    b2.write_bytes(b"PK\x03\x04")
+    _stub_resolve_ok(monkeypatch)
+    (tmp_path / "a.epub").write_bytes(b"PK\x03\x04")
+    (tmp_path / "b.epub").write_bytes(b"PK\x03\x04")
 
-    # 第一次调用返回 OK，第二次返回 ERROR
     responses = [
         (0, json.dumps({"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []})),
         (1, json.dumps({
@@ -1264,49 +1464,61 @@ def test_cli_check_directory_batch(tmp_path, monkeypatch):
     def fake_run(epub_path, config, *, profile=None, mode=None):
         return responses.pop(0)
 
-    monkeypatch.setattr("epub_checker.run_epubcheck", fake_run)
+    monkeypatch.setattr("epub_checker.main.run_epubcheck", fake_run)
 
     result = runner.invoke(app, ["check", str(tmp_path)])
-    # 第二个文件失败 → 退出码 2（ERROR）
+    # 第二个文件 ERROR → 退出码 2
     assert result.exit_code == 2
 
 
-def test_cli_check_epubcheck_not_found(tmp_path, monkeypatch):
-    book = tmp_path / "book.epub"
-    book.write_bytes(b"PK\x03\x04")
+def test_cli_version_prints_something(tmp_path, monkeypatch):
+    def fake_resolve(c):
+        return ["fake-epubcheck"]
+    monkeypatch.setattr("epub_checker.main._resolve_epubcheck_cmd", fake_resolve)
 
-    def fake_resolve(config):
-        raise EpubCheckNotFound("missing")
+    import subprocess
+    def fake_subprocess_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="EPUBCheck v5.0.0", stderr="")
 
-    monkeypatch.setattr("epub_checker._resolve_epubcheck_cmd", fake_resolve)
+    monkeypatch.setattr("epub_checker.main.subprocess.run", fake_subprocess_run)
 
-    result = runner.invoke(app, ["check", str(book)])
-    assert result.exit_code == 4
-    assert "epubcheck" in result.stdout.lower() or "epubcheck" in (result.stderr or "").lower()
+    # 让 Config.from_yaml 指向空路径，避免读真实 config.yaml
+    monkeypatch.setattr("epub_checker.main.Config.from_yaml",
+                        classmethod(lambda cls, p: Config()))
+
+    result = runner.invoke(app, ["version"])
+    assert "epub-checker" in result.stdout.lower() or "epubcheck" in result.stdout.lower()
 ```
 
-- [ ] **Step 6.1.1: 写失败测试**
+- [ ] **Step 7.1.1: 写失败测试**
 
-追加到 `tests/test_epub_checker.py`。
+写入 `epub_checker/tests/test_cli.py`。
 
-- [ ] **Step 6.1.2: 跑测试确认失败**
+- [ ] **Step 7.1.2: 跑测试确认失败**
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: FAIL with `ImportError: cannot import name 'app'`
+Run: `pytest epub_checker/tests/test_cli.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'epub_checker.main'`
 
-### 6.2 实现 CLI
+### 7.2 实现 main
 
 **Files:**
-- Modify: `epub_checker.py`
-
-在区块 6 后追加区块 7：
+- Create: `epub_checker/main.py`
 
 ```python
-# ============================================================
-# 区块 7：Typer CLI
-# ============================================================
+"""Typer CLI 入口。"""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
 
 import typer
+
+from . import __version__
+from .config import Config
+from .discovery import EpubCheckNotFound, _resolve_epubcheck_cmd
+from .parser import parse_epubcheck_output
+from .report import render_console, render_json, render_markdown
+from .runner import run_epubcheck
 
 
 app = typer.Typer(
@@ -1316,13 +1528,19 @@ app = typer.Typer(
 )
 
 
-def _compute_exit_code(result: CheckResult, strict: bool) -> int:
-    """根据检查结果和 --strict 决定退出码。"""
-    if result.counts.get("FATAL", 0) > 0:
+EXIT_OK = 0
+EXIT_WARNING_STRICT = 1
+EXIT_ERROR = 2
+EXIT_FATAL = 3
+EXIT_TOOL_ERROR = 4
+
+
+def _compute_exit_code(counts: dict[str, int], strict: bool) -> int:
+    if counts.get("FATAL", 0) > 0:
         return EXIT_FATAL
-    if result.counts.get("ERROR", 0) > 0:
+    if counts.get("ERROR", 0) > 0:
         return EXIT_ERROR
-    if strict and result.counts.get("WARNING", 0) > 0:
+    if strict and counts.get("WARNING", 0) > 0:
         return EXIT_WARNING_STRICT
     return EXIT_OK
 
@@ -1342,16 +1560,16 @@ def _check_single(
     result = parse_epubcheck_output(stdout, epub_path)
 
     if as_json:
-        print(render_json(result))
+        typer.echo(render_json(result))
     else:
         render_console(result, strict)
 
     if md_path:
         md_path.write_text(render_markdown(result, strict), encoding="utf-8")
         if not as_json:
-            print(f"Markdown report: {md_path}")
+            typer.echo(f"Markdown report: {md_path}")
 
-    return _compute_exit_code(result, strict)
+    return _compute_exit_code(result.counts, strict)
 
 
 @app.command()
@@ -1379,7 +1597,6 @@ def check(
         typer.echo(str(e), err=True)
         raise typer.Exit(EXIT_TOOL_ERROR)
 
-    # 目录批量
     if path.is_dir():
         epub_files = sorted(path.glob("*.epub"))
         if not epub_files:
@@ -1396,7 +1613,6 @@ def check(
             worst = max(worst, rc)
         raise typer.Exit(worst)
 
-    # 单文件
     rc = _check_single(
         path, config,
         profile=profile, mode=mode,
@@ -1408,8 +1624,7 @@ def check(
 @app.command()
 def version() -> None:
     """打印工具版本和底层 EPUBCheck 版本。"""
-    import epub_checker
-    typer.echo(f"epub-checker: {getattr(epub_checker, '__version__', '0.1.0')}")
+    typer.echo(f"epub-checker: {__version__}")
     try:
         config = Config.from_yaml(Path("config.yaml"))
         cmd = _resolve_epubcheck_cmd(config)
@@ -1422,51 +1637,50 @@ def version() -> None:
         typer.echo(f"EPUBCheck 不可用: {e}", err=True)
 
 
-__version__ = "0.1.0"
-
-
 if __name__ == "__main__":
     app()
 ```
 
-- [ ] **Step 6.2.1: 实现区块 7**
+- [ ] **Step 7.2.1: 实现 `main.py`**
 
-追加到 `epub_checker.py`。
+- [ ] **Step 7.2.2: 跑测试确认通过**
 
-- [ ] **Step 6.2.2: 跑测试确认通过**
+Run: `pytest epub_checker/tests/test_cli.py -v`
+Expected: PASS（10 个测试全绿）
 
-Run: `pytest tests/test_epub_checker.py -v`
-Expected: PASS（32 个测试全绿）
-
-- [ ] **Step 6.2.3: 提交**
+- [ ] **Step 7.2.3: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add epub_checker.py tests/test_epub_checker.py
+git add epub_checker/
 git commit -m "feat(epub-checker): Typer CLI（check/version，4 档退出码）"
 ```
 
 ---
 
-## Task 7: 端到端冒烟（真实 epubcheck 集成，仅在已装环境跑）
+## Task 8: 端到端冒烟（E2E，默认跳过）
 
 **Files:**
-- Create: `tests/test_epub_checker_e2e.py`
+- Create: `epub_checker/tests/test_e2e.py`
 
-### 7.1 真实 epubcheck 集成测试
+### 8.1 E2E 集成测试
 
 **Files:**
-- Create: `tests/test_epub_checker_e2e.py`
+- Create: `epub_checker/tests/test_e2e.py`
 
 ```python
 """端到端集成测试——需要本机已装 epubcheck 与 Java。
 通过环境变量 SKIP_EPUBCHECK_E2E=1 可跳过。"""
 import os
 import shutil
-import subprocess
-from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
+
+from epub_checker.main import app
+
+
+runner = CliRunner()
 
 
 pytestmark = pytest.mark.skipif(
@@ -1475,91 +1689,75 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_real_epubcheck_call(tmp_path):
-    """最小冒烟：随便一个空 zip 当 epub（epubcheck 会报 FATAL，但至少能跑通）"""
-    from epub_checker import Config, run_epubcheck, parse_epubcheck_output
-
-    fake = tmp_path / "fake.epub"
-    fake.write_bytes(b"")  # 空文件
-
-    cfg = Config()
-    rc, stdout = run_epubcheck(fake, cfg, profile="default", mode="exp")
-
-    assert rc != 0  # 空文件肯定不合法
-    assert stdout.strip()  # 应该有 JSON 输出
-    result = parse_epubcheck_output(stdout, fake)
-    assert result.counts.get("FATAL", 0) >= 1
-
-
-def test_real_epubcheck_cli_help():
+def test_real_cli_help():
     """CLI 帮助文本可访问"""
-    from typer.testing import CliRunner
-    from epub_checker import app
-
-    runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "check" in result.stdout
 
 
-def test_real_epubcheck_version_cmd():
-    """version 命令在装好 epubcheck 时打印版本"""
-    from typer.testing import CliRunner
-    from epub_checker import app
+def test_real_check_empty_file(tmp_path):
+    """最小冒烟：空文件当 epub（epubcheck 应报 FATAL）"""
+    fake = tmp_path / "fake.epub"
+    fake.write_bytes(b"")
+    result = runner.invoke(app, ["check", str(fake)])
+    # 空文件不合法
+    assert result.exit_code != 0
+    assert result.exit_code in (2, 3)  # ERROR or FATAL
 
-    runner = CliRunner()
+
+def test_real_version_cmd():
+    """version 命令在装好 epubcheck 时打印版本"""
     result = runner.invoke(app, ["version"])
-    # 不强求 exit 0，只要求有输出
-    assert "epubcheck" in result.stdout.lower() or "epub-checker" in result.stdout.lower()
+    assert "epub-checker" in result.stdout.lower() or "epubcheck" in result.stdout.lower()
 ```
 
-- [ ] **Step 7.1.1: 写入 E2E 测试**
+- [ ] **Step 8.1.1: 写入 E2E 测试**
 
-把上面的代码写入 `tests/test_epub_checker_e2e.py`。
+- [ ] **Step 8.1.2: 跑 E2E（默认跳过）**
 
-- [ ] **Step 7.1.2: 跑 E2E 测试**
-
-Run: `SKIP_EPUBCHECK_E2E=1 pytest tests/test_epub_checker_e2e.py -v`
-Expected: SKIPPED（默认跳过）
+Run: `SKIP_EPUBCHECK_E2E=1 pytest epub_checker/tests/test_e2e.py -v`
+Expected: SKIPPED
 
 如果有 epubcheck：
-Run: `pytest tests/test_epub_checker_e2e.py -v`
+Run: `pytest epub_checker/tests/test_e2e.py -v`
 Expected: PASS（3 个测试）
 
-- [ ] **Step 7.1.3: 提交**
+- [ ] **Step 8.1.3: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add tests/test_epub_checker_e2e.py
-git commit -m "test(epub-checker): 端到端集成测试（默认跳过，需要本机 epubcheck）"
+git add epub_checker/tests/test_e2e.py
+git commit -m "test(epub-checker): 端到端集成测试（默认跳过）"
 ```
 
 ---
 
-## Task 8: 用户文档
+## Task 9: 用户文档（README.md）
 
 **Files:**
-- Create: `docs/epub_checker.md`
+- Create: `epub_checker/README.md`
 
-### 8.1 写文档
+### 9.1 写文档
 
 **Files:**
-- Create: `docs/epub_checker.md`
+- Create: `epub_checker/README.md`
 
 ```markdown
 # EPUB 质量检查工具
 
-一个独立的 CLI 工具，验证 EPUB 文件是否符合 **EPUB 3.3** 出版社标准。
+一个独立子项目，验证 EPUB 文件是否符合 **EPUB 3.3** 出版社标准。
 基于 W3C 官方 [EPUBCheck](https://github.com/w3c/epubcheck)（Java）。
 
 ## 特性
 
-- 单文件脚本，零 Python 依赖（只复用项目已有的 `typer` / `rich` / `pyyaml`）
+- 自包含子项目，类似 `ebook_translator/`
 - 三种报告：Rich 控制台表格、JSON、Markdown
 - 4 档退出码，支持 CI 集成
 - 不依赖 `automation/` 流水线，可独立运行
+- 仅依赖项目已有的 `typer` / `rich` / `pyyaml`
 
-## 安装
+## 安装前置
 
 工具依赖外部二进制 `epubcheck`，需要先装 **Java 11+**：
 
@@ -1578,27 +1776,29 @@ epubcheck --version
 
 ## 快速开始
 
+从项目根目录：
+
 ```bash
 # 基本检查
-python epub_checker.py check book.epub
+python -m epub_checker.main check book.epub
 
 # 输出 JSON（适合 CI 集成）
-python epub_checker.py check book.epub --json
+python -m epub_checker.main check book.epub --json
 
 # 额外写 Markdown 报告
-python epub_checker.py check book.epub --md report.md
+python -m epub_checker.main check book.epub --md report.md
 
 # 严格模式（WARNING 也算不通过）
-python epub_checker.py check book.epub --strict
+python -m epub_checker.main check book.epub --strict
 
 # 批量检查目录下所有 *.epub
-python epub_checker.py check ./epubs/
+python -m epub_checker.main check ./epubs/
 
 # 用字典 profile 校验
-python epub_checker.py check book.epub --profile dict
+python -m epub_checker.main check book.epub --profile dict
 
 # 查看 epubcheck 版本
-python epub_checker.py version
+python -m epub_checker.main version
 ```
 
 ## 退出码
@@ -1628,79 +1828,103 @@ epub_checker:
 
 | 错误信息 | 原因 | 解决 |
 |---|---|---|
-| `找不到 epubcheck 可执行文件` | PATH 中没有 epubcheck | 见上文"安装" |
+| `找不到 epubcheck 可执行文件` | PATH 中没有 epubcheck | 见上文"安装前置" |
 | `java: command not found` | JDK/JRE 没装 | 装 Java 11+ |
 | `subprocess.TimeoutExpired` | 单文件检查超时 | 调大 `timeout_seconds` |
 | 报告里 `epub_version: ?` | epubcheck 输出无法解析为 JSON | 重试；如仍失败附 stderr 给开发者 |
 
-## 与现有流水线的关系
+## 与现有项目的关系
 
 - **不** 与 `automation/` 流水线集成
 - **不** 写数据库
 - **不** 与 `automation/quality_checker.py`（翻译质量检查）混淆——本工具只做文件级 EPUB 合规检查
 
+## 模块结构
+
+```
+epub_checker/
+├── __init__.py          # __version__
+├── main.py              # Typer CLI
+├── config.py            # Config dataclass + from_yaml
+├── models.py            # Severity, Issue, CheckResult
+├── discovery.py         # 定位 epubcheck 可执行文件
+├── runner.py            # subprocess 调用
+├── parser.py            # EPUBCheck JSON 解析
+├── report.py            # Rich / JSON / Markdown 渲染
+└── tests/               # 单元测试 + E2E
+```
+
 ## 开发与测试
 
 ```bash
 # 跑所有单元测试（不需要 epubcheck 二进制）
-pytest tests/test_epub_checker.py -v
+pytest epub_checker/tests/ -v --ignore=epub_checker/tests/test_e2e.py
 
 # 跑端到端测试（需要本机 epubcheck）
-pytest tests/test_epub_checker_e2e.py -v
+pytest epub_checker/tests/test_e2e.py -v
 
 # 跳过 E2E
-SKIP_EPUBCHECK_E2E=1 pytest tests/ -v
+SKIP_EPUBCHECK_E2E=1 pytest epub_checker/tests/ -v
 ```
 ```
 
-- [ ] **Step 8.1.1: 写文档**
+- [ ] **Step 9.1.1: 写 README**
 
-把上面的内容写入 `docs/epub_checker.md`。
-
-- [ ] **Step 8.1.2: 提交**
+- [ ] **Step 9.1.2: 提交**
 
 ```bash
 cd D:/project/bookfile_bat
-git add docs/epub_checker.md
-git commit -m "docs: EPUB 质量检查工具用户文档"
+git add epub_checker/README.md
+git commit -m "docs(epub-checker): 用户文档（README.md）"
 ```
 
 ---
 
-## Task 9: 整体验收
+## Task 10: 整体验收
 
-- [ ] **Step 9.1: 跑全部测试**
+- [ ] **Step 10.1: 跑全部单元测试**
 
-Run: `SKIP_EPUBCHECK_E2E=1 pytest tests/test_epub_checker.py -v`
-Expected: 32 个测试全绿
+Run: `SKIP_EPUBCHECK_E2E=1 pytest epub_checker/tests/ -v --ignore=epub_checker/tests/test_e2e.py`
+Expected: 38 个测试全绿（models 8 + config 5 + discovery 5 + runner 4 + parser 5 + report 6 + cli 10 = 43；个别可能略不同）
 
-- [ ] **Step 9.2: 手动冒烟**
+实际单元测试数：
+- test_models.py: 8
+- test_config.py: 5
+- test_discovery.py: 5
+- test_runner.py: 4
+- test_parser.py: 5
+- test_report.py: 6
+- test_cli.py: 10
+- **合计 43 个单元测试**
+
+- [ ] **Step 10.2: 手动冒烟**
 
 ```bash
 cd D:/project/bookfile_bat
-python -c "import epub_checker; print('导入成功')"
-python epub_checker.py --help
-python epub_checker.py version  # 若有 epubcheck
+python -c "from epub_checker import __version__; print('v', __version__)"
+python -m epub_checker.main --help
+python -m epub_checker.main check  # 不带参数看 usage
 ```
 
-Expected: 无报错，输出符合预期
+Expected: 无报错，模块导入成功
 
-- [ ] **Step 9.3: 检查文件结构**
+- [ ] **Step 10.3: 检查目录结构**
 
 ```bash
-ls -la epub_checker.py tests/test_epub_checker.py tests/test_epub_checker_e2e.py docs/epub_checker.md tests/fixtures/epubcheck_sample.json
+ls -la epub_checker/
+ls -la epub_checker/tests/
 ```
 
-Expected: 5 个文件全部存在
+Expected: 8 个模块 + tests 完整
 
-- [ ] **Step 9.4: 检查现有代码未受影响**
+- [ ] **Step 10.4: 检查现有代码未受影响**
 
 ```bash
 git status
 git diff --stat
 ```
 
-Expected: 仅有新增文件，无对现有文件的修改
+Expected: 仅有 epub_checker/ 目录新增，无对其他文件的修改
 
 ---
 
@@ -1710,24 +1934,24 @@ Expected: 仅有新增文件，无对现有文件的修改
 
 | Spec 章节 | 对应 Task |
 |---|---|
-| §3 决策：独立 CLI | Task 6 |
-| §3 决策：EPUB 3.3 严格 | 通过 EPUBCheck 调用实现（Task 3） |
-| §3 决策：调用外部 epubcheck | Task 2, 3 |
-| §3 决策：Rich + JSON + Markdown | Task 5 |
+| §3 决策：独立 CLI | Task 7 |
+| §3 决策：EPUB 3.3 严格 | 通过 EPUBCheck 调用实现（Task 4） |
+| §3 决策：调用外部 epubcheck | Task 3, 4 |
+| §3 决策：Rich + JSON + Markdown | Task 6 |
 | §3 决策：不要 PDF | 不实现（符合决策） |
-| §3 决策：FATAL/ERROR 退出非零 | Task 6 `_compute_exit_code` |
-| §3 决策：PATH + 配置覆盖 | Task 2 `_resolve_epubcheck_cmd` |
-| §3 决策：单文件脚本 | 全部 Task 在 `epub_checker.py` |
-| §5 内部结构 7 区块 | Task 1-6 每个对应一个区块 |
+| §3 决策：FATAL/ERROR 退出非零 | Task 7 `_compute_exit_code` |
+| §3 决策：PATH + 配置覆盖 | Task 3 `_resolve_epubcheck_cmd` + Task 2 `Config` |
+| §3 决策：子目录 + 多文件模块 | 全部 Task 在 `epub_checker/` 子目录 |
+| §5 内部结构 7 区块 → 7 文件 | Task 1-7 每个对应一个文件 |
 | §6 数据模型 | Task 1 |
-| §7 CLI | Task 6 |
-| §8 配置 | Task 1 `Config.from_yaml` |
-| §9 与 EPUBCheck 对接 | Task 3, 4 |
-| §10 报告渲染 | Task 5 |
-| §11 错误处理 | Task 2, 3, 6 |
-| §12 测试 | Task 1-7 全覆盖 |
-| §13 文档 | Task 8 |
-| §15 验收标准 | Task 9 |
+| §7 CLI | Task 7 |
+| §8 配置 | Task 2 |
+| §9 与 EPUBCheck 对接 | Task 4, 5 |
+| §10 报告渲染 | Task 6 |
+| §11 错误处理 | Task 3, 4, 7 |
+| §12 测试 | Task 1-8 全覆盖 |
+| §13 文档 | Task 9 |
+| §15 验收标准 | Task 10 |
 
 ### 2. 占位符扫描
 
@@ -1735,10 +1959,10 @@ Expected: 仅有新增文件，无对现有文件的修改
 
 ### 3. 类型一致性
 
-- `Severity` / `Issue` / `CheckResult` 在 Task 1 定义，Task 4-6 一致使用
-- `_resolve_epubcheck_cmd` 在 Task 2 定义，Task 3 引用，Task 6 引用
-- `run_epubcheck` 签名 `(Path, Config, *, profile=None, mode=None) → tuple[int, str]`，Task 3 定义，Task 4 stub 测试，Task 6 CLI 全部一致
-- `parse_epubcheck_output` 签名 `(str, Path) → CheckResult`，Task 4 定义，Task 5/6 一致
-- `Config.from_yaml` 签名 `(Path) → Config`，Task 1 定义，Task 6 引用
-- `_check_single` 在 Task 6 定义，Task 6 内部调用一致
-- `_compute_exit_code` 在 Task 6 定义，Task 6 内部 + 测试一致
+- `Severity` / `Issue` / `CheckResult` 在 Task 1 (models.py) 定义，Task 5/6/7 一致使用
+- `_resolve_epubcheck_cmd` 在 Task 3 (discovery.py) 定义，Task 4 (runner.py) 引用，Task 7 (main.py) 引用——通过 `from .discovery import _resolve_epubcheck_cmd` 跨模块引用
+- `run_epubcheck` 签名 `(Path, Config, *, profile=None, mode=None) → tuple[int, str]`，Task 4 (runner.py) 定义，Task 7 (main.py) 一致调用
+- `parse_epubcheck_output` 签名 `(str, Path) → CheckResult`，Task 5 (parser.py) 定义，Task 7 (main.py) 一致调用
+- `Config.from_yaml` 签名 `(Path) → Config`，Task 2 (config.py) 定义，Task 7 (main.py) 一致调用
+- `_compute_exit_code` 在 Task 7 (main.py) 定义，仅在该文件内使用
+- `EpubCheckNotFound` 在 Task 3 (discovery.py) 定义，Task 7 (main.py) 一致捕获
