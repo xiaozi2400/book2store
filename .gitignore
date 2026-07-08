@@ -33,6 +33,11 @@ pytest_cache/
 *.tmp
 *.temp
 
+# HTML 测试/调试产物(根目录各种 *.html)
+*.html
+!test_*/
+!test_*.py
+
 # File processing
 test*
 !test_*/
