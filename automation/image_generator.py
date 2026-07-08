@@ -292,8 +292,7 @@ class ImageGenerator:
         """从 palettes 池随机挑一套 + 打乱色序,返回 (name, palette_lines_text, colors_list, theme)。
 
         - 按 config 中 color_theme 过滤 palette
-        - 深色 palette:打乱 4 色在图 1/2/3/4 之间的分配
-        - 浅色 palette:不 shuffle,保持 bg + 3 强调色固定顺序
+        - 打乱 4 色在图 1/2/3/4 之间的分配
         - palette_lines_text:注入 design_prompt 供 AI 参考
         - colors_list:代码渲染时直接使用,不再依赖 AI 回写 HEX
         """
@@ -302,31 +301,21 @@ class ImageGenerator:
         theme = img_cfg.get("color_theme", "dark")
         default_colors = ["#1A365D", "#276749", "#553C9A", "#9B2C2C"]
 
-        # 按 theme 过滤
         candidates = [p for p in palettes if p.get("theme", "dark") == theme]
         if not candidates:
             candidates = palettes if palettes else [{"name": "经典深沉", "colors": default_colors}]
 
         chosen = random.choice(candidates)
         name = chosen.get("name", "未命名")
-
-        if theme == "light":
-            # 浅色 palette: bg + 3 强调色,不 shuffle
-            bg = chosen.get("bg", "#FAFAF9")
-            accents = chosen.get("accents", ["#C8C4BC", "#7A7670", "#3D3B38"])
-            colors = [bg] + accents  # 保持顺序不被打乱
-            # AI prompt 用 accent 色展示
-            lines = "\n      ".join(f"- 强调色{i+1}: {c}" for i, c in enumerate(accents))
+        colors = list(chosen.get("colors", []) or [])
+        if len(colors) < 4:
+            logger.warning(f"配色方案 {name} 少于 4 色,补齐经典色")
+            colors = (colors + default_colors)[:4]
         else:
-            colors = list(chosen.get("colors", []) or [])
-            if len(colors) < 4:
-                logger.warning(f"配色方案 {name} 少于 4 色,补齐经典色")
-                colors = (colors + default_colors)[:4]
-            else:
-                colors = colors[:4]
-            random.shuffle(colors)
-            lines = "\n      ".join(f"- 图{i+1}主色: {c}" for i, c in enumerate(colors))
+            colors = colors[:4]
 
+        random.shuffle(colors)
+        lines = "\n      ".join(f"- 图{i+1}主色: {c}" for i, c in enumerate(colors))
         return (name, lines, colors, theme)
 
     @staticmethod

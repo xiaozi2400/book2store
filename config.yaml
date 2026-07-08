@@ -373,31 +373,25 @@ image_generator:
       theme: dark
       colors: ["#3F3F46", "#701A75", "#134E4A", "#7C2D12"]  # 深灰 / 洋红 / 深松石 / 焦糖
     # ── 浅色系 ──
-    # bg: 统一近白背景色(不参与shuffle) / accents[0-2]: 3个强调色
+    # 每套4色均为浅色调,对应图1/2/3/4,打乱分配
     - name: 暖阳纸页
       theme: light
-      bg: "#FFFDF8"
-      accents: ["#E8D5B7", "#C4A882", "#8B6914"]
+      colors: ["#FAF0E6", "#F5E6D3", "#E8D5B7", "#C4A882"]  # 淡黄/米黄/奶黄/焦糖
     - name: 薄荷静谧
       theme: light
-      bg: "#F7FBF9"
-      accents: ["#A8C5B8", "#5B8A72", "#2D5A45"]
+      colors: ["#EDF5F1", "#D4EBE0", "#A8C5B8", "#5B8A72"]  # 薄荷白/浅绿/苔绿/深绿
     - name: 柔暮玫瑰
       theme: light
-      bg: "#FEF9FA"
-      accents: ["#DDBAC7", "#A85C7C", "#6B334D"]
+      colors: ["#FDF5F7", "#F0E0E8", "#DDBAC7", "#A85C7C"]  # 腮红白/浅玫/玫瑰/酒玫
     - name: 晴空蓝调
       theme: light
-      bg: "#F5F8FD"
-      accents: ["#9DB8E0", "#4A6FA5", "#2C4A7C"]
+      colors: ["#EEF3FB", "#D6E5F5", "#9DB8E0", "#4A6FA5"]  # 天蓝白/浅蓝/钴蓝/深蓝
     - name: 薰衣草田
       theme: light
-      bg: "#F9F7FC"
-      accents: ["#C9BCE0", "#8B6FAE", "#5A4070"]
+      colors: ["#F5F3F9", "#E8E0F5", "#C9BCE0", "#8B6FAE"]  # 薰衣草白/浅紫/紫藤/深紫
     - name: 水泥极简
       theme: light
-      bg: "#FAFAF9"
-      accents: ["#C8C4BC", "#7A7670", "#3D3B38"]
+      colors: ["#F5F5F3", "#E8E8E4", "#C8C4BC", "#7A7670"]  # 暖灰白/浅灰/中灰/深灰
   design_prompt: |
       为下列书籍规划 4 张 800x800 商品主图方案(PPT 高级感)。
       图 2/3/4 布局**固定**:图2=2x2网格,图3=标签展示,图4=双栏对比。
