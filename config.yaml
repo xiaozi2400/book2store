@@ -377,22 +377,22 @@ image_generator:
     # 背景色用于所有页面主背景;强调色用于标签/章节的底色
     - name: 暖阳纸页
       theme: light
-      colors: ["#FAF6F0", "#E8D5B7", "#C4A882", "#8B6914"]  # 暖白(背景) / 奶黄 / 焦糖 / 深金
+      colors: ["#FDFAF6", "#E8D5B7", "#C4A882", "#8B6914"]  # 暖白(背景) / 奶黄 / 焦糖 / 深金
     - name: 薄荷静谧
       theme: light
-      colors: ["#EDF5F1", "#A8C5B8", "#5B8A72", "#2D5A45"]  # 薄荷白(背景) / 浅绿 / 苔绿 / 深松
+      colors: ["#F4FAF7", "#A8C5B8", "#5B8A72", "#2D5A45"]  # 薄荷白(背景) / 浅绿 / 苔绿 / 深松
     - name: 柔暮玫瑰
       theme: light
-      colors: ["#FDF5F7", "#DDBAC7", "#A85C7C", "#6B334D"]  # 腮红白(背景) / 浅玫 / 酒玫 / 深玫
+      colors: ["#FEF9FA", "#DDBAC7", "#A85C7C", "#6B334D"]  # 腮红白(背景) / 浅玫 / 酒玫 / 深玫
     - name: 晴空蓝调
       theme: light
-      colors: ["#EEF3FB", "#9DB8E0", "#4A6FA5", "#2C4A7C"]  # 天蓝白(背景) / 浅蓝 / 钴蓝 / 深蓝
+      colors: ["#F5F8FD", "#9DB8E0", "#4A6FA5", "#2C4A7C"]  # 天蓝白(背景) / 浅蓝 / 钴蓝 / 深蓝
     - name: 薰衣草田
       theme: light
-      colors: ["#F5F3F9", "#C9BCE0", "#8B6FAE", "#5A4070"]  # 薰衣草白(背景) / 浅紫 / 紫藤 / 深紫
+      colors: ["#F9F7FC", "#C9BCE0", "#8B6FAE", "#5A4070"]  # 薰衣草白(背景) / 浅紫 / 紫藤 / 深紫
     - name: 水泥极简
       theme: light
-      colors: ["#F5F5F3", "#C8C4BC", "#7A7670", "#3D3B38"]  # 暖灰白(背景) / 浅灰 / 中灰 / 深灰
+      colors: ["#FAFAF9", "#C8C4BC", "#7A7670", "#3D3B38"]  # 暖灰白(背景) / 浅灰 / 中灰 / 深灰
   design_prompt: |
       为下列书籍规划 4 张 800x800 商品主图方案(PPT 高级感)。
       图 2/3/4 布局**固定**:图2=2x2网格,图3=标签展示,图4=双栏对比。
