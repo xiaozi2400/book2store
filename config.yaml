@@ -345,34 +345,64 @@ image_generator:
   screenshot_quality: 92
   # 配色方案池 — 每次生成随机选一套(每套 4 色对应图 1/2/3/4)
   # 每套 4 色为"深饱和度、气质相配、色相有区分",保证 4 张图各具风格且整体协调
+  # theme: dark=深色底白字(默认) / light=浅色底深字
+  color_theme: dark
   palettes:
+    # ── 深色系 ──
     - name: 经典深沉
+      theme: dark
       colors: ["#1A365D", "#276749", "#553C9A", "#9B2C2C"]  # 海洋蓝 / 森林绿 / 皇家紫 / 酒红
     - name: 午夜宝石
+      theme: dark
       colors: ["#1E1B4B", "#134E4A", "#78350F", "#7F1D1D"]  # 靛蓝 / 深松石 / 咖啡棕 / 深红
     - name: 暮色都市
+      theme: dark
       colors: ["#0F172A", "#4C1D95", "#831843", "#065F46"]  # 石板黑 / 深紫 / 玫红 / 翡翠
     - name: 高级商务
+      theme: dark
       colors: ["#1F2937", "#374151", "#7C2D12", "#1E40AF"]  # 石板灰 / 炭灰 / 焦糖 / 深邃蓝
     - name: 秋日大地
+      theme: dark
       colors: ["#78350F", "#3F6212", "#7C2D12", "#365314"]  # 咖啡棕 / 橄榄绿 / 焦糖 / 苔绿
     - name: 极光冷调
+      theme: dark
       colors: ["#0C4A6E", "#134E4A", "#312E81", "#1E3A8A"]  # 深天青 / 深松石 / 靛青 / 皇家蓝
     - name: 深夜霓虹
+      theme: dark
       colors: ["#4A044E", "#164E63", "#7C2D12", "#1E1B4B"]  # 深紫红 / 深青 / 焦糖 / 午夜靛
     - name: 摩登轻奢
+      theme: dark
       colors: ["#3F3F46", "#701A75", "#134E4A", "#7C2D12"]  # 深灰 / 洋红 / 深松石 / 焦糖
+    # ── 浅色系 ──
+    - name: 暖阳纸页
+      theme: light
+      colors: ["#FEF9F0", "#E8D5B7", "#C4A882", "#8B6914"]  # 暖白 / 奶黄 / 焦糖 / 深金
+    - name: 薄荷静谧
+      theme: light
+      colors: ["#F0F7F4", "#B2D4C8", "#5B8A72", "#2D5A45"]  # 薄荷白 / 浅绿 / 苔绿 / 深松
+    - name: 柔暮玫瑰
+      theme: light
+      colors: ["#FDF5F7", "#E8D0D8", "#A85C7C", "#6B334D"]  # 腮红白 / 浅玫瑰 / 酒玫瑰 / 深玫
+    - name: 晴空蓝调
+      theme: light
+      colors: ["#F0F5FC", "#B8CCEA", "#4A6FA5", "#2C4A7C"]  # 天蓝白 / 浅蓝 / 钴蓝 / 深蓝
+    - name: 薰衣草田
+      theme: light
+      colors: ["#F5F3F9", "#D8CCE8", "#8B6FAE", "#5A4070"]  # 薰衣草白 / 浅紫 / 紫藤 / 深紫
+    - name: 水泥极简
+      theme: light
+      colors: ["#F5F5F3", "#D4D0C8", "#7A7670", "#3D3B38"]  # 暖灰白 / 浅灰 / 中灰 / 深灰
   design_prompt: |
-      为下列书籍规划 4 张 800x800 商品主图方案(PPT 高级感,每张图独立深色底+白字)。
+      为下列书籍规划 4 张 800x800 商品主图方案(PPT 高级感)。
       图 2/3/4 布局**固定**:图2=2x2网格,图3=标签展示,图4=双栏对比。
 
       书名：{title}  作者：{author}  封面配色：{cover_colors}
       摘要：{summary}
 
       # 项数(从摘要提炼)
-      N2=能学到的知识点数,**固定 4** | N3=目标读者类别数,3~5 | N4=主要模块/目录内容,5~10
+      N2=能学到的知识点数,**固定 4** | N3=目标读者类别数,3~5 | N4=主要模块/目录内容,≤10
 
-      # 配色(本次已为你选定:**{palette_name}**,渲染器会自动把这 4 色分配给图 1/2/3/4,你不需要回写 HEX)
+      # 配色(本次已为你选定:**{palette_name}**,渲染器会自动把这 4 色分配给图 1/2/3/4,深浅主题由配置决定,你不需要回写 HEX)
       {palette_lines}
 
       # 输出格式(严格,无 markdown 无解释)

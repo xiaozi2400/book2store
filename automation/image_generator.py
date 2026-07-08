@@ -17,33 +17,59 @@ from automation.config import config
 logger = logging.getLogger(__name__)
 
 
-# 克制配色池 — 全 palette 共用 4 色,每张卡/标签固定色相+alpha=0.40
-# 顺序固定:米白 / 银灰 / 干桃 / 薰衣草紫
-UNIVERSAL_ACCENTS = [
+# 克制配色池 — 全 palette 共用 4 色
+# 深色主题: 4 张卡半透底色(在深色背景上)
+UNIVERSAL_ACCENTS_DARK = [
     "rgba(254,243,199,0.40)",   # #FEF3C7 米白
     "rgba(229,231,235,0.40)",   # #E5E7EB 银灰
     "rgba(253,215,170,0.40)",   # #FED7AA 干桃
     "rgba(196,181,253,0.40)",   # #C4B5FD 薰衣草紫
 ]
-UNIVERSAL_PILLS = [
+UNIVERSAL_PILLS_DARK = [
     "rgba(254,243,199,0.40)",
     "rgba(229,231,235,0.40)",
     "rgba(253,215,170,0.40)",
     "rgba(196,181,253,0.40)",
     "rgba(254,243,199,0.40)",
 ]
+# 浅色主题: 不透明柔和色(在浅色背景上可见)
+UNIVERSAL_ACCENTS_LIGHT = [
+    "#FDEFC4",   # 米黄
+    "#E4E8ED",   # 浅灰
+    "#FDDCAB",   # 干桃
+    "#D4C8F5",   # 薰衣草紫
+]
+UNIVERSAL_PILLS_LIGHT = [
+    "#FDEFC4",
+    "#E4E8ED",
+    "#FDDCAB",
+    "#D4C8F5",
+    "#FDEFC4",
+]
 
 # 4 张主图的 CSS+HTML 骨架 — 与 prompt 解耦,只做纯渲染,不参与 AI 上下文
 _CSS_SKELETON = """*{margin:0;padding:0;box-sizing:border-box}
 body{background:#f2f4f8;display:flex;flex-direction:column;align-items:center;padding:40px 20px;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
 .page,.content,.footer-tags,.skill-card,.reader-tag,.left-col,.right-col{display:flex;flex-direction:column;align-items:center}
-.page{width:800px;height:800px;box-shadow:0 12px 40px rgba(0,0,0,.1);margin-bottom:40px;overflow:hidden;padding:30px 40px;color:#fff;justify-content:space-between}
+.page{width:800px;height:800px;box-shadow:0 12px 40px rgba(0,0,0,.1);margin-bottom:40px;overflow:hidden;padding:30px 40px;justify-content:space-between}
 .content{width:100%;flex:1;justify-content:center}
 .footer-tags{flex-direction:row;justify-content:center;gap:24px;width:100%;margin-top:20px}
 .tag{padding:6px 22px;border-radius:40px;font-size:14px;font-weight:500;box-shadow:0 2px 6px rgba(0,0,0,.08)}
 .tag-pdf{background:#1E3A5F}.tag-lang{background:#8E3A3A}
 .section-title{font-size:48px;font-weight:700;margin-bottom:28px}
+/* 深色主题默认白字 */
+.page{color:#fff}
+.tag{color:#fff}
+/* 浅色主题深色字 */
+.page.light{color:#1a1a1a}
+.page.light .tag{color:#1a1a1a}
+/* 四色主背景占位符 */
 .page-1{background:__COLOR1__}.page-2{background:__COLOR2__}.page-3{background:__COLOR3__}.page-4{background:__COLOR4__}
+/* 浅色主题下正文变深,副文字用中灰 */
+.page.light{color:#1a1a1a}
+.page.light .author,.page.light .sub-line,.page.light .quote-line{color:rgba(26,26,26,.75)}
+.page.light .quote-line{border-top-color:rgba(26,26,26,.15)}
+.page.light .footer-tags .tag{color:#fff}
 .book-title{font-size:54px;font-weight:700;line-height:1.2;text-align:center;max-width:90%}
 .author{font-size:24px;font-weight:300;margin-top:8px;opacity:.9}
 .cover-img{height:340px;margin:20px 0 10px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
@@ -52,16 +78,19 @@ body{background:#f2f4f8;display:flex;flex-direction:column;align-items:center;pa
 .quote-line::before{content:open-quote}.quote-line::after{content:close-quote}
 .grid-2x2{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:700px}
 .skill-card{padding:24px 16px;border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.2);text-align:center;position:relative}
-.skill-card .num{font-size:36px;font-weight:700;font-family:"Georgia","Times New Roman",serif;color:rgba(255,255,255,.25);position:absolute;top:12px;left:16px;line-height:1}
+.skill-card .num{font-size:36px;font-weight:700;font-family:"Georgia","Times New Roman",serif;position:absolute;top:12px;left:16px;line-height:1}
 .skill-card h3{font-size:22px;font-weight:600;margin-bottom:6px;margin-top:8px}
 .skill-card p{font-size:15px;opacity:.9;line-height:1.4}
+/* 深色主题:数字淡白 */
+.skill-card .num{color:rgba(255,255,255,.25)}
+/* 浅色主题:数字深灰 */
+.page.light .skill-card .num{color:rgba(26,26,26,.2)}
 .skill-card:nth-child(1){background:__TINT1__}
 .skill-card:nth-child(2){background:__TINT2__}
 .skill-card:nth-child(3){background:__TINT3__}
 .skill-card:nth-child(4){background:__TINT4__}
 .tag-row{display:flex;flex-wrap:wrap;justify-content:center;gap:28px;width:100%;max-width:720px}
 .reader-tag{padding:20px 28px;border-radius:60px;box-shadow:0 8px 20px rgba(0,0,0,.18);min-width:140px;position:relative;align-items:center}
-.reader-tag .num{font-size:28px;font-weight:700;font-family:"Georgia","Times New Roman",serif;color:rgba(255,255,255,.3);position:absolute;top:10px;right:16px;line-height:1}
 .reader-tag .label{font-size:22px;font-weight:600}
 .reader-tag .desc{font-size:14px;opacity:.85;margin-top:4px;text-align:center}
 .reader-tag:nth-child(1){background:__PILL1__}
@@ -75,6 +104,8 @@ body{background:#f2f4f8;display:flex;flex-direction:column;align-items:center;pa
 .left-col,.right-col{padding:24px 16px;justify-content:space-around;align-items:stretch}
 .left-col{flex:1;background:rgba(0,0,0,.35)}
 .right-col{flex:1.6;background:#f5ede6;color:#2d2d2d}
+/* 浅色主题版式A右栏保持浅色 */
+.page.light .right-col{background:rgba(0,0,0,.06);color:#1a1a1a}
 .rule-item{font-size:20px;font-weight:600;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.1)}
 .strategy-item{font-size:16px;font-weight:500;padding:10px 8px;border-bottom:1px solid rgba(0,0,0,.08);line-height:1.3}
 .rule-item:last-child,.strategy-item:last-child{border-bottom:none}
@@ -82,17 +113,36 @@ body{background:#f2f4f8;display:flex;flex-direction:column;align-items:center;pa
 .dual-col-b{display:flex;flex-direction:column;width:100%;max-width:720px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35)}
 .chapter-row{display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
 .chapter-row:last-child{border-bottom:none}
-.chapter-num{font-size:18px;font-weight:700;font-family:"Georgia","Times New Roman",serif;color:rgba(255,255,255,.35);min-width:48px}
-.chapter-text{flex:1;font-size:18px;font-weight:600;color:#fff}
-.chapter-brief{flex:1;font-size:15px;color:rgba(255,255,255,.7);padding-left:16px}
+.chapter-num{font-size:18px;font-weight:700;font-family:"Georgia","Times New Roman",serif;min-width:48px}
+.chapter-text{flex:1;font-size:18px;font-weight:600}
+.chapter-brief{flex:1;font-size:15px;padding-left:16px}
+/* 深色:章节号淡白/浅色文字;浅色:深灰文字 */
+.chapter-num{color:rgba(255,255,255,.35)}
+.chapter-text{color:#fff}
+.chapter-brief{color:rgba(255,255,255,.7)}
 /* 版式C: ≥15章 双栏纯列表 */
 .dual-col-c{display:flex;width:100%;max-width:720px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;border:1px solid rgba(255,255,255,.1)}
 .left-col-c{flex:3;background:rgba(0,0,0,.3);padding:20px 16px}
 .right-col-c{flex:1;background:#f5ede6;color:#2d2d2d;padding:20px 16px}
-.chapter-item{font-size:17px;font-weight:600;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.1);color:#fff}
+.chapter-item{font-size:17px;font-weight:600;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.1)}
 .chapter-item:last-child{border-bottom:none}
 .strategy-item-c{font-size:15px;font-weight:500;padding:10px 8px;border-bottom:1px solid rgba(0,0,0,.08);line-height:1.3;color:#2d2d2d}
-.strategy-item-c:last-child{border-bottom:none}"""
+.strategy-item-c:last-child{border-bottom:none}
+/* 浅色主题覆盖 */
+.page.light .chapter-num{color:rgba(26,26,26,.3)}
+.page.light .chapter-text{color:#1a1a1a}
+.page.light .chapter-brief{color:rgba(26,26,26,.65)}
+.page.light .left-col-c{background:rgba(0,0,0,.06)}
+.page.light .right-col-c{background:rgba(0,0,0,.04);color:#1a1a1a}
+.page.light .chapter-item{color:#1a1a1a;border-bottom-color:rgba(26,26,26,.1)}
+.page.light .strategy-item-c{color:#1a1a1a}
+.page.light .strategy-item-c{border-bottom-color:rgba(26,26,26,.08)}
+.page.light .left-col{background:rgba(0,0,0,.08)}
+.page.light .rule-item{border-bottom-color:rgba(26,26,26,.1);color:#1a1a1a}
+.page.light .strategy-item{border-bottom-color:rgba(26,26,26,.08);color:#1a1a1a}
+.page.light .dual-col{border-color:rgba(26,26,26,.1)}
+.page.light .dual-col-b{border-color:rgba(26,26,26,.1)}
+.page.light .dual-col-c{border-color:rgba(26,26,26,.1)}"""
 
 _FOOTER_TAGS = ('<div class="footer-tags">'
                 '<span class="tag tag-pdf">支持PDF+EPUB双格式</span>'
@@ -147,8 +197,8 @@ class ImageGenerator:
 
         # 2. 设计分析（Chain-of-Thought）
         event("AI 设计分析")
-        palette_name, palette_lines, palette_colors = self._pick_palette()
-        logger.info(f"本次选用配色方案: {palette_name} → 图1/2/3/4 = {palette_colors}")
+        palette_name, palette_lines, palette_colors, palette_theme = self._pick_palette()
+        logger.info(f"本次选用配色方案: {palette_name} [{palette_theme}] → 图1/2/3/4 = {palette_colors}")
         design_plan = self._design_analysis(title, author, summary, cover_colors, palette_name, palette_lines)
 
         # 3. 抽取原书完整章节目录(用于图 4)——避免 summary_text 截断导致目录缺失
@@ -168,7 +218,7 @@ class ImageGenerator:
 
         # 5. 用固定骨架 + AI 内容 + 4 主色(代码直接决定,不再从 AI 输出解析)渲染 HTML
         chapter_count = len(full_toc) if full_toc else 0
-        html = self._render_html(content, palette_colors, chapter_count)
+        html = self._render_html(content, palette_colors, chapter_count, palette_theme)
 
         # 5. 注入封面图（替换占位符）
         cover_base64 = self._load_cover_base64(cover_path) if cover_path else None
@@ -239,31 +289,35 @@ class ImageGenerator:
             return ""
 
     def _pick_palette(self) -> tuple:
-        """从 palettes 池随机挑一套 + 打乱色序,返回 (name, palette_lines_text, colors_list)。
+        """从 palettes 池随机挑一套 + 打乱色序,返回 (name, palette_lines_text, colors_list, theme)。
 
+        - 按 config 中 color_theme 过滤 palette
         - 打乱色序:确保同一 palette 也能产出多种"图 N 主色"组合(总变体数 = 8 × 24 = 192)
         - palette_lines_text:注入 design_prompt 供 AI 参考
         - colors_list:代码渲染时直接使用,不再依赖 AI 回写 HEX
         """
         img_cfg = config.image_generator_config
         palettes = img_cfg.get("palettes") or []
+        theme = img_cfg.get("color_theme", "dark")
         default_colors = ["#1A365D", "#276749", "#553C9A", "#9B2C2C"]
-        if not palettes:
-            colors = default_colors[:]
-            name = "经典深沉"
+
+        # 按 theme 过滤
+        candidates = [p for p in palettes if p.get("theme", "dark") == theme]
+        if not candidates:
+            candidates = palettes if palettes else [{"name": "经典深沉", "colors": default_colors}]
+
+        chosen = random.choice(candidates)
+        name = chosen.get("name", "未命名")
+        colors = list(chosen.get("colors", []) or [])
+        if len(colors) < 4:
+            logger.warning(f"配色方案 {name} 少于 4 色,补齐经典色")
+            colors = (colors + default_colors)[:4]
         else:
-            chosen = random.choice(palettes)
-            name = chosen.get("name", "未命名")
-            colors = list(chosen.get("colors", []) or [])
-            if len(colors) < 4:
-                logger.warning(f"配色方案 {name} 少于 4 色,补齐经典色")
-                colors = (colors + default_colors)[:4]
-            else:
-                colors = colors[:4]
+            colors = colors[:4]
 
         random.shuffle(colors)  # 打乱 4 色在图 1/2/3/4 之间的分配
         lines = "\n      ".join(f"- 图{i+1}主色: {c}" for i, c in enumerate(colors))
-        return (name, lines, colors)
+        return (name, lines, colors, theme)
 
     @staticmethod
     def _hex_to_rgb(hex_str: str) -> tuple:
@@ -419,7 +473,7 @@ class ImageGenerator:
                 colors[i] = default[i]
         return colors
 
-    def _render_html(self, content: dict, colors: list, chapter_count: int = 0) -> str:
+    def _render_html(self, content: dict, colors: list, chapter_count: int = 0, theme: str = "dark") -> str:
         """用骨架 + AI 出的 content JSON + 4 主色,渲染最终 HTML。
 
         布局与 section 标题**固定**:
@@ -430,19 +484,27 @@ class ImageGenerator:
         css = _CSS_SKELETON
         for i, c in enumerate(colors[:4], 1):
             css = css.replace(f"__COLOR{i}__", c)
-        # 辅助色:全 palette 共用克制池,不再从主色派生
-        for i, t in enumerate(UNIVERSAL_ACCENTS, 1):
+        # 辅助色:深色主题用半透明池,浅色主题用实色池
+        if theme == "light":
+            accents = UNIVERSAL_ACCENTS_LIGHT
+            pills = UNIVERSAL_PILLS_LIGHT
+        else:
+            accents = UNIVERSAL_ACCENTS_DARK
+            pills = UNIVERSAL_PILLS_DARK
+        for i, t in enumerate(accents, 1):
             css = css.replace(f"__TINT{i}__", t)
-        for i, p in enumerate(UNIVERSAL_PILLS, 1):
+        for i, p in enumerate(pills, 1):
             css = css.replace(f"__PILL{i}__", p)
 
-        page1 = self._render_page1(content.get("page1", {}))
+        light_cls = " light" if theme == "light" else ""
+
+        page1 = self._render_page1(content.get("page1", {}), light_cls)
         page2 = self._render_content_page(
-            "page-2", "能学到什么", content.get("page2", {}), self._render_layout_grid)
+            "page-2" + light_cls, "能学到什么", content.get("page2", {}), self._render_layout_grid)
         page3 = self._render_content_page(
-            "page-3", "适合谁阅读", content.get("page3", {}), self._render_layout_pill)
+            "page-3" + light_cls, "适合谁阅读", content.get("page3", {}), self._render_layout_pill)
         page4 = self._render_content_page(
-            "page-4", "目录内容",  content.get("page4", {}),
+            "page-4" + light_cls, "目录内容",  content.get("page4", {}),
             lambda items: self._render_layout_dual(items, chapter_count))
 
         return (
@@ -452,13 +514,13 @@ class ImageGenerator:
             f'</body></html>'
         )
 
-    def _render_page1(self, p) -> str:
+    def _render_page1(self, p, light_cls: str = "") -> str:
         if not isinstance(p, dict):
             logger.warning(f"page1 内容非 dict: {type(p).__name__},当作空处理")
             p = {}
         subline = p.get("subline", "").replace("·", "｜")
         return (
-            f'<div class="page page-1"><div class="content">'
+            f'<div class="page page-1{light_cls}"><div class="content">'
             f'<div class="book-title">{p.get("title","")}</div>'
             f'<div class="author">{p.get("author","")}</div>'
             f'<img class="cover-img" src="data:image/jpeg;base64,__COVER_PLACEHOLDER__" alt="封面">'
