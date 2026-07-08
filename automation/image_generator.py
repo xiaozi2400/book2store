@@ -325,6 +325,11 @@ class ImageGenerator:
         return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
 
     @staticmethod
+    def _hex_to_rgba(hex_str: str, alpha: float) -> str:
+        r, g, b = ImageGenerator._hex_to_rgb(hex_str)
+        return f"rgba({r},{g},{b},{alpha:.2f})"
+
+    @staticmethod
     def _mix_with_white(hex_color: str, alpha: float = 0.22) -> str:
         """把主色按 alpha 混到白底上,得到"辅助色"—— 保证同 palette 下辅助色也随主色变化。"""
         r, g, b = ImageGenerator._hex_to_rgb(hex_color)
@@ -482,19 +487,32 @@ class ImageGenerator:
         - page4 = 自适应三版式(≤10章 A / 11-14章 B / ≥15章 C), 标题"目录内容"
         """
         css = _CSS_SKELETON
-        for i, c in enumerate(colors[:4], 1):
-            css = css.replace(f"__COLOR{i}__", c)
-        # 辅助色:深色主题用半透明池,浅色主题用实色池
+
         if theme == "light":
-            accents = UNIVERSAL_ACCENTS_LIGHT
-            pills = UNIVERSAL_PILLS_LIGHT
+            # 浅色模式:所有页面统一背景色(colors[0]),其余3色作强调色
+            bg = colors[0]
+            accents = colors[1:4]   # 3个强调色
+            for i, c in enumerate([bg, bg, bg, bg], 1):
+                css = css.replace(f"__COLOR{i}__", c)
+            # 强调色映射: tint1/2/3 → accent[0/1/2], tint4 → accent[2]
+            accent_rgba = [self._hex_to_rgba(c, 0.55) for c in accents]  # 不透明度55%在浅背景上可见
+            for i, rgba in enumerate(accent_rgba[:3], 1):
+                css = css.replace(f"__TINT{i}__", rgba)
+            # 第4个tint复用accent[2]
+            css = css.replace(f"__TINT4__", accent_rgba[2])
+            # 5个pill对应3个accent循环
+            pill_rgba = [self._hex_to_rgba(c, 0.50) for c in accents]
+            pills_order = [pill_rgba[0], pill_rgba[1], pill_rgba[2], pill_rgba[1], pill_rgba[0]]
+            for i, rgba in enumerate(pills_order, 1):
+                css = css.replace(f"__PILL{i}__", rgba)
         else:
-            accents = UNIVERSAL_ACCENTS_DARK
-            pills = UNIVERSAL_PILLS_DARK
-        for i, t in enumerate(accents, 1):
-            css = css.replace(f"__TINT{i}__", t)
-        for i, p in enumerate(pills, 1):
-            css = css.replace(f"__PILL{i}__", p)
+            # 深色模式:每页各自背景色
+            for i, c in enumerate(colors[:4], 1):
+                css = css.replace(f"__COLOR{i}__", c)
+            for i, t in enumerate(UNIVERSAL_ACCENTS_DARK, 1):
+                css = css.replace(f"__TINT{i}__", t)
+            for i, p in enumerate(UNIVERSAL_PILLS_DARK, 1):
+                css = css.replace(f"__PILL{i}__", p)
 
         light_cls = " light" if theme == "light" else ""
 
