@@ -292,7 +292,8 @@ class ImageGenerator:
         """从 palettes 池随机挑一套 + 打乱色序,返回 (name, palette_lines_text, colors_list, theme)。
 
         - 按 config 中 color_theme 过滤 palette
-        - 打乱 4 色在图 1/2/3/4 之间的分配
+        - 深色 palette:打乱 4 色在图 1/2/3/4 之间的分配
+        - 浅色 palette:不 shuffle,保持 bg + 3 强调色固定顺序
         - palette_lines_text:注入 design_prompt 供 AI 参考
         - colors_list:代码渲染时直接使用,不再依赖 AI 回写 HEX
         """
@@ -301,21 +302,31 @@ class ImageGenerator:
         theme = img_cfg.get("color_theme", "dark")
         default_colors = ["#1A365D", "#276749", "#553C9A", "#9B2C2C"]
 
+        # 按 theme 过滤
         candidates = [p for p in palettes if p.get("theme", "dark") == theme]
         if not candidates:
             candidates = palettes if palettes else [{"name": "经典深沉", "colors": default_colors}]
 
         chosen = random.choice(candidates)
         name = chosen.get("name", "未命名")
-        colors = list(chosen.get("colors", []) or [])
-        if len(colors) < 4:
-            logger.warning(f"配色方案 {name} 少于 4 色,补齐经典色")
-            colors = (colors + default_colors)[:4]
-        else:
-            colors = colors[:4]
 
-        random.shuffle(colors)
-        lines = "\n      ".join(f"- 图{i+1}主色: {c}" for i, c in enumerate(colors))
+        if theme == "light":
+            # 浅色 palette: bg + 3 强调色,不 shuffle
+            bg = chosen.get("bg", "#FAFAF9")
+            accents = chosen.get("accents", ["#C8C4BC", "#7A7670", "#3D3B38"])
+            colors = [bg] + accents  # 保持顺序不被打乱
+            # AI prompt 用 accent 色展示
+            lines = "\n      ".join(f"- 强调色{i+1}: {c}" for i, c in enumerate(accents))
+        else:
+            colors = list(chosen.get("colors", []) or [])
+            if len(colors) < 4:
+                logger.warning(f"配色方案 {name} 少于 4 色,补齐经典色")
+                colors = (colors + default_colors)[:4]
+            else:
+                colors = colors[:4]
+            random.shuffle(colors)
+            lines = "\n      ".join(f"- 图{i+1}主色: {c}" for i, c in enumerate(colors))
+
         return (name, lines, colors, theme)
 
     @staticmethod
@@ -327,6 +338,15 @@ class ImageGenerator:
     def _hex_to_rgba(hex_str: str, alpha: float) -> str:
         r, g, b = ImageGenerator._hex_to_rgb(hex_str)
         return f"rgba({r},{g},{b},{alpha:.2f})"
+
+    @staticmethod
+    def _lighten(hex_str: str, amount: float) -> str:
+        """把 hex 色混入 amount 比例的白色,返回极浅的新 hex。amount=0.88 表示 12%原色+88%白"""
+        r, g, b = ImageGenerator._hex_to_rgb(hex_str)
+        nr = int(r + (255 - r) * amount)
+        ng = int(g + (255 - g) * amount)
+        nb = int(b + (255 - b) * amount)
+        return f"#{nr:02x}{ng:02x}{nb:02x}"
 
     @staticmethod
     def _mix_with_white(hex_color: str, alpha: float = 0.22) -> str:
@@ -488,19 +508,21 @@ class ImageGenerator:
         css = _CSS_SKELETON
 
         if theme == "light":
-            # 浅色模式:所有页面统一背景色(colors[0]),其余3色作强调色
-            bg = colors[0]
-            accents = colors[1:4]   # 3个强调色
-            for i, c in enumerate([bg, bg, bg, bg], 1):
+            # 浅色模式:3个强调色分别混入大量白色,生成4张图各自的极浅背景色
+            # 混入比例 0.85 = 15%原色+85%白,产生"近白但有色调"的背景
+            accent0_pale = self._lighten(colors[1], 0.85)  # 强调色0的极浅版
+            accent1_pale = self._lighten(colors[2], 0.85)  # 强调色1的极浅版
+            accent2_pale = self._lighten(colors[3], 0.85)  # 强调色2的极浅版
+            accent0_paler = self._lighten(colors[1], 0.90)  # 强调色0的更浅版
+            page_bgs = [accent0_pale, accent1_pale, accent2_pale, accent0_paler]
+            for i, c in enumerate(page_bgs, 1):
                 css = css.replace(f"__COLOR{i}__", c)
-            # 强调色映射: tint1/2/3 → accent[0/1/2], tint4 → accent[2]
-            accent_rgba = [self._hex_to_rgba(c, 0.55) for c in accents]  # 不透明度55%在浅背景上可见
+            # 强调色半透明用于标签/卡片底色
+            accent_rgba = [self._hex_to_rgba(c, 0.55) for c in colors[1:4]]
             for i, rgba in enumerate(accent_rgba[:3], 1):
                 css = css.replace(f"__TINT{i}__", rgba)
-            # 第4个tint复用accent[2]
             css = css.replace(f"__TINT4__", accent_rgba[2])
-            # 5个pill对应3个accent循环
-            pill_rgba = [self._hex_to_rgba(c, 0.50) for c in accents]
+            pill_rgba = [self._hex_to_rgba(c, 0.50) for c in colors[1:4]]
             pills_order = [pill_rgba[0], pill_rgba[1], pill_rgba[2], pill_rgba[1], pill_rgba[0]]
             for i, rgba in enumerate(pills_order, 1):
                 css = css.replace(f"__PILL{i}__", rgba)
