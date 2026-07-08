@@ -64,10 +64,10 @@ def parse_epubcheck_output(json_text: str, epub_path: Path) -> CheckResult:
 
     return CheckResult(
         epub_path=epub_path,
-        epub_version=str(data.get("epubVersion", "?")),
-        checker_version=str(data.get("checkerVersion", "?")),
+        epub_version=str( (data.get("publication") or {}).get("ePubVersion") or "?" ),
+        checker_version=str( (data.get("checker") or {}).get("checkerVersion") or "?" ),
         issues=issues,
         counts=counts,
-        duration_ms=0,
+        duration_ms=(data.get("checker") or {}).get("elapsedTime", 0) or 0,
         raw_output=None,
     )

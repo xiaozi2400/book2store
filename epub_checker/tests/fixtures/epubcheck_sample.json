@@ -1,6 +1,4 @@
 {
-  "epubVersion": "3.3",
-  "checkerVersion": "5.0.0",
   "messages": [
     {
       "ID": "OPF-018",
@@ -42,5 +40,12 @@
       "locations": {},
       "hint": null
     }
-  ]
+  ],
+  "checker": {
+    "checkerVersion": "5.0.0",
+    "elapsedTime": 1420
+  },
+  "publication": {
+    "ePubVersion": "3.3"
+  }
 }

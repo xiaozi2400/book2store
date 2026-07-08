@@ -25,8 +25,7 @@ def run_epubcheck(
         str(epub_path),
         "--mode", mode or config.default_mode,
         "--profile", profile or config.default_profile,
-        "--json",
-        "-v", "0",
+        "--json", "-",
     ]
     proc = subprocess.run(
         cmd,

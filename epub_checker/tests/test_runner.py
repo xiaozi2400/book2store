@@ -15,7 +15,7 @@ def _completed(returncode: int, stdout: str = "", stderr: str = ""):
 
 
 def test_run_epubcheck_command_assembly(tmp_path, monkeypatch):
-    """验证命令拼装：epubcheck 前缀 + epub 路径 + mode + profile + --json + -v 0"""
+    """验证命令拼装：epubcheck 前缀 + epub 路径 + mode + profile + --json -"""
     fake = tmp_path / "ec"
     fake.write_text("#!/bin/sh\n")
     cfg = Config(epubcheck_path=str(fake))
@@ -44,8 +44,9 @@ def test_run_epubcheck_command_assembly(tmp_path, monkeypatch):
     assert "--profile" in captured["cmd"]
     assert "dict" in captured["cmd"]
     assert "--json" in captured["cmd"]
-    assert "-v" in captured["cmd"]
-    assert "0" in captured["cmd"]
+    idx = captured["cmd"].index("--json")
+    assert idx + 1 < len(captured["cmd"])
+    assert captured["cmd"][idx + 1] == "-"
     assert captured["timeout"] == cfg.timeout_seconds
     assert captured["text"] is True
     assert captured["capture_output"] is True

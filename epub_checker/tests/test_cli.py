@@ -27,7 +27,7 @@ def _stub_resolve_ok(monkeypatch):
 def test_cli_check_pass_exits_0(tmp_path, monkeypatch):
     _stub_resolve_ok(monkeypatch)
     _stub_run(monkeypatch, json.dumps(
-        {"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []}
+        {"messages": [], "checker": {"checkerVersion": "5.0.0"}, "publication": {"ePubVersion": "3.3"}}
     ))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
@@ -49,8 +49,9 @@ def test_cli_check_fatal_exits_3(tmp_path, monkeypatch):
 def test_cli_check_warning_only_strict_exits_1(tmp_path, monkeypatch):
     _stub_resolve_ok(monkeypatch)
     _stub_run(monkeypatch, json.dumps({
-        "epubVersion": "3.3", "checkerVersion": "5.0.0",
         "messages": [{"severity": "WARNING", "message": "w", "locations": {}}],
+        "checker": {"checkerVersion": "5.0.0"},
+        "publication": {"ePubVersion": "3.3"}
     }))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
@@ -61,8 +62,9 @@ def test_cli_check_warning_only_strict_exits_1(tmp_path, monkeypatch):
 def test_cli_check_warning_only_non_strict_exits_0(tmp_path, monkeypatch):
     _stub_resolve_ok(monkeypatch)
     _stub_run(monkeypatch, json.dumps({
-        "epubVersion": "3.3", "checkerVersion": "5.0.0",
         "messages": [{"severity": "WARNING", "message": "w", "locations": {}}],
+        "checker": {"checkerVersion": "5.0.0"},
+        "publication": {"ePubVersion": "3.3"}
     }))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
@@ -73,8 +75,9 @@ def test_cli_check_warning_only_non_strict_exits_0(tmp_path, monkeypatch):
 def test_cli_check_json_output(tmp_path, monkeypatch):
     _stub_resolve_ok(monkeypatch)
     _stub_run(monkeypatch, json.dumps({
-        "epubVersion": "3.3", "checkerVersion": "5.0.0",
         "messages": [{"severity": "WARNING", "message": "w", "locations": {}}],
+        "checker": {"checkerVersion": "5.0.0"},
+        "publication": {"ePubVersion": "3.3"}
     }))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
@@ -87,7 +90,7 @@ def test_cli_check_json_output(tmp_path, monkeypatch):
 def test_cli_check_md_output_writes_file(tmp_path, monkeypatch):
     _stub_resolve_ok(monkeypatch)
     _stub_run(monkeypatch, json.dumps(
-        {"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []}
+        {"messages": [], "checker": {"checkerVersion": "5.0.0"}, "publication": {"ePubVersion": "3.3"}}
     ))
     book = tmp_path / "book.epub"
     book.write_bytes(b"PK\x03\x04")
@@ -120,10 +123,11 @@ def test_cli_check_directory_batch(tmp_path, monkeypatch):
     (tmp_path / "b.epub").write_bytes(b"PK\x03\x04")
 
     responses = [
-        (0, json.dumps({"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []})),
+        (0, json.dumps({"messages": [], "checker": {"checkerVersion": "5.0.0"}, "publication": {"ePubVersion": "3.3"}})),
         (1, json.dumps({
-            "epubVersion": "3.3", "checkerVersion": "5.0.0",
             "messages": [{"severity": "ERROR", "message": "x", "locations": {}}],
+            "checker": {"checkerVersion": "5.0.0"},
+            "publication": {"ePubVersion": "3.3"}
         })),
     ]
 

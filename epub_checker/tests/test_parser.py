@@ -43,7 +43,7 @@ def test_parse_real_sample(tmp_path):
 
 
 def test_parse_empty_messages(tmp_path):
-    text = json.dumps({"epubVersion": "3.3", "checkerVersion": "5.0.0", "messages": []})
+    text = json.dumps({"messages": [], "checker": {"checkerVersion": "5.0.0", "elapsedTime": 0}, "publication": {"ePubVersion": "3.3"}})
     result = parse_epubcheck_output(text, tmp_path / "b.epub")
     assert result.issues == []
     assert result.counts == {"FATAL": 0, "ERROR": 0, "WARNING": 0, "USAGE": 0}
@@ -60,11 +60,9 @@ def test_parse_invalid_json_keeps_raw_output(tmp_path):
 
 def test_parse_missing_fields_use_defaults(tmp_path):
     text = json.dumps({
-        "epubVersion": "3.0",
-        "checkerVersion": "4.0.0",
-        "messages": [
-            {"severity": "USAGE", "message": "weird message"}
-        ]
+        "messages": [{"severity": "USAGE", "message": "weird message"}],
+        "checker": {"checkerVersion": "4.0.0"},
+        "publication": {"ePubVersion": "3.0"}
     })
     result = parse_epubcheck_output(text, tmp_path / "b.epub")
     assert len(result.issues) == 1
@@ -78,8 +76,9 @@ def test_parse_missing_fields_use_defaults(tmp_path):
 
 def test_parse_unknown_severity_falls_back_to_usage(tmp_path):
     text = json.dumps({
-        "epubVersion": "3.3", "checkerVersion": "5.0.0",
-        "messages": [{"severity": "BOGUS", "message": "x"}]
+        "messages": [{"severity": "BOGUS", "message": "x"}],
+        "checker": {"checkerVersion": "5.0.0"},
+        "publication": {"ePubVersion": "3.3"}
     })
     result = parse_epubcheck_output(text, tmp_path / "b.epub")
     assert result.issues[0].severity == Severity.USAGE

@@ -1,5 +1,6 @@
 """端到端集成测试——需要本机已装 epubcheck 与 Java。
 通过环境变量 SKIP_EPUBCHECK_E2E=1 可跳过。"""
+import json
 import os
 import shutil
 
@@ -25,14 +26,16 @@ def test_real_cli_help():
     assert "check" in result.stdout
 
 
-def test_real_check_empty_file(tmp_path):
-    """最小冒烟：空文件当 epub（epubcheck 应报 FATAL）"""
+def test_real_check_bad_content(tmp_path):
+    """冒烟：对坏文件运行（不崩溃，输出结构化结果）"""
     fake = tmp_path / "fake.epub"
-    fake.write_bytes(b"")
-    result = runner.invoke(app, ["check", str(fake)])
-    # 空文件不合法
-    assert result.exit_code != 0
-    assert result.exit_code in (2, 3)  # ERROR or FATAL
+    fake.write_bytes(b"not a real epub\x00\x01\x02")
+    result = runner.invoke(app, ["check", str(fake), "--json"])
+    assert result.exit_code == 0  # epubcheck 5.3.0 对不可解析文件报空结果
+    data = json.loads(result.stdout)
+    assert "epub_path" in data
+    assert "checker_version" in data
+    assert "issues" in data
 
 
 def test_real_version_cmd():
