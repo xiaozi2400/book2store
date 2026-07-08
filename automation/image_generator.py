@@ -510,10 +510,10 @@ class ImageGenerator:
         if theme == "light":
             # 浅色模式:3个强调色分别混入大量白色,生成4张图各自的极浅背景色
             # 混入比例 0.85 = 15%原色+85%白,产生"近白但有色调"的背景
-            accent0_pale = self._lighten(colors[1], 0.85)  # 强调色0的极浅版
-            accent1_pale = self._lighten(colors[2], 0.85)  # 强调色1的极浅版
-            accent2_pale = self._lighten(colors[3], 0.85)  # 强调色2的极浅版
-            accent0_paler = self._lighten(colors[1], 0.90)  # 强调色0的更浅版
+            accent0_pale = self._lighten(colors[1], 0.80)  # 强调色0的极浅版
+            accent1_pale = self._lighten(colors[2], 0.80)  # 强调色1的极浅版
+            accent2_pale = self._lighten(colors[3], 0.80)  # 强调色2的极浅版
+            accent0_paler = self._lighten(colors[1], 0.88)  # 强调色0的更浅版
             page_bgs = [accent0_pale, accent1_pale, accent2_pale, accent0_paler]
             for i, c in enumerate(page_bgs, 1):
                 css = css.replace(f"__COLOR{i}__", c)
