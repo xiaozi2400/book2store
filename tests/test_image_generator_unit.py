@@ -65,3 +65,24 @@ def test_format_prompt_contains_all_fields(mock_config, mock_ai, mock_db, mock_p
     assert "书名：测试书" in prompt
     assert "摘要：这是一本测试书" in prompt
     assert "封面：fake_base64" in prompt
+
+def test_safe_format_tolerates_literal_css_braces():
+    """模板中出现 CSS/JSON 字面量 `{...}` 时不应崩溃(修复 KeyError: '\n  --primary')。"""
+    from automation.image_generator import _safe_format
+
+    template = (
+        "{design_plan}\n\n"
+        "书名：{title}\n"
+        "示例样式:\n"
+        ":root {\n"
+        "  --primary: #333;\n"
+        "  --accent: #f00;\n"
+        "}\n"
+    )
+    # 关键: 用 str.format 会抛 KeyError, _safe_format 必须成功
+    result = _safe_format(template, design_plan="PLAN", title="Deep Work",
+                          author="", summary="", cover_colors="")
+    assert "PLAN" in result
+    assert "Deep Work" in result
+    assert "--primary" in result  # CSS 字面量原样保留
+    assert "{design_plan}" not in result

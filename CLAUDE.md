@@ -20,10 +20,7 @@ python -m automation.main publish <book_id> --auto                 # 发布到�
 python -m automation.main generate_list <book_id>                  # 发布失败的备用方案
 python -m automation.main regenerate-images --book-id <book_id>   # 修改主图 prompt 后复用 summary 重跑
 
-# 查询
-python -m automation.main scan / status / list --status-filter failed
-python -m automation.main stats <book_id>                         # Token 消耗
-python -m automation.main import_links <excel_path>                # 百度网盘 Excel 链接导入
+Excel 链接导入
 
 # 测试(conftest.py 自动用内存数据库,无需 mock)
 pytest
