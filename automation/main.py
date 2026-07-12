@@ -509,7 +509,7 @@ def auto(
                     generate_main_image(book_id)
 
                 with phase("提取图片"):
-                    base_name = Path(input_path).stem
+                    base_name = Path(input_path).stem.strip()
                     pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
                     extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
             else:
@@ -630,7 +630,7 @@ def test(
             continue
 
         import shutil
-        base_name = epub_path.stem
+        base_name = epub_path.stem.strip()
         book_output_dir = Path(config.output_dir) / base_name
         if book_output_dir.exists():
             shutil.rmtree(book_output_dir)
@@ -667,7 +667,7 @@ def test(
                 generate_main_image(book_id)
 
                 console.print(f"  [dim]→ 提取图片...[/dim]")
-                base_name = epub_path.stem
+                base_name = epub_path.stem.strip()
                 pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
                 extract_images(book_id, str(epub_path), str(pdf_path) if pdf_path.exists() else None)
             else:

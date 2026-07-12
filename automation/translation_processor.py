@@ -14,7 +14,17 @@ from .config import config
 from .utils import logger, ensure_dir
 from .translation_cache import SQLiteTranslationCache
 
-# 导入 library 模块
+# 同步 config.yaml 中的 API Key 到环境变量（供 ebook_translator 读取）
+# 解决两处配置不一致的问题：automation 读 yaml，ebook_translator 读 env
+_ai_key = config.ai_config.get("api_key", "") or config.get("ai.api_key", "")
+if _ai_key:
+    os.environ.setdefault("DEEPSEEK_API_KEY", _ai_key)
+
+_minimax_key = config.minimax_config.get("api_key", "")
+if _minimax_key:
+    os.environ.setdefault("MINIMAX_API_KEY", _minimax_key)
+
+# 导入 library 模块（需要在环境变量设置后导入）
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ebook_translator'))
 from ebook_translator.library import translate_epub, convert_english_pdf_only
 
