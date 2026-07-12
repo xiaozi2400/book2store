@@ -38,10 +38,11 @@ pytest_cache/
 !test_*/
 !test_*.py
 
-# File processing
+# File processing (keep tests/ tracked)
 test*
 !test_*/
 !test_*.py
+!tests/
 *.pdf
 *.epub
 

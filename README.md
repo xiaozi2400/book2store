@@ -203,7 +203,7 @@ python -m automation.main regenerate-images --book-id <book_id>
 
 ---
 
-### standalone EPU B 翻译工具
+### standalone EPU B 翻译工具 
 
 独立翻译工具，不依赖自动化数据库：
 
