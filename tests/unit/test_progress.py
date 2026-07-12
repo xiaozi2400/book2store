@@ -1,4 +1,5 @@
 """测试 progress 模块的阶段输出"""
+import re
 import sys
 import time
 import pytest
@@ -22,8 +23,18 @@ def test_phase_outputs_duration_format_seconds(capsys):
     with phase("快速任务"):
         time.sleep(0.05)
     captured = capsys.readouterr()
-    # 包含耗时数字
+    # 包含耗时数字，排除极端情况
     assert "s)" in captured.out or "ms)" in captured.out
+    # 确保不出现异常耗时（如 1000s），排除极端慢的情况
+    import re
+    match = re.search(r'\d+\.?\d*\s*ms\)|(\d+\.?\d*)\s*s\)', captured.out)
+    if match:
+        value = float(match.group(1) or match.group().replace('ms)', '').replace('s)', ''))
+        unit = 'ms' if 'ms' in match.group() else 's'
+        if unit == 's':
+            assert value < 60, f"耗时 {value}s 超过 60s，可能是 CI 慢导致的误报"
+        else:
+            assert value < 60000, f"耗时 {value}ms 超过 60s"
 
 
 def test_phase_exception_outputs_failure(capsys):

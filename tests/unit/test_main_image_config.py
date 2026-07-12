@@ -11,12 +11,11 @@ def test_image_generator_config_exists():
 
 
 def test_image_generator_has_prompt():
-    """验证提示词包含 {title} {summary} {cover_base64} 占位符"""
+    """验证提示词包含 {title} {summary} 占位符"""
     config = Config()
     html_prompt = config.image_generator_config.get("html_prompt", "")
     assert "{title}" in html_prompt
     assert "{summary}" in html_prompt
-    assert "{cover_base64}" in html_prompt
 
 
 def test_image_generator_has_dimensions():

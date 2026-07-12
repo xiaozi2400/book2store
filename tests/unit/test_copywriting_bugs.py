@@ -1,11 +1,12 @@
 """
-测试 AI 客户端文案生成功能
+测试 AI 客户端文案生成功能的历史 bug 修复
+
+本文件中的 TestXianyuPublisherMetaDir / TestMetadataWriter / TestContentSummarizerCover
+使用 AST 静态分析验证源码中不存在问题代码，属于代码存在性检查而非行为测试。
 """
 import pytest
-import sys
+import ast
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class TestAIClientCopywriting:
@@ -34,37 +35,30 @@ class TestAIClientCopywriting:
 
 
 class TestXianyuPublisherMetaDir:
-    """测试 xianyu_publisher meta_dir 顺序"""
+    """验证 xianyu_publisher.py publish() 中 meta_dir 在使用前已定义"""
 
     def test_publish_method_meta_dir_defined_before_use(self):
         """
-        验证 publish() 方法中 meta_dir 在使用前已定义
-
-        期望：代码中 meta_dir 的赋值在使用之前
+        AST 检查：meta_dir 赋值行号 < 使用行号
         """
-        import ast
-        from pathlib import Path
-
-        xianyu_path = Path(__file__).parent.parent / "automation" / "xianyu_publisher.py"
-        with open(xianyu_path, "r", encoding="utf-8") as f:
-            source = f.read()
-
+        xianyu_path = Path(__file__).parent.parent.parent / "automation" / "xianyu_publisher.py"
+        source = xianyu_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
 
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == "publish":
-                func_source = ast.get_source_segment(source, node)
-                if func_source is None:
-                    lines = source.split('\n')
-                    func_source = '\n'.join(lines[node.lineno - 1:node.end_lineno])
+                lines = source.split('\n')
+                func_lines = lines[node.lineno - 1:node.end_lineno]
+                func_source = '\n'.join(func_lines)
 
                 meta_dir_assign_lines = []
                 meta_dir_use_lines = []
 
-                for i, line in enumerate(func_source.split('\n'), 1):
-                    if 'meta_dir' in line and ('=' in line and 'self._get_meta_dir' in line):
+                for i, line in enumerate(func_lines, node.lineno):
+                    stripped = line.strip()
+                    if 'meta_dir' in stripped and '=' in stripped and 'self._get_meta_dir' in stripped:
                         meta_dir_assign_lines.append(i)
-                    if 'meta_dir' in line and '=' not in line:
+                    if 'meta_dir' in stripped and '=' not in stripped:
                         meta_dir_use_lines.append(i)
 
                 if meta_dir_assign_lines and meta_dir_use_lines:
@@ -73,68 +67,44 @@ class TestXianyuPublisherMetaDir:
 
 
 class TestMetadataWriter:
-    """测试 metadata_writer"""
+    """验证 metadata_writer.py 中 shutil.copy2 只在 meta_dir 下操作"""
 
     def test_write_copywriting_no_cover_copy(self):
         """
-        验证 write_copywriting 不复制封面到书籍目录
-
-        期望：shutil.copy2 只在 meta_dir 下操作，不在书籍目录下操作
+        AST 检查：shutil.copy2 调用行必须包含 'meta_dir'
         """
-        import ast
-        from pathlib import Path
-
-        mw_path = Path(__file__).parent.parent / "automation" / "metadata_writer.py"
-        with open(mw_path, "r", encoding="utf-8") as f:
-            source = f.read()
-
+        mw_path = Path(__file__).parent.parent.parent / "automation" / "metadata_writer.py"
+        source = mw_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
 
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == "write_copywriting":
-                func_source = ast.get_source_segment(source, node)
-                if func_source is None:
-                    lines = source.split('\n')
-                    func_source = '\n'.join(lines[node.lineno - 1:node.end_lineno])
-
-                lines = func_source.split('\n')
-                for line in lines:
+                lines = source.split('\n')
+                func_lines = lines[node.lineno - 1:node.end_lineno]
+                for line in func_lines:
                     if 'shutil.copy2' in line:
                         assert 'meta_dir' in line, \
                             f"封面复制应该只在 meta_dir 下: {line.strip()}"
 
 
 class TestContentSummarizerCover:
-    """测试 content_summarizer 封面复制"""
+    """验证 content_summarizer.py 中封面不复制到书籍 output_dir 根目录"""
 
     def test_summarize_no_cover_in_book_dir(self):
         """
-        验证生成精简版时封面只复制到 metadata 目录，不复制到书籍目录
-
-        期望：output_dir / cover.jpg 相关的复制逻辑被删除
+        AST 检查：cover 相关且含 output_dir 且含 '/' 的行，必须也含 meta_dir 或 .stem
         """
-        import ast
-        from pathlib import Path
-
-        cs_path = Path(__file__).parent.parent / "automation" / "content_summarizer.py"
-        with open(cs_path, "r", encoding="utf-8") as f:
-            source = f.read()
-
+        cs_path = Path(__file__).parent.parent.parent / "automation" / "content_summarizer.py"
+        source = cs_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
 
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == "summarize":
-                func_source = ast.get_source_segment(source, node)
-                if func_source is None:
-                    lines = source.split('\n')
-                    func_source = '\n'.join(lines[node.lineno - 1:node.end_lineno])
-
-                lines = func_source.split('\n')
-                cover_to_output_dir = False
-                for line in lines:
+                lines = source.split('\n')
+                func_lines = lines[node.lineno - 1:node.end_lineno]
+                for line in func_lines:
                     if 'cover' in line.lower() and 'output_dir' in line and '/' in line:
                         if 'meta_dir' not in line and '.stem' not in line:
-                            cover_to_output_dir = True
-
-                assert not cover_to_output_dir, \
-                    "书籍目录下不应复制封面，只应在 metadata 目录下复制"
+                            raise AssertionError(
+                                f"书籍目录下不应复制封面，只应在 metadata 目录下复制: {line.strip()}"
+                            )
