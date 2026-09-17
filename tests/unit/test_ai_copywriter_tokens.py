@@ -13,8 +13,8 @@ class TestAICopywriterTokenRecording:
 
     def test_generate_unpacks_xianyu_tuple(self):
         """应解包 generate_xianyu_listing 的 tuple 并传 text 给 write_copywriting"""
-        with patch("automation.ai_copywriter.AIClient") as MockAIClient, \
-             patch("automation.ai_copywriter.DatabaseManager") as MockDB, \
+        with patch("automation.publishing.ai_copywriter.AIClient") as MockAIClient, \
+             patch("automation.publishing.ai_copywriter.DatabaseManager") as MockDB, \
              patch("automation.ai_copywriter.MetadataWriter") as MockMW:
 
             ai_instance = MagicMock()
@@ -31,12 +31,14 @@ class TestAICopywriterTokenRecording:
             db_instance = MagicMock()
             MockDB.return_value = db_instance
 
+            mw_instance = MagicMock()
+            MockMW.return_value = mw_instance
+
             from automation.ai_copywriter import AICopywriter
             copywriter = AICopywriter()
 
             copywriter.generate("test-book-id", {"title": "Test", "author": "Author"})
 
-            mw_instance = MockMW.return_value
             called_xianyu = mw_instance.write_copywriting.call_args[0][1]
             called_xiaohongshu = mw_instance.write_copywriting.call_args[0][2]
 
@@ -47,8 +49,8 @@ class TestAICopywriterTokenRecording:
 
     def test_generate_records_xianyu_token_usage(self):
         """应记录闲鱼文案的 token 使用"""
-        with patch("automation.ai_copywriter.AIClient") as MockAIClient, \
-             patch("automation.ai_copywriter.DatabaseManager") as MockDB, \
+        with patch("automation.publishing.ai_copywriter.AIClient") as MockAIClient, \
+             patch("automation.publishing.ai_copywriter.DatabaseManager") as MockDB, \
              patch("automation.ai_copywriter.MetadataWriter"):
 
             ai_instance = MagicMock()
@@ -77,8 +79,8 @@ class TestAICopywriterTokenRecording:
 
     def test_generate_records_xiaohongshu_token_usage(self):
         """应记录小红书文案的 token 使用"""
-        with patch("automation.ai_copywriter.AIClient") as MockAIClient, \
-             patch("automation.ai_copywriter.DatabaseManager") as MockDB, \
+        with patch("automation.publishing.ai_copywriter.AIClient") as MockAIClient, \
+             patch("automation.publishing.ai_copywriter.DatabaseManager") as MockDB, \
              patch("automation.ai_copywriter.MetadataWriter"):
 
             ai_instance = MagicMock()
@@ -107,8 +109,8 @@ class TestAICopywriterTokenRecording:
 
     def test_generate_records_both_token_usages(self):
         """应记录闲鱼和小红书两者的 token 使用"""
-        with patch("automation.ai_copywriter.AIClient") as MockAIClient, \
-             patch("automation.ai_copywriter.DatabaseManager") as MockDB, \
+        with patch("automation.publishing.ai_copywriter.AIClient") as MockAIClient, \
+             patch("automation.publishing.ai_copywriter.DatabaseManager") as MockDB, \
              patch("automation.ai_copywriter.MetadataWriter"):
 
             ai_instance = MagicMock()
@@ -134,8 +136,8 @@ class TestAICopywriterTokenRecording:
 
     def test_generate_handles_missing_usage(self):
         """usage 为空时应跳过记录"""
-        with patch("automation.ai_copywriter.AIClient") as MockAIClient, \
-             patch("automation.ai_copywriter.DatabaseManager") as MockDB, \
+        with patch("automation.publishing.ai_copywriter.AIClient") as MockAIClient, \
+             patch("automation.publishing.ai_copywriter.DatabaseManager") as MockDB, \
              patch("automation.ai_copywriter.MetadataWriter"):
 
             ai_instance = MagicMock()

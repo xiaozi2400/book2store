@@ -3,9 +3,9 @@ from unittest.mock import patch, MagicMock
 from automation.image_generator import ImageGenerator
 
 
-@patch('automation.image_generator.DatabaseManager')
-@patch('automation.image_generator.AIClient')
-@patch('automation.image_generator.config')
+@patch('automation.image.image_generator.DatabaseManager')
+@patch('automation.image.image_generator.AIClient')
+@patch('automation.image.image_generator.config')
 def test_generate_no_summary_skips(mock_config, mock_ai, mock_db):
     """summary_text 为 None 时应跳过，不调用 AI"""
     cfg = {"enabled": True, "width": 800, "height": 800, "html_prompt": "test {title}"}
@@ -28,9 +28,9 @@ def test_generate_no_summary_skips(mock_config, mock_ai, mock_db):
     mock_ai.return_value.chat.assert_not_called()
 
 
-@patch('automation.image_generator.DatabaseManager')
-@patch('automation.image_generator.AIClient')
-@patch('automation.image_generator.config')
+@patch('automation.image.image_generator.DatabaseManager')
+@patch('automation.image.image_generator.AIClient')
+@patch('automation.image.image_generator.config')
 def test_generate_disabled_skips(mock_config, mock_ai, mock_db):
     """enabled:false 时应跳过"""
     cfg = {"enabled": False, "width": 800, "height": 800, "html_prompt": "test {title}"}
@@ -43,10 +43,10 @@ def test_generate_disabled_skips(mock_config, mock_ai, mock_db):
     assert result is False, "禁用时应跳过"
 
 
-@patch('automation.image_generator.Path')
-@patch('automation.image_generator.DatabaseManager')
-@patch('automation.image_generator.AIClient')
-@patch('automation.image_generator.config')
+@patch('automation.image.image_generator.Path')
+@patch('automation.image.image_generator.DatabaseManager')
+@patch('automation.image.image_generator.AIClient')
+@patch('automation.image.image_generator.config')
 def test_format_prompt_contains_all_fields(mock_config, mock_ai, mock_db, mock_path):
     """_format_prompt 应正确填充 {title} {summary}"""
     cfg = {

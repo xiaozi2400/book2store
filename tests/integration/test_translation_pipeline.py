@@ -109,8 +109,8 @@ def test_translate_epub_success_returns_quality_data(
 # Test 3: TranslationProcessor 处理失败场景
 # ============================================================
 
-@patch('automation.translation_processor.translate_epub')
-@patch('automation.translation_processor.DatabaseManager')
+@patch('automation.translation.translation_processor.translate_epub')
+@patch('automation.translation.translation_processor.DatabaseManager')
 def test_translation_processor_failed_translation(mock_db_cls, mock_translate):
     """translate_epub 返回 success=False 时，process 返回 False"""
     from automation.translation_processor import TranslationProcessor

@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from automation.database import DatabaseManager
 from automation.config import config
 from automation.utils import logger, ensure_dir
-from automation.suitability_evaluator import SuitabilityEvaluator
+from automation.summarizer.suitability_evaluator import SuitabilityEvaluator
 from automation.summarizer.cover_extractor import extract_cover_from_epub
 from automation.summarizer.chapter_extractor import (
     extract_chapters,

@@ -20,7 +20,6 @@ from automation.content_summarizer import generate_summary
 from automation.image_extractor import extract_images
 from automation.ai_copywriter import generate_copywriting
 from automation.link_importer import import_links
-from automation.xianyu_publisher import publish_to_xianyu
 from automation.config import config
 from automation.utils import extract_title_from_filename, move_processed_epubs
 from automation.progress import phase, event
@@ -145,6 +144,7 @@ def process(
 ):
     """处理指定书籍"""
     from automation.translation_processor import translate_book
+    from automation.xianyu_publisher import publish_to_xianyu
 
     console.print(f"[bold blue]开始处理书籍: {book_id}[/bold blue]")
 
@@ -179,7 +179,8 @@ def process(
 
     with phase("生成主图"):
         from automation.image_generator import generate_main_image
-        generate_main_image(book_id)
+        if not generate_main_image(book_id):
+            console.print("[yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
 
     with phase("提取图片"):
         base_name = Path(input_path).stem.strip()
@@ -260,6 +261,7 @@ def publish(
     auto: bool = typer.Option(False, help="自动发布（跳过手动确认）")
 ):
     """发布到闲鱼"""
+    from automation.xianyu_publisher import publish_to_xianyu
     console.print(f"[bold blue]发布到闲鱼: {book_id}[/bold blue]")
 
     if not auto:
@@ -506,7 +508,8 @@ def auto(
             if not skip_images:
                 with phase("生成主图"):
                     from automation.image_generator import generate_main_image
-                    generate_main_image(book_id)
+                    if not generate_main_image(book_id):
+                        console.print("  [yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
 
                 with phase("提取图片"):
                     base_name = Path(input_path).stem.strip()
@@ -664,7 +667,8 @@ def test(
             if not skip_images:
                 console.print(f"  [dim]→ 生成主图...[/dim]")
                 from automation.image_generator import generate_main_image
-                generate_main_image(book_id)
+                if not generate_main_image(book_id):
+                    console.print(f"  [yellow]⚠ 主图生成失败（检查日志）[/yellow]")
 
                 console.print(f"  [dim]→ 提取图片...[/dim]")
                 base_name = epub_path.stem.strip()

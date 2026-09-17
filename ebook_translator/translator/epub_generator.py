@@ -590,11 +590,8 @@ class EPUBGenerator:
                 tag['data-original'] = text
 
                 if mode == 'bilingual':
-                    saved = [c.extract() for c in list(tag.children)
-                             if isinstance(c, Tag)]
+                    # 不保留子标签: get_text() 已包含全部文本,子标签重加会导致英文重复
                     tag.clear()
-                    for c in saved:
-                        tag.append(c)
                     tag.append(text)
                     tag.append(soup.new_tag('br'))
                     span = soup.new_tag('span')
@@ -640,11 +637,8 @@ class EPUBGenerator:
             tag['data-original'] = text
 
             if mode == 'bilingual':
-                saved = [c.extract() for c in list(tag.children)
-                         if isinstance(c, Tag)]
+                # 不保留子标签: get_text() 已包含全部文本,子标签重加会导致英文重复
                 tag.clear()
-                for c in saved:
-                    tag.append(c)
                 tag.append(text)
                 tag.append(soup.new_tag('br'))
                 span = soup.new_tag('span')
@@ -870,12 +864,14 @@ class EPUBGenerator:
                 bilingual_css = f"""/* 中英对照样式 - 从配置文件加载 */
 p {{
     text-indent: {css_config.get('paragraph_text_indent', '2em')} !important;
+    margin-top: 0 !important;
     margin-bottom: {css_config.get('paragraph_margin_bottom', '1.5em')} !important;
     line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
 }}
 
 div {{
     text-indent: {css_config.get('paragraph_text_indent', '2em')} !important;
+    margin-top: 0 !important;
     margin-bottom: {css_config.get('paragraph_margin_bottom', '1.5em')} !important;
     line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
 }}
@@ -899,10 +895,14 @@ div {{
                 with open(css_path, 'w', encoding='utf-8') as f:
                     f.write(bilingual_css)
 
-                # 更新 OPF 文件
-                opf_files = [f for f in os.listdir(temp_dir) if f.endswith('.opf')]
+                # 更新 OPF 文件（递归搜索，部分 EPUB 的 OPF 在子目录如 OEBPS/）
+                opf_files = []
+                for opf_root, _, opf_fs in os.walk(temp_dir):
+                    for opf_f in opf_fs:
+                        if opf_f.endswith('.opf'):
+                            opf_files.append(os.path.join(opf_root, opf_f))
                 if opf_files:
-                    opf_path = os.path.join(temp_dir, opf_files[0])
+                    opf_path = opf_files[0]
                     try:
                         with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
                             content = f.read()
@@ -924,19 +924,22 @@ div {{
                                         html_soup = BeautifulSoup(html_content, 'lxml')
                                         head = html_soup.find('head')
                                         if head:
-                                            css_link = html_soup.find('link', href='styles/translation.css')
+                                            # 计算 CSS 相对于当前 HTML 文件的路径
+                                            html_dir = os.path.dirname(file_path)
+                                            css_rel_path = os.path.relpath(css_path, html_dir).replace('\\', '/')
+                                            css_link = html_soup.find('link', href=css_rel_path)
                                             if not css_link:
                                                 new_link = html_soup.new_tag('link')
                                                 new_link['rel'] = 'stylesheet'
                                                 new_link['type'] = 'text/css'
-                                                new_link['href'] = 'styles/translation.css'
+                                                new_link['href'] = css_rel_path
                                                 head.append(new_link)
-                                        
+
                                         with open(file_path, 'w', encoding='utf-8') as f:
                                             f.write(str(html_soup))
                                     except Exception as e:
                                         logger.warning(f"添加CSS到 {file} 时出错: {e}")
-                        
+
                         with open(opf_path, 'w', encoding='utf-8') as f:
                             f.write(str(soup))
                     except Exception as e:
@@ -1048,10 +1051,14 @@ blockquote {{
                 with open(css_path, 'w', encoding='utf-8') as f:
                     f.write(chinese_css)
 
-                # 更新 OPF 文件
-                opf_files = [f for f in os.listdir(temp_dir) if f.endswith('.opf')]
+                # 更新 OPF 文件（递归搜索，部分 EPUB 的 OPF 在子目录如 OEBPS/）
+                opf_files = []
+                for opf_root, _, opf_fs in os.walk(temp_dir):
+                    for opf_f in opf_fs:
+                        if opf_f.endswith('.opf'):
+                            opf_files.append(os.path.join(opf_root, opf_f))
                 if opf_files:
-                    opf_path = os.path.join(temp_dir, opf_files[0])
+                    opf_path = opf_files[0]
                     try:
                         with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
                             content = f.read()
@@ -1073,12 +1080,15 @@ blockquote {{
                                         html_soup = BeautifulSoup(html_content, 'lxml')
                                         head = html_soup.find('head')
                                         if head:
-                                            css_link = html_soup.find('link', href='styles/chinese_style.css')
+                                            # 计算 CSS 相对于当前 HTML 文件的路径
+                                            html_dir = os.path.dirname(file_path)
+                                            css_rel_path = os.path.relpath(css_path, html_dir).replace('\\', '/')
+                                            css_link = html_soup.find('link', href=css_rel_path)
                                             if not css_link:
                                                 new_link = html_soup.new_tag('link')
                                                 new_link['rel'] = 'stylesheet'
                                                 new_link['type'] = 'text/css'
-                                                new_link['href'] = 'styles/chinese_style.css'
+                                                new_link['href'] = css_rel_path
                                                 head.append(new_link)
                                         
                                         with open(file_path, 'w', encoding='utf-8') as f:

@@ -23,7 +23,7 @@ def test_process_command_passes_summary_to_copywriting():
                     with patch('automation.translation_processor.translate_book'):
                         with patch('automation.main.generate_summary'):
                             with patch('automation.main.extract_images'):
-                                with patch('automation.main.publish_to_xianyu'):
+                                with patch('automation.xianyu_publisher.publish_to_xianyu'):
                                     with patch('automation.main.Path.exists', return_value=True):
                                         result = runner.invoke(app, ["process", "test-book-id-123"])
 

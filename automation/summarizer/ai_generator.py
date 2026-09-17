@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from automation.ai_client import AIClient
 from automation.database import DatabaseManager
 from automation.config import config
-from automation.template_generator import TemplateGenerator, detect_and_generate_prompt
+from automation.summarizer.template_generator import TemplateGenerator, detect_and_generate_prompt
 from automation.utils import logger
 
 
@@ -50,7 +50,7 @@ class SummaryAIGenerator:
             logger.info(f"精简版生成提示词: 长度={prompt_len}, 前500字符: {prompt[:500]}")
 
             logger.info("开始调用AI...")
-            result, usage = self.ai.chat(prompt, max_tokens=8000)
+            result, usage = self.ai.chat(prompt, max_tokens=15000)
             logger.info(f"AI调用完成, 返回长度: {len(result) if result else 0}")
 
             if usage:

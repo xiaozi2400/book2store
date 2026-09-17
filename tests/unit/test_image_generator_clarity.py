@@ -9,9 +9,9 @@ from automation.image_generator import ImageGenerator
 
 def _build_generator_with_config(cfg: dict) -> ImageGenerator:
     """构造一个 ImageGenerator,通过 mock 让 config 可控"""
-    with patch('automation.image_generator.config') as mock_config, \
-         patch('automation.image_generator.AIClient'), \
-         patch('automation.image_generator.DatabaseManager'):
+    with patch('automation.image.image_generator.config') as mock_config, \
+         patch('automation.image.image_generator.AIClient'), \
+         patch('automation.image.image_generator.DatabaseManager'):
         mock_config.image_generator_config = cfg
         mock_config.output_dir = "."
         gen = ImageGenerator()
