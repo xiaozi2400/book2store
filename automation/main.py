@@ -16,9 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from automation.database import DatabaseManager
 from automation.directory_scanner import scan_input_directory
-from automation.content_summarizer import generate_summary
-from automation.image_extractor import extract_images
-from automation.ai_copywriter import generate_copywriting
+from automation.summarizer import generate_summary
+from automation.image import extract_images
+from automation.publishing import generate_copywriting
 from automation.link_importer import import_links
 from automation.config import config
 from automation.utils import extract_title_from_filename, move_processed_epubs
