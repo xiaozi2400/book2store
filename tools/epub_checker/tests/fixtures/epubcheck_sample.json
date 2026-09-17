@@ -1,0 +1,51 @@
+{
+  "messages": [
+    {
+      "ID": "OPF-018",
+      "severity": "ERROR",
+      "message": "Resource 'OEBPS/img/cover.jpg' is not declared in OPF manifest.",
+      "locations": {
+        "application/xml": [
+          {"path": "OEBPS/package.opf", "line": 42}
+        ]
+      },
+      "hint": "Add a manifest item with href='img/cover.jpg'."
+    },
+    {
+      "ID": "RSC-005",
+      "severity": "ERROR",
+      "message": "File reference 'missing.xhtml' could not be found in the publication.",
+      "locations": {
+        "application/xml": [
+          {"path": "OEBPS/package.opf", "line": 87}
+        ]
+      },
+      "hint": "Ensure the referenced file exists in the EPUB."
+    },
+    {
+      "ID": "OPF-097",
+      "severity": "WARNING",
+      "message": "Missing accessibility metadata.",
+      "locations": {
+        "application/xml": [
+          {"path": "OEBPS/package.opf"}
+        ]
+      },
+      "hint": "Consider adding schema:accessMode."
+    },
+    {
+      "ID": "FATAL-001",
+      "severity": "FATAL",
+      "message": "EPUB package could not be opened.",
+      "locations": {},
+      "hint": null
+    }
+  ],
+  "checker": {
+    "checkerVersion": "5.0.0",
+    "elapsedTime": 1420
+  },
+  "publication": {
+    "ePubVersion": "3.3"
+  }
+}
