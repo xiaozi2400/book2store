@@ -20,10 +20,10 @@ def test_process_command_passes_summary_to_copywriting():
         with patch('automation.main.DatabaseManager.create_book_output'):
             with patch('automation.main.DatabaseManager.get_token_summary', return_value=None):
                 with patch('automation.main.generate_copywriting') as mock_gen:
-                    with patch('automation.translation_processor.translate_book'):
+                    with patch('automation.translation.translate_book'):
                         with patch('automation.main.generate_summary'):
                             with patch('automation.main.extract_images'):
-                                with patch('automation.xianyu_publisher.publish_to_xianyu'):
+                                with patch('automation.publishing.xianyu_publisher.publish_to_xianyu'):
                                     with patch('automation.main.Path.exists', return_value=True):
                                         result = runner.invoke(app, ["process", "test-book-id-123"])
 

@@ -177,7 +177,7 @@ class TestStageExecution:
             mock_db.update_book_status.return_value = None
             mock_db.add_log.return_value = None
 
-            with patch('automation.translation_processor.translate_book') as mock_translate:
+            with patch('automation.translation.translate_book') as mock_translate:
                 mock_translate.return_value = True
 
                 stage = TranslationStage()

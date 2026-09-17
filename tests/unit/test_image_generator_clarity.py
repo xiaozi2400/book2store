@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock, call
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from automation.image_generator import ImageGenerator
+from automation.image.image_generator import ImageGenerator
 
 
 def _build_generator_with_config(cfg: dict) -> ImageGenerator:

@@ -143,8 +143,8 @@ def process(
     skip_publish: bool = typer.Option(False, help="跳过发布步骤")
 ):
     """处理指定书籍"""
-    from automation.translation_processor import translate_book
-    from automation.xianyu_publisher import publish_to_xianyu
+    from automation.translation import translate_book
+    from automation.publishing import publish_to_xianyu
 
     console.print(f"[bold blue]开始处理书籍: {book_id}[/bold blue]")
 
@@ -178,7 +178,7 @@ def process(
         generate_summary(book_id, str(input_path))
 
     with phase("生成主图"):
-        from automation.image_generator import generate_main_image
+        from automation.image import generate_main_image
         if not generate_main_image(book_id):
             console.print("[yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
 
@@ -261,7 +261,7 @@ def publish(
     auto: bool = typer.Option(False, help="自动发布（跳过手动确认）")
 ):
     """发布到闲鱼"""
-    from automation.xianyu_publisher import publish_to_xianyu
+    from automation.publishing import publish_to_xianyu
     console.print(f"[bold blue]发布到闲鱼: {book_id}[/bold blue]")
 
     if not auto:
@@ -284,7 +284,7 @@ def generate_list(
     book_id: str = typer.Argument(..., help="书籍ID")
 ):
     """生成闲鱼发布清单（备用方案）"""
-    from automation.xianyu_publisher import XianyuPublisher
+    from automation.publishing.xianyu_publisher import XianyuPublisher
 
     publisher = XianyuPublisher()
     list_path = publisher.generate_publish_list(book_id)
@@ -359,7 +359,7 @@ def republish_failed(
     auto: bool = typer.Option(False, "--auto", help="跳过执行前的确认"),
 ):
     """重新发布失败的书籍"""
-    from automation.xianyu_publisher import publish_to_xianyu
+    from automation.publishing import publish_to_xianyu
     from rich.table import Table
 
     db = DatabaseManager()
@@ -456,11 +456,11 @@ def auto(
 ):
     """一键处理：扫描输入目录，自动处理所有新书籍"""
     from automation.directory_scanner import scan_input_directory
-    from automation.translation_processor import translate_book
-    from automation.image_extractor import extract_images
-    from automation.ai_copywriter import generate_copywriting
-    from automation.content_summarizer import generate_summary
-    from automation.xianyu_publisher import publish_to_xianyu
+    from automation.translation import translate_book
+    from automation.image import extract_images
+    from automation.publishing import generate_copywriting
+    from automation.summarizer import generate_summary
+    from automation.publishing import publish_to_xianyu
     import time
 
     console.print("[bold blue]开始一键处理...[/bold blue]\n")
@@ -507,7 +507,7 @@ def auto(
 
             if not skip_images:
                 with phase("生成主图"):
-                    from automation.image_generator import generate_main_image
+                    from automation.image import generate_main_image
                     if not generate_main_image(book_id):
                         console.print("  [yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
 
@@ -593,10 +593,10 @@ def test(
     skip_cache: bool = typer.Option(False, help="跳过翻译缓存，强制重新翻译")
 ):
     """测试模式：直接从 test_input_dir 读取文件处理（跳过闲鱼发布）"""
-    from automation.translation_processor import translate_book
-    from automation.image_extractor import extract_images
-    from automation.ai_copywriter import generate_copywriting
-    from automation.content_summarizer import generate_summary
+    from automation.translation import translate_book
+    from automation.image import extract_images
+    from automation.publishing import generate_copywriting
+    from automation.summarizer import generate_summary
     from automation.utils import is_valid_epub
     import time
 
@@ -666,7 +666,7 @@ def test(
 
             if not skip_images:
                 console.print(f"  [dim]→ 生成主图...[/dim]")
-                from automation.image_generator import generate_main_image
+                from automation.image import generate_main_image
                 if not generate_main_image(book_id):
                     console.print(f"  [yellow]⚠ 主图生成失败（检查日志）[/yellow]")
 
@@ -791,7 +791,7 @@ def regenerate_images(
     book_id: str = typer.Option(None, "--book-id", help="指定书籍ID（优先于关键词）"),
 ):
     """复用已有摘要重新生成主图（修改提示词后测试用）"""
-    from automation.image_generator import generate_main_image
+    from automation.image import generate_main_image
 
     db = DatabaseManager()
 

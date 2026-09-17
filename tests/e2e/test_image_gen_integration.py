@@ -9,7 +9,7 @@ from ebooklib import epub
 
 from automation.config import config
 from automation.database import DatabaseManager
-from automation.image_generator import generate_main_image
+from automation.image import generate_main_image
 
 # Find a book with summary_text
 db = DatabaseManager()

@@ -81,7 +81,7 @@ class TranslationStage(Stage):
         return ctx.skip_translate
 
     def execute(self, ctx: PipelineContext) -> None:
-        from automation.translation_processor import translate_book
+        from automation.translation import translate_book
 
         logger.info(f"[{self.name}] 开始翻译: {ctx.book_id}")
         self.db.update_book_status(ctx.book_id, "translating")

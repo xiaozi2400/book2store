@@ -1,6 +1,6 @@
 """测试 ContentSummarizer 在生成摘要后保存 summary_text"""
 from unittest.mock import MagicMock, Mock, patch
-from automation.content_summarizer import ContentSummarizer
+from automation.summarizer import ContentSummarizer
 from automation.database import get_session
 from automation.models import Book
 

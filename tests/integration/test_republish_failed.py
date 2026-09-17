@@ -33,7 +33,7 @@ def test_get_books_by_publish_status_returns_only_failed(db_session):
 
 def test_publish_failure_writes_publish_status_failed(db_session, monkeypatch, tmp_path):
     """XianyuPublisher.publish() 失败时回写 BookOutput.publish_status='failed' 和 publish_error"""
-    from automation.xianyu_publisher import XianyuPublisher
+    from automation.publishing.xianyu_publisher import XianyuPublisher
     from automation.config import config
 
     real_output_dir = tmp_path / "output"
@@ -89,7 +89,7 @@ def test_republish_failed_command_retries_all(db_session, monkeypatch):
     """republish-failed --all --auto 重新发布所有失败书籍"""
     from typer.testing import CliRunner
     from automation.main import app
-    from automation.xianyu_publisher import XianyuPublisher
+    from automation.publishing.xianyu_publisher import XianyuPublisher
 
     db_session.add(Book(id="book-failed-1", filename="f1.epub", title="失败1", status="completed"))
     db_session.add(Book(id="book-failed-2", filename="f2.epub", title="失败2", status="completed"))

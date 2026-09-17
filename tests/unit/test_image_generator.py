@@ -1,7 +1,7 @@
 """Test image_generator module"""
 import base64
 import pytest
-from automation.image_generator import ImageGenerator
+from automation.image.image_generator import ImageGenerator
 
 
 class TestCoverImageInjection:

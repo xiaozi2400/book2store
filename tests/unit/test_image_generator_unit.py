@@ -1,6 +1,6 @@
 """Test ImageGenerator core logic"""
 from unittest.mock import patch, MagicMock
-from automation.image_generator import ImageGenerator
+from automation.image.image_generator import ImageGenerator, _safe_format
 
 
 @patch('automation.image.image_generator.DatabaseManager')
@@ -67,7 +67,7 @@ def test_format_prompt_contains_all_fields(mock_config, mock_ai, mock_db, mock_p
 
 def test_safe_format_tolerates_literal_css_braces():
     """模板中出现 CSS/JSON 字面量 `{...}` 时不应崩溃(修复 KeyError: '\n  --primary')。"""
-    from automation.image_generator import _safe_format
+    from automation.image.image_generator import _safe_format
 
     template = (
         "{design_plan}\n\n"

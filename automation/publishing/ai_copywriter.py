@@ -58,7 +58,7 @@ class AICopywriter:
                 )
             logger.info(f"小红书笔记生成结果: {xiaohongshu_result[:100] if xiaohongshu_result else 'None'}...")
 
-            from automation.ai_copywriter import MetadataWriter  # 测试通过 patch 此路径拦截
+            from automation.metadata_writer import MetadataWriter  # 测试通过 patch 此路径拦截
             MetadataWriter().write_copywriting(book_id, xianyu_result, xiaohongshu_result)
 
             self.db.add_log(book_id, "copywriting", "success", "文案生成完成")

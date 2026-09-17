@@ -41,7 +41,7 @@ class TestXianyuPublisherMetaDir:
         """
         AST 检查：meta_dir 赋值行号 < 使用行号
         """
-        xianyu_path = Path(__file__).parent.parent.parent / "automation" / "xianyu_publisher.py"
+        xianyu_path = Path(__file__).parent.parent.parent / "automation" / "publishing" / "xianyu_publisher.py"
         source = xianyu_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
 
@@ -94,7 +94,7 @@ class TestContentSummarizerCover:
         """
         AST 检查：cover 相关且含 output_dir 且含 '/' 的行，必须也含 meta_dir 或 .stem
         """
-        cs_path = Path(__file__).parent.parent.parent / "automation" / "content_summarizer.py"
+        cs_path = Path(__file__).parent.parent.parent / "automation" / "summarizer" / "content_summarizer.py"
         source = cs_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
 
