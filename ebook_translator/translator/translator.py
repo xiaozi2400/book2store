@@ -5,6 +5,7 @@ import time
 import re
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 
 logger = logging.getLogger(__name__)
 
@@ -340,32 +341,52 @@ class Translator:
 
         batch_config = self.opt_config['batch']
 
-        if tier_groups['tier1_short_repeatable']:
-            logger.info(f"[Tier 1] 翻译 {len(tier_groups['tier1_short_repeatable'])} 个短文本...")
-            tier1_results = self._translate_tier(
-                tier_groups['tier1_short_repeatable'],
-                'tier1_short_repeatable',
-                batch_config['tier1_batch_size']
-            )
-            all_results.update(tier1_results)
+        total_paragraphs = len(tier_groups['tier1_short_repeatable']) + \
+                          len(tier_groups['tier2_normal']) + \
+                          len(tier_groups['tier3_long_complex'])
 
-        if tier_groups['tier2_normal']:
-            logger.info(f"[Tier 2] 翻译 {len(tier_groups['tier2_normal'])} 个普通文本...")
-            tier2_results = self._translate_tier(
-                tier_groups['tier2_normal'],
-                'tier2_normal',
-                batch_config['tier2_batch_size']
-            )
-            all_results.update(tier2_results)
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("({task.completed}/{task.total})"),
+            TimeRemainingColumn(),
+            console=Console(stderr=True),
+        ) as progress:
+            task = progress.add_task(f"翻译 ({total_paragraphs} 段落)", total=total_paragraphs)
 
-        if tier_groups['tier3_long_complex']:
-            logger.info(f"[Tier 3] 翻译 {len(tier_groups['tier3_long_complex'])} 个长文本...")
-            tier3_results = self._translate_tier(
-                tier_groups['tier3_long_complex'],
-                'tier3_long_complex',
-                1
-            )
-            all_results.update(tier3_results)
+            if tier_groups['tier1_short_repeatable']:
+                logger.info(f"[Tier 1] 翻译 {len(tier_groups['tier1_short_repeatable'])} 个短文本...")
+                tier1_results = self._translate_tier(
+                    tier_groups['tier1_short_repeatable'],
+                    'tier1_short_repeatable',
+                    batch_config['tier1_batch_size'],
+                    progress,
+                    task
+                )
+                all_results.update(tier1_results)
+
+            if tier_groups['tier2_normal']:
+                logger.info(f"[Tier 2] 翻译 {len(tier_groups['tier2_normal'])} 个普通文本...")
+                tier2_results = self._translate_tier(
+                    tier_groups['tier2_normal'],
+                    'tier2_normal',
+                    batch_config['tier2_batch_size'],
+                    progress,
+                    task
+                )
+                all_results.update(tier2_results)
+
+            if tier_groups['tier3_long_complex']:
+                logger.info(f"[Tier 3] 翻译 {len(tier_groups['tier3_long_complex'])} 个长文本...")
+                tier3_results = self._translate_tier(
+                    tier_groups['tier3_long_complex'],
+                    'tier3_long_complex',
+                    1,
+                    progress,
+                    task
+                )
+                all_results.update(tier3_results)
 
         for dup in duplicates:
             original_id = dup.get('original_id')
@@ -408,7 +429,7 @@ class Translator:
         
         return batches
     
-    def _translate_tier(self, paragraphs, tier, batch_size):
+    def _translate_tier(self, paragraphs, tier, batch_size, progress=None, task=None):
         """翻译指定 tier 的段落"""
         if not paragraphs:
             return {}
@@ -446,22 +467,17 @@ class Translator:
                         self.stats['by_tier'][tier] += 1
 
                     completed += len(batch)
-                    progress = completed / len(paragraphs) * 100
-                    # 单行动态进度条：使用 \r 回到行首覆盖上一行，避免日志刷屏
-                    bar_width = 30
-                    filled = int(bar_width * completed / len(paragraphs))
-                    bar = "█" * filled + "░" * (bar_width - filled)
-                    print(f"\r  翻译进度: [{bar}] {completed}/{len(paragraphs)} ({progress:.1f}%)", end="", flush=True)
-                    logger.info(f"  进度: {completed}/{len(paragraphs)} ({progress:.1f}%)")
+                    if progress and task is not None:
+                        progress.update(task, completed=completed)
+                    logger.info(f"  进度: {completed}/{len(paragraphs)}")
 
                 except Exception as e:
                     logger.warning(f"  批次翻译出错: {e}")
                     for para in batch:
                         result = self._translate_single_with_retry(para)
                         results[result['id']] = result
-
-        # 进度条结束换行，避免覆盖下一行内容
-        print()
+                        if progress and task is not None:
+                            progress.update(task, advance=1)
 
         return results
 
