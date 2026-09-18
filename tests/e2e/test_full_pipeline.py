@@ -8,6 +8,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from automation.database import get_session, close_session
+from automation.models import Book, BookOutput, ProcessingLog, TranslationCache
 from automation.config import config
 
 
@@ -17,14 +19,43 @@ INPUT_EPUB = Path("data") / f"{BOOK_NAME}.epub"
 
 
 @pytest.fixture(scope="module")
-def setup_input_file(ensure_input_exists):
-    """将测试 epub 复制到 input_dir"""
-    input_dir = Path(config.input_dir)
-    input_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = input_dir / f"{BOOK_NAME}.epub"
-    shutil.copy2(ensure_input_exists, dest_path)
-    yield dest_path
-    # 测试后不清理 input_dir 中的文件
+def reset_database():
+    """清理数据库中与测试书籍相关的所有记录（强制重新翻译）"""
+    session = get_session()
+    try:
+        # 1. 查找测试书籍（精确匹配文件名）
+        book = session.query(Book).filter(Book.filename == f"{BOOK_NAME}.epub").first()
+        if book:
+            book_id = book.id
+
+            # 2. 清理关联记录：BookOutput
+            session.query(BookOutput).filter(BookOutput.book_id == book_id).delete()
+
+            # 3. 清理关联记录：ProcessingLog
+            session.query(ProcessingLog).filter(ProcessingLog.book_id == book_id).delete()
+
+            # 4. 清理关联记录：TokenUsage
+            from automation.models import TokenUsage
+            session.query(TokenUsage).filter(TokenUsage.book_id == book_id).delete()
+
+            # 5. 清理关联记录：ShareLink
+            from automation.models import ShareLink
+            session.query(ShareLink).filter(ShareLink.book_id == book_id).delete()
+
+            # 6. 删除 Book 记录
+            session.delete(book)
+
+            # 7. 清空 TranslationCache 表（测试专用，强制重新翻译）
+            session.query(TranslationCache).delete()
+
+            session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"清理数据库记录时出错: {e}")
+    finally:
+        close_session(session)
+
+    yield
 
 
 @pytest.fixture(scope="module")
@@ -48,6 +79,22 @@ def clean_environment():
 
 
 @pytest.fixture(scope="module")
+def clean_processed_dir():
+    """清理"已处理"目录下的测试文件"""
+    input_dir = Path(config.input_dir)
+    processed_dir = input_dir / "已处理"
+
+    if processed_dir.exists():
+        # 清理 processed 目录下的测试文件
+        processed_epub = processed_dir / f"{BOOK_NAME}.epub"
+        if processed_epub.exists():
+            processed_epub.unlink()
+            print(f"\n已清理: {processed_epub}")
+
+    yield
+
+
+@pytest.fixture(scope="module")
 def ensure_input_exists():
     """确保测试用的 epub 文件存在"""
     if not INPUT_EPUB.exists():
@@ -55,10 +102,23 @@ def ensure_input_exists():
     return INPUT_EPUB
 
 
+@pytest.fixture(scope="module")
+def setup_input_file(ensure_input_exists):
+    """将测试 epub 复制到 input_dir"""
+    input_dir = Path(config.input_dir)
+    input_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = input_dir / f"{BOOK_NAME}.epub"
+    shutil.copy2(ensure_input_exists, dest_path)
+    yield dest_path
+    # 测试后清理 input_dir 中的测试文件
+    if dest_path.exists():
+        dest_path.unlink()
+
+
 class TestFullPipeline:
     """完整流水线 E2E 测试"""
 
-    def test_pipeline_execution(self, clean_environment, setup_input_file):
+    def test_pipeline_execution(self, reset_database, clean_environment, clean_processed_dir, setup_input_file):
         """执行完整流水线（跳过发布）"""
         # 切换到项目根目录执行命令
         project_root = Path(__file__).parent.parent.parent
