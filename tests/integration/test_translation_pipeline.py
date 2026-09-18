@@ -18,7 +18,7 @@ import pytest
 @patch('ebook_translator.library.EPUBParser')
 def test_translate_epub_empty_translation_detection(
     mock_parser_cls, mock_get_translator, mock_cache_cls,
-    mock_gen_cls, mock_pdf_cls
+    mock_gen_cls, mock_pdf_cls, tmp_path
 ):
     """翻译 API 全部返回空时，translate_epub 返回 success=False"""
     from ebook_translator.library import translate_epub
@@ -39,8 +39,13 @@ def test_translate_epub_empty_translation_detection(
     ]
     mock_get_translator.return_value = mock_translator
 
+    # Use tmp_path to avoid creating directories in project root
+    epub_path = tmp_path / "dummy.epub"
+    epub_path.touch()
+
     result = translate_epub(
-        epub_path="dummy.epub",
+        epub_path=str(epub_path),
+        output_dir=str(tmp_path),
         skip_cache=True,
         test_mode=True
     )
@@ -62,7 +67,7 @@ def test_translate_epub_empty_translation_detection(
 @patch('ebook_translator.library.EPUBParser')
 def test_translate_epub_success_returns_quality_data(
     mock_parser_cls, mock_get_translator, mock_cache_cls,
-    mock_gen_cls, mock_pdf_cls, mock_copy2
+    mock_gen_cls, mock_pdf_cls, mock_copy2, tmp_path
 ):
     """翻译成功时，返回 source_paragraphs、translated_paragraphs、cache_data"""
     from ebook_translator.library import translate_epub
@@ -84,8 +89,13 @@ def test_translate_epub_success_returns_quality_data(
     mock_translator.get_stats.return_value = {}
     mock_get_translator.return_value = mock_translator
 
+    # Use tmp_path to avoid creating directories in project root
+    epub_path = tmp_path / "dummy.epub"
+    epub_path.touch()
+
     result = translate_epub(
-        epub_path="dummy.epub",
+        epub_path=str(epub_path),
+        output_dir=str(tmp_path),
         skip_cache=True,
         test_mode=True
     )
@@ -111,7 +121,7 @@ def test_translate_epub_success_returns_quality_data(
 
 @patch('automation.translation.translation_processor.translate_epub')
 @patch('automation.translation.translation_processor.DatabaseManager')
-def test_translation_processor_failed_translation(mock_db_cls, mock_translate):
+def test_translation_processor_failed_translation(mock_db_cls, mock_translate, tmp_path):
     """translate_epub 返回 success=False 时，process 返回 False"""
     from automation.translation.translation_processor import TranslationProcessor
 
@@ -121,7 +131,9 @@ def test_translation_processor_failed_translation(mock_db_cls, mock_translate):
     mock_db_cls.return_value = mock_db
 
     processor = TranslationProcessor()
-    result = processor.process(book_id="test-id", epub_path="dummy.epub")
+    epub_path = tmp_path / "dummy.epub"
+    epub_path.touch()
+    result = processor.process(book_id="test-id", epub_path=str(epub_path))
 
     assert result is False
     mock_db.update_book_status.assert_any_call("test-id", "failed", "翻译失败")
