@@ -49,11 +49,6 @@ class ImageGenerationError(ImageError):
     pass
 
 
-class ImageExtractionError(ImageError):
-    """图片提取失败"""
-    pass
-
-
 # ===== 文案相关 =====
 class CopywritingError(BookfileBaseError):
     """文案生成失败"""
@@ -111,7 +106,6 @@ def wrap_stage_error(stage_name: str, original_error: Exception, book_id: str = 
         "translation": TranslationError,
         "summarize": SummaryError,
         "image_generation": ImageGenerationError,
-        "image_extraction": ImageExtractionError,
         "copywriting": CopywritingError,
         "publish": PublishError,
     }
