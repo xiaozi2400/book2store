@@ -116,7 +116,7 @@ class SummaryStage(Stage):
         return ctx.skip_summarize
 
     def execute(self, ctx: PipelineContext) -> None:
-        from automation.content_summarizer import generate_summary
+        from automation.summarizer import generate_summary
 
         logger.info(f"[{self.name}] 开始生成精简版: {ctx.book_id}")
         self.db.update_book_status(ctx.book_id, "summarizing")
@@ -144,7 +144,7 @@ class ImageGenerationStage(Stage):
         return ctx.skip_images
 
     def execute(self, ctx: PipelineContext) -> None:
-        from automation.image_generator import generate_main_image
+        from automation.image import generate_main_image
 
         logger.info(f"[{self.name}] 开始生成主图: {ctx.book_id}")
         self.db.update_book_status(ctx.book_id, "generating_images")
@@ -157,18 +157,6 @@ class ImageGenerationStage(Stage):
         logger.info(f"[{self.name}] 主图生成完成: {ctx.book_id}, 数量: {ctx.main_image_count}")
 
 
-class ImageExtractionStage(Stage):
-    """图片提取阶段 - 已禁用（封面提取已移至 summarizer）"""
-
-    name = "image_extraction"
-
-    def should_skip(self, ctx: PipelineContext) -> bool:
-        return True  # 始终跳过
-
-    def execute(self, ctx: PipelineContext) -> None:
-        logger.info(f"[{self.name}] 图片提取已禁用，跳过: {ctx.book_id}")
-
-
 class CopywritingStage(Stage):
     """文案生成阶段 - 生成闲鱼文案和小红书笔记"""
 
@@ -178,7 +166,7 @@ class CopywritingStage(Stage):
         return ctx.skip_copywriting
 
     def execute(self, ctx: PipelineContext) -> None:
-        from automation.ai_copywriter import generate_copywriting
+        from automation.publishing import generate_copywriting
 
         logger.info(f"[{self.name}] 开始生成文案: {ctx.book_id}")
         self.db.update_book_status(ctx.book_id, "copywriting")
@@ -203,7 +191,7 @@ class PublishStage(Stage):
         return ctx.skip_publish
 
     def execute(self, ctx: PipelineContext) -> None:
-        from automation.xianyu_publisher import publish_to_xianyu
+        from automation.publishing import publish_to_xianyu
 
         logger.info(f"[{self.name}] 开始发布: {ctx.book_id}")
         self.db.update_book_status(ctx.book_id, "publishing")
@@ -256,7 +244,6 @@ def build_pipeline(
         TranslationStage(skip_cache=skip_cache),
         SummaryStage(),
         ImageGenerationStage(),
-        ImageExtractionStage(),
         CopywritingStage(),
         PublishStage(),
     ]

@@ -2,8 +2,8 @@
 
 # 路径配置
 paths:
-  input_dir: "E:\\ebooks\\input"
-  output_dir: "./output"
+  input_dir: "./data/input"
+  output_dir: "./data/output"
   data_dir: "./data"
   log_dir: "./logs"
 

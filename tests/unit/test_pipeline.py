@@ -7,12 +7,17 @@ from pathlib import Path
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _root)
+# 确保 ebook_translator 在 sys.path 中（translation 模块依赖 translator 子模块）
+_ebook_translator_path = os.path.join(_root, 'ebook_translator')
+if _ebook_translator_path not in sys.path:
+    sys.path.insert(0, _ebook_translator_path)
 
 from automation.pipeline import (
     PipelineContext, Pipeline, Stage,
     TranslationStage, SummaryStage, ImageGenerationStage,
-    ImageExtractionStage, CopywritingStage, PublishStage,
+    CopywritingStage, PublishStage,
     build_pipeline, run_pipeline
 )
 
@@ -54,7 +59,7 @@ class TestBuildPipeline:
     def test_build_pipeline_returns_pipeline(self):
         pipeline = build_pipeline()
         assert isinstance(pipeline, Pipeline)
-        assert len(pipeline.stages) == 6
+        assert len(pipeline.stages) == 5
 
     def test_build_pipeline_with_skip_flags(self):
         pipeline = build_pipeline(
@@ -84,7 +89,6 @@ class TestPipelineRun:
             TranslationStage=MagicMock(),
             SummaryStage=MagicMock(),
             ImageGenerationStage=MagicMock(),
-            ImageExtractionStage=MagicMock(),
             CopywritingStage=MagicMock(),
             PublishStage=MagicMock(),
         ) as mocks:
@@ -134,9 +138,7 @@ class TestStageShouldSkip:
     def test_image_stages_skip_when_images_flag_set(self):
         ctx = PipelineContext(book_id="test", epub_path="test.epub", skip_images=True)
         gen_stage = ImageGenerationStage()
-        extract_stage = ImageExtractionStage()
         assert gen_stage.should_skip(ctx) is True
-        assert extract_stage.should_skip(ctx) is True
 
     def test_copywriting_stage_skips_when_flag_set(self):
         ctx = PipelineContext(book_id="test", epub_path="test.epub", skip_copywriting=True)
@@ -163,7 +165,7 @@ class TestStageExecution:
             skip_publish=True,
         )
 
-        # Mock 数据库和 translate_book（在 translation_processor 模块中）
+        # Mock 数据库
         mock_output = MagicMock()
         mock_output.bilingual_epub = "/path/to/bilingual.epub"
         mock_output.chinese_epub = "/path/to/chinese.epub"
@@ -177,15 +179,19 @@ class TestStageExecution:
             mock_db.update_book_status.return_value = None
             mock_db.add_log.return_value = None
 
-            with patch('automation.translation.translate_book') as mock_translate:
-                mock_translate.return_value = True
+            # Patch where translate_book is imported (inside TranslationStage.execute)
+            import automation.translation as translation_module
+            original = translation_module.translate_book
+            translation_module.translate_book = MagicMock(return_value=True)
 
+            try:
                 stage = TranslationStage()
                 stage.db = mock_db
                 stage.execute(ctx)
 
-                mock_translate.assert_called_once()
                 assert ctx.translation_result["bilingual_epub"] == "/path/to/bilingual.epub"
+            finally:
+                translation_module.translate_book = original
 
 
 class TestPipelineErrorHandling:

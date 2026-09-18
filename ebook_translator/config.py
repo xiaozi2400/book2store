@@ -6,9 +6,23 @@ import logging
 logger = logging.getLogger(__name__)
 
 # DeepSeek API 配置
-# 从环境变量读取 API 密钥
-# 请设置环境变量 DEEPSEEK_API_KEY 为您的 API 密钥
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+# 从环境变量读取 API 密钥，如果未设置则 fallback 到 automation.config
+_DEEPSEEK_API_KEY_ENV = os.environ.get("DEEPSEEK_API_KEY", "")
+
+if _DEEPSEEK_API_KEY_ENV:
+    DEEPSEEK_API_KEY = _DEEPSEEK_API_KEY_ENV
+else:
+    # Fallback to automation.config.ai_config
+    try:
+        import sys
+        import os as _os
+        _os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from automation.config import config as _auto_config
+        DEEPSEEK_API_KEY = _auto_config.ai_config.get("api_key", "")
+    except Exception:
+        DEEPSEEK_API_KEY = ""
+
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_MODEL = "deepseek-chat"
 

@@ -6,6 +6,7 @@ import re
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
+from rich.console import Console
 
 logger = logging.getLogger(__name__)
 

@@ -142,8 +142,8 @@ def process(
     skip_publish: bool = typer.Option(False, help="跳过发布步骤")
 ):
     """处理指定书籍"""
-    from automation.translation import translate_book
-    from automation.publishing import publish_to_xianyu
+    from automation.pipeline import run_pipeline
+    import time
 
     console.print(f"[bold blue]开始处理书籍: {book_id}[/bold blue]")
 
@@ -168,31 +168,29 @@ def process(
         console.print(f"[bold red]文件不存在: {input_path}[/bold red]")
         raise typer.Exit(1)
 
-    with phase("翻译并生成 PDF"):
-        if not translate_book(book_obj.id, str(input_path)):
-            console.print("[bold red]翻译失败，停止处理[/bold red]")
-            raise typer.Exit(1)
+    start_time = time.time()
 
-    with phase("生成精简版"):
-        generate_summary(book_id, str(input_path))
+    ctx = run_pipeline(
+        book_id=book_id,
+        epub_path=str(input_path),
+        filename=book_obj.filename,
+        title=book_obj.title or '',
+        author=book_obj.author or '',
+        skip_translate=False,
+        skip_summarize=False,
+        skip_images=False,
+        skip_copywriting=False,
+        skip_publish=skip_publish,
+        skip_cache=False,
+    )
 
-    with phase("生成主图"):
-        from automation.image import generate_main_image
-        if not generate_main_image(book_id):
-            console.print("[yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
+    elapsed = time.time() - start_time
 
-    with phase("生成文案"):
-        generate_copywriting(book_id, {
-            'title': book_obj.title,
-            'author': book_obj.author,
-            'summary': book_obj.summary_text or ''
-        })
+    if ctx.status == "failed":
+        console.print(f"[bold red]处理失败: {ctx.error}[/bold red]")
+        raise typer.Exit(1)
 
-    if not skip_publish:
-        with phase("发布到闲鱼"):
-            publish_to_xianyu(book_id)
-
-    console.print(f"[bold green]处理完成: {book_id}[/bold green]")
+    console.print(f"[bold green]处理完成: {book_id} ({elapsed:.1f}秒)[/bold green]")
     steps = db.get_token_summary(book_id)
     if steps:
         console.print(format_token_summary(steps))
@@ -450,10 +448,7 @@ def auto(
 ):
     """一键处理：扫描输入目录，自动处理所有新书籍"""
     from automation.directory_scanner import scan_input_directory
-    from automation.translation import translate_book
-    from automation.publishing import generate_copywriting
-    from automation.summarizer import generate_summary
-    from automation.publishing import publish_to_xianyu
+    from automation.pipeline import run_pipeline
     import time
 
     console.print("[bold blue]开始一键处理...[/bold blue]\n")
@@ -477,57 +472,40 @@ def auto(
         console.print(f"\n[bold cyan]处理第 {i}/{len(books)} 本: {title}[/bold cyan]")
 
         book_id = db.create_book(filename, title, book.get('author', '')).id
-
         start_time = time.time()
-        db.update_book_status(book_id, "processing")
 
         try:
             input_path = Path(config.input_dir) / filename
-            db.create_book_output(book_id)
 
-            if not skip_translate:
-                with phase("翻译并生成 PDF"):
-                    if not translate_book(book_id, str(input_path), skip_cache=skip_cache):
-                        raise Exception("翻译失败")
-            else:
-                console.print(f"[dim]跳过翻译步骤[/dim]")
-
-            if not skip_summarize:
-                with phase("生成精简版"):
-                    generate_summary(book_id, str(input_path))
-            else:
-                console.print(f"[dim]跳过精简版步骤[/dim]")
-
-            if not skip_images:
-                with phase("生成主图"):
-                    from automation.image import generate_main_image
-                    if not generate_main_image(book_id):
-                        console.print("  [yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
-
-            if not skip_copywriting:
-                with phase("生成文案"):
-                    book_obj = db.get_book_by_id(book_id)
-                    generate_copywriting(book_id, {
-                        'title': book_obj.title,
-                        'author': book_obj.author,
-                        'summary': book_obj.summary_text or ''
-                    })
-            else:
-                console.print(f"[dim]跳过文案生成步骤[/dim]")
-
-            if not skip_publish:
-                with phase("发布到闲鱼"):
-                    publish_to_xianyu(book_id)
+            ctx = run_pipeline(
+                book_id=book_id,
+                epub_path=str(input_path),
+                filename=filename,
+                title=title,
+                author=book.get('author', ''),
+                skip_translate=skip_translate,
+                skip_summarize=skip_summarize,
+                skip_images=skip_images,
+                skip_copywriting=skip_copywriting,
+                skip_publish=skip_publish,
+                skip_cache=skip_cache,
+            )
 
             elapsed = time.time() - start_time
-            db.update_book_status(book_id, "completed")
-            console.print(f"[bold green]✓ {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
-            steps = db.get_token_summary(book_id)
-            if steps:
-                console.print(format_token_summary(steps))
-            success_count += 1
-            book_obj = db.get_book_by_id(book_id)
-            processed_books.append(book_obj)
+
+            if ctx.status == "failed":
+                db.update_book_status(book_id, "failed", ctx.error)
+                console.print(f"[bold red]✗ {title} 处理失败: {ctx.error}[/bold red]")
+                fail_count += 1
+            else:
+                db.update_book_status(book_id, "completed")
+                console.print(f"[bold green]✓ {title} 处理完成 ({elapsed:.1f}秒)[/bold green]")
+                steps = db.get_token_summary(book_id)
+                if steps:
+                    console.print(format_token_summary(steps))
+                success_count += 1
+                book_obj = db.get_book_by_id(book_id)
+                processed_books.append(book_obj)
 
         except Exception as e:
             db.update_book_status(book_id, "failed", str(e))

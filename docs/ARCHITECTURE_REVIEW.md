@@ -407,6 +407,375 @@ class Stage(ABC):
 
 ---
 
+## 8. Pipeline 架构未被使用问题（新增）
+
+### 8.1 问题描述
+
+`pipeline.py` 定义了完整的 Pipeline + Stage 架构，但 `main.py` 的所有命令（包括核心的 `auto` 命令）都直接调用各模块函数，完全绕过了 Pipeline 架构。
+
+**架构设计形同虚设**：
+- `pipeline.py` 定义了 6 个 Stage：`TranslationStage`、`SummaryStage`、`ImageGenerationStage`、`ImageExtractionStage`（已禁用）、`CopywritingStage`、`PublishStage`
+- `main.py` 的 `auto` 命令手动按顺序调用：`scan_input_directory` -> `translate_book` -> `generate_summary` -> `generate_main_image` -> `generate_copywriting` -> `publish_to_xianyu`
+- `process` 命令同样直接调用各函数，不经过 Pipeline
+
+### 8.2 根因分析
+
+| 因素 | 分析 |
+|------|------|
+| **设计时序问题** | Pipeline 架构是后来引入的，但 main.py 已经稳定运行，未重构 |
+| **功能不一致** | `TranslationStage.execute()` 调用 `translate_book()`，但参数签名与 Stage 设计不完全匹配 |
+| **skip 参数处理** | Pipeline 用 `ctx.skip_*` 控制跳过，但 main.py 用 `if not skip_*` 条件判断 |
+| **上下文传递** | Pipeline 用 `PipelineContext` 在 Stage 间共享数据，但 main.py 直接从 `DatabaseManager` 读取 |
+| **Stage 内部耦合** | 每个 Stage 在 `__init__` 中创建 `DatabaseManager()` 单例，违反了依赖注入原则 |
+
+### 8.3 具体差异对比
+
+**Pipeline 架构设计的执行流程**：
+```
+run_pipeline(ctx)
+  -> Pipeline.run(ctx)
+    -> for stage in stages:
+         -> stage.should_skip(ctx)  # 检查 ctx.skip_*
+         -> stage.execute(ctx)       # 执行阶段
+         -> stage.on_error(ctx, e)   # 错误处理
+```
+
+**main.py auto 命令的实际执行流程**：
+```
+for book in books:
+  -> scan_input_directory()           # 不经过 Stage
+  -> db.create_book()                 # 直接调用
+  -> translate_book()                 # 阶段1，手动 with phase()
+  -> generate_summary()               # 阶段2，手动 with phase()
+  -> generate_main_image()            # 阶段3，手动 with phase()
+  -> generate_copywriting()           # 阶段4，手动 with phase()
+  -> publish_to_xianyu()              # 阶段5，手动 with phase()
+```
+
+**关键差异**：
+1. Pipeline 用 `ctx.skip_*` 属性控制跳过，main.py 用 `if not skip_*` 条件判断
+2. Pipeline 用 `PipelineContext` 传递数据，main.py 用 `DatabaseManager` 查询
+3. Pipeline 用 `stage.on_error()` 统一错误处理，main.py 用 `try/except` 块
+4. Pipeline 的 `TranslationStage` 接收 `skip_cache` 参数，但实际调用时参数传递不一致
+
+### 8.4 ImageExtractionStage 问题
+
+```python
+# pipeline.py 第 160-169 行
+class ImageExtractionStage(Stage):
+    """图片提取阶段 - 已禁用（封面提取已移至 summarizer）"""
+
+    name = "image_extraction"
+
+    def should_skip(self, ctx: PipelineContext) -> bool:
+        return True  # 始终跳过
+
+    def execute(self, ctx: PipelineContext) -> None:
+        logger.info(f"[{self.name}] 图片提取已禁用，跳过: {ctx.book_id}")
+```
+
+**问题**：
+- 已禁用的 Stage 仍然在 `build_pipeline()` 中被添加到 stages 列表
+- 虽然 `should_skip()` 返回 True，但代码冗余
+- Stage 注释说"封面提取已移至 summarizer"，但未从 pipeline 中移除
+
+### 8.5 迁移路径建议
+
+#### Phase 1: 清理 Pipeline 架构
+1. 从 `build_pipeline()` 中移除 `ImageExtractionStage`
+2. 统一样的 skip 逻辑：`should_skip()` 检查 `ctx.skip_*` 属性
+3. 清理 `PipelineContext`，移除不再使用的字段
+
+#### Phase 2: 重构 main.py 使用 Pipeline
+```python
+# main.py auto 命令重构后
+from automation.pipeline import run_pipeline
+
+@app.command()
+def auto(
+    skip_publish: bool = typer.Option(False, help="跳过发布步骤"),
+    skip_translate: bool = typer.Option(False, help="跳过翻译步骤"),
+    skip_summarize: bool = typer.Option(False, help="跳过生成精简版"),
+    skip_images: bool = typer.Option(False, help="跳过图片提取"),
+    skip_copywriting: bool = typer.Option(False, help="跳过文案生成"),
+    skip_cache: bool = typer.Option(False, help="跳过翻译缓存，强制重新翻译"),
+):
+    books = scan_input_directory()
+    for book in books:
+        ctx = run_pipeline(
+            book_id=book['id'],
+            epub_path=str(Path(config.input_dir) / book['filename']),
+            filename=book['filename'],
+            title=book.get('title', ''),
+            author=book.get('author', ''),
+            skip_translate=skip_translate,
+            skip_summarize=skip_summarize,
+            skip_images=skip_images,
+            skip_copywriting=skip_copywriting,
+            skip_publish=skip_publish,
+            skip_cache=skip_cache,
+        )
+        # 处理 ctx.status, ctx.error
+```
+
+#### Phase 3: 完善 Stage 实现
+1. 所有 Stage 的数据读写都通过 `PipelineContext`，不再直接查询数据库
+2. Stage 之间通过 context 传递中间结果
+3. 统一的错误处理和日志记录
+
+---
+
+## 9. 模块耦合问题（新增）
+
+### 9.1 DatabaseManager 单例滥用
+
+```python
+# pipeline.py 第 52-53 行
+class Stage(ABC):
+    def __init__(self):
+        self.db = DatabaseManager()  # 每个 Stage 都创建新实例
+```
+
+**问题**：
+- 每个 Stage 在 `__init__` 中创建 `DatabaseManager()`，虽然 DatabaseManager 是单例，但紧耦合
+- Stage 无法独立单元测试（必须要有数据库）
+- 数据库连接在每个 Stage 中独立管理，无法统一事务
+
+### 9.2 main.py 直接导入问题
+
+```python
+# main.py 大量直接导入
+from automation.database import DatabaseManager
+from automation.directory_scanner import scan_input_directory
+from automation.summarizer import generate_summary
+from automation.publishing import generate_copywriting
+from automation.translation import translate_book
+from automation.publishing import publish_to_xianyu
+from automation.image import generate_main_image
+```
+
+**问题**：
+- `main.py` 是业务组装层，直接导入并调用各模块函数
+- 各模块函数签名不一致，有的返回 bool，有的返回路径，有的返回字典
+- 缺乏统一的接口抽象
+
+### 9.3 ebook_translator 耦合问题
+
+```
+automation/              ebook_translator/
+    │                         │
+    ├── translation/          ├── library.py
+    │   └── translation_processor.py
+    │           │                   │
+    └───────────┴───────────────────┘
+                    │调用
+```
+
+**问题**：
+- `automation/translation/translation_processor.py` 调用 `ebook_translator/library.py`
+- 但 `ebook_translator/config.py` 独立配置 API Key
+- 两处 config.py 维护两套 API Key 配置
+
+---
+
+## 10. 配置分散问题（新增）
+
+### 10.1 双配置系统
+
+| 配置位置 | 内容 | API Key |
+|----------|------|---------|
+| `automation/config.py` | Config 单例类，读取 config.yaml | `config.yaml` 中的 `ai.api_key` |
+| `ebook_translator/config.py` | 模块级变量 DEEPSEEK_API_KEY | 环境变量 `DEEPSEEK_API_KEY` |
+
+### 10.2 API Key 两处配置
+
+**config.yaml**（主流程使用）：
+```yaml
+ai:
+  provider: deepseek
+  api_key: "your-api-key-here"  # 手动填入
+```
+
+**ebook_translator/config.py**（standalone 模式使用）：
+```python
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+```
+
+**问题**：
+- 主流程通过 `automation/config.py` -> `config.yaml` 读取 api_key
+- standalone 翻译器通过环境变量读取
+- 容易造成 API Key 不一致的困惑
+
+### 10.3 配置加载时机
+
+```python
+# automation/config.py
+config = Config()  # 模块加载时立即实例化
+
+# ebook_translator/config.py
+PDF_CONFIG = load_pdf_config()  # 模块加载时执行
+```
+
+**问题**：
+- 配置在模块导入时就加载，无法动态重载
+- `ebook_translator/config.py` 加载时使用 `os.getcwd()`，依赖当前工作目录
+- 测试时无法轻易 mock 配置
+
+---
+
+## 11. 异常处理不统一问题（新增）
+
+### 11.1 异常处理模式混乱
+
+```python
+# main.py auto 命令
+try:
+    if not skip_translate:
+        with phase("翻译并生成 PDF"):
+            if not translate_book(...):
+                raise Exception("翻译失败")  # 手动抛异常
+except Exception as e:
+    db.update_book_status(book_id, "failed", str(e))
+    console.print(f"[bold red]✗ {title} 处理失败: {e}[/bold red]")
+```
+
+```python
+# pipeline.py Stage.on_error()
+def on_error(self, ctx: PipelineContext, exc: Exception) -> None:
+    ctx.error = str(exc)
+    ctx.status = "failed"
+    logger.error(f"[{self.name}] 阶段失败: {exc}")
+```
+
+**问题**：
+- main.py 用 `if not success: raise Exception()` 模式检查结果
+- Pipeline 用异常传播机制
+- 两种模式混用导致错误处理路径不一致
+
+### 11.2 缺少统一异常类型
+
+```python
+# 大量 bare raise
+raise Exception("翻译失败")
+raise RuntimeError("发布失败")
+```
+
+**问题**：
+- 没有定义项目专用的异常类层次结构
+- 无法区分可重试错误和不可重试错误
+- `exceptions.py` 存在但未被充分利用
+
+### 11.3 phase() 上下文管理器的作用
+
+```python
+# progress.py
+@contextmanager
+def phase(name: str):
+    print(f"{indent}⏳ 正在{name}...")
+    try:
+        yield
+        print(f"{indent}✓ {name}完成 ({_format_duration(elapsed)})")
+    except Exception as e:
+        print(f"{indent}✗ {name}失败: {type(e).__name__}: {str(e)[:200]}")
+        raise
+```
+
+**作用**：
+- 为用户提供阶段执行的视觉反馈
+- 捕获异常并输出友好错误信息
+- 但不负责错误恢复或状态回滚
+
+---
+
+## 12. 架构问题优先级排序与解决方案
+
+### 12.1 问题优先级矩阵
+
+| 优先级 | 问题 | 影响 | 修复成本 |
+|--------|------|------|----------|
+| P0 | Pipeline 架构未被使用 | 架构设计形同虚设，技术债务 | 高 |
+| P0 | API Key 两处配置 | 配置混乱，易出错 | 中 |
+| P1 | DatabaseManager 单例滥用 | 测试困难，紧耦合 | 高 |
+| P1 | 异常处理不统一 | 错误处理路径混乱 | 中 |
+| P2 | ImageExtractionStage 残留 | 代码冗余 | 低 |
+| P2 | Stage 间数据传递混乱 | PipelineContext 字段过多 | 中 |
+| P3 | 配置加载时机固定 | 无法动态重载 | 低 |
+
+### 12.2 解决方案详细说明
+
+#### P0-1: 将 main.py 迁移到使用 Pipeline
+
+**目标**：让 `auto` 和 `process` 命令通过 `run_pipeline()` 执行
+
+**步骤**：
+1. 清理 `ImageExtractionStage`，从 `build_pipeline()` 移除
+2. 统一 skip 逻辑：所有 Stage 的 `should_skip()` 检查 `ctx.skip_*` 属性
+3. 完善 `PipelineContext` 字段定义
+4. 重构 `TranslationStage`、`SummaryStage` 等，使数据读写通过 context
+5. 修改 `auto` 命令使用 `run_pipeline()`
+6. 修改 `process` 命令使用 `run_pipeline()`
+
+**验收标准**：
+- `python -m automation.main auto --skip-publish` 能正常运行
+- `python -m automation.main process <book_id>` 能正常运行
+
+#### P0-2: 统一 API Key 配置
+
+**目标**：消除 `ebook_translator/config.py` 的独立 API Key 配置
+
+**步骤**：
+1. 修改 `ebook_translator/config.py`，优先从环境变量读取，fallback 到 `automation/config.py` 读取
+2. 或者：统一使用 `automation/config` 的 `ai.api_key`
+3. 更新 `ebook_translator/library.py`，调用 `automation/config` 而非自己的配置
+
+#### P1-1: 依赖注入改进
+
+**目标**：让 Stage 可以独立测试
+
+**步骤**：
+1. 为 `Stage` 添加 `db: DatabaseManager` 构造函数参数
+2. `Pipeline` 在构建时注入共享的 `DatabaseManager` 实例
+3. 测试时传入 mock 的 DatabaseManager
+
+**重构后**：
+```python
+class Stage(ABC):
+    name: str = "base"
+
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+class TranslationStage(Stage):
+    def __init__(self, db: DatabaseManager, skip_cache: bool = False):
+        super().__init__(db)
+        self.skip_cache = skip_cache
+```
+
+#### P1-2: 统一异常类型
+
+**目标**：建立项目专用的异常层次结构
+
+**步骤**：
+1. 在 `automation/exceptions.py` 定义异常类
+2. 用自定义异常替换 bare `raise Exception()`
+
+**示例**：
+```python
+class PipelineError(Exception):
+    """流水线执行错误"""
+    pass
+
+class TranslationError(PipelineError):
+    """翻译阶段错误"""
+    pass
+
+class PublishError(PipelineError):
+    """发布阶段错误"""
+    pass
+```
+
+---
+
 ## 附录：关键文件路径
 
 ```

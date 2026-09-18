@@ -1,9 +1,16 @@
 """测试配置 - 使用内存数据库"""
 
 import pytest
+import os
+import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from automation.models import Base, Book
+
+# 确保 ebook_translator 在 sys.path 中（translation_cache.py 依赖 translator 模块）
+_ebook_translator_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ebook_translator')
+if _ebook_translator_path not in sys.path:
+    sys.path.insert(0, _ebook_translator_path)
 
 
 @pytest.fixture(autouse=True)
