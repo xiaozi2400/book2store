@@ -16,8 +16,14 @@ class BookfileBaseError(Exception):
         return self.message
 
 
+# ===== 流水线相关 =====
+class PipelineError(BookfileBaseError):
+    """流水线执行错误"""
+    pass
+
+
 # ===== 翻译相关 =====
-class TranslationError(BookfileBaseError):
+class TranslationError(PipelineError):
     """翻译失败"""
     pass
 
@@ -56,7 +62,7 @@ class CopywritingError(BookfileBaseError):
 
 
 # ===== 发布相关 =====
-class PublishError(BookfileBaseError):
+class PublishError(PipelineError):
     """发布到闲鱼失败"""
     pass
 

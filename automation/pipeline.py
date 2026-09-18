@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 
 from automation.config import config
 from automation.database import DatabaseManager
+from automation.exceptions import TranslationError, PublishError
 from automation.utils import logger
 
 
@@ -26,10 +27,7 @@ class PipelineContext:
     summary_pdf: str = ""
     main_images: List[str] = field(default_factory=list)
     main_image_count: int = 0
-    cover_image: str = ""
-    toc_preview: str = ""
     xianyu_description: str = ""
-    xiaohongshu_note: str = ""
 
     # 状态
     status: str = "pending"
@@ -49,8 +47,8 @@ class Stage(ABC):
 
     name: str = "base"
 
-    def __init__(self):
-        self.db = DatabaseManager()
+    def __init__(self, db: DatabaseManager = None):
+        self.db = db or DatabaseManager()
 
     @abstractmethod
     def execute(self, ctx: PipelineContext) -> None:
@@ -73,8 +71,8 @@ class TranslationStage(Stage):
 
     name = "translation"
 
-    def __init__(self, skip_cache: bool = False):
-        super().__init__()
+    def __init__(self, db: DatabaseManager = None, skip_cache: bool = False):
+        super().__init__(db)
         self.skip_cache = skip_cache
 
     def should_skip(self, ctx: PipelineContext) -> bool:
@@ -90,7 +88,7 @@ class TranslationStage(Stage):
         success = translate_book(ctx.book_id, ctx.epub_path, skip_cache=self.skip_cache or ctx.skip_cache)
 
         if not success:
-            raise RuntimeError("翻译失败")
+            raise TranslationError("翻译失败", ctx.book_id)
 
         # 获取翻译结果
         output = self.db.get_book_output(ctx.book_id)
@@ -200,7 +198,7 @@ class PublishStage(Stage):
         success = publish_to_xianyu(ctx.book_id)
 
         if not success:
-            raise RuntimeError("发布失败")
+            raise PublishError("发布失败", ctx.book_id)
 
         self.db.update_book_status(ctx.book_id, "published")
         self.db.add_log(ctx.book_id, "publishing", "success", "发布成功")
@@ -232,6 +230,7 @@ class Pipeline:
 
 
 def build_pipeline(
+    db: DatabaseManager = None,
     skip_translate: bool = False,
     skip_summarize: bool = False,
     skip_images: bool = False,
@@ -241,11 +240,11 @@ def build_pipeline(
 ) -> Pipeline:
     """构建流水线实例"""
     stages = [
-        TranslationStage(skip_cache=skip_cache),
-        SummaryStage(),
-        ImageGenerationStage(),
-        CopywritingStage(),
-        PublishStage(),
+        TranslationStage(db=db, skip_cache=skip_cache),
+        SummaryStage(db=db),
+        ImageGenerationStage(db=db),
+        CopywritingStage(db=db),
+        PublishStage(db=db),
     ]
 
     # 注意：实际的跳过逻辑在 Stage.should_skip() 中通过 ctx 参数判断

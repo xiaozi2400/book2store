@@ -20,6 +20,7 @@ from automation.summarizer import generate_summary
 from automation.publishing import generate_copywriting
 from automation.link_importer import import_links
 from automation.config import config
+from automation.exceptions import TranslationError
 from automation.utils import extract_title_from_filename, move_processed_epubs
 from automation.progress import phase, event
 
@@ -617,7 +618,7 @@ def test(
                 else:
                     console.print(f"  [dim]→ 翻译并生成PDF...[/dim]")
                 if not translate_book(book_id, str(epub_path), skip_cache=skip_cache):
-                    raise Exception("翻译失败")
+                    raise TranslationError("翻译失败", book_id)
             else:
                 console.print(f"  [dim]→ 跳过翻译步骤[/dim]")
 

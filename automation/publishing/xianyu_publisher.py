@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from playwright.sync_api import sync_playwright, Browser, Page, BrowserContext
 from automation.database import DatabaseManager
 from automation.config import config
+from automation.exceptions import PublishError
 from automation.utils import logger, ensure_dir
 
 
@@ -491,7 +492,7 @@ class XianyuPublisher:
                 time.sleep(1.5)
                 logger.info("  已点击「添加规格类型」按钮")
             else:
-                raise Exception("未找到「添加规格类型」按钮")
+                raise PublishError("未找到「添加规格类型」按钮")
         except Exception as e:
             logger.error("  点击添加规格类型按钮失败: %s" % str(e))
             raise
@@ -539,7 +540,7 @@ class XianyuPublisher:
                 time.sleep(1.5)
                 logger.info("  已点击「输入自定义类型」")
             else:
-                raise Exception("未找到「输入自定义类型」选项")
+                raise PublishError("未找到「输入自定义类型」选项")
         except Exception as e:
             logger.error("  点击「输入自定义类型」失败: %s" % str(e))
             raise
@@ -566,7 +567,7 @@ class XianyuPublisher:
                 time.sleep(2)
                 logger.info("  已确认规格类型")
             else:
-                raise Exception("未找到可编辑的规格类型输入框")
+                raise PublishError("未找到可编辑的规格类型输入框")
         except Exception as e:
             logger.error("  输入或确认规格类型失败: %s" % str(e))
             raise
@@ -589,7 +590,7 @@ class XianyuPublisher:
                     time.sleep(0.5)
                     logger.info("  已添加版本 %d: %s" % (i+1, version_name))
                 else:
-                    raise Exception("未找到版本 %d 的输入框" % (i+1))
+                    raise PublishError("未找到版本 %d 的输入框" % (i+1))
             except Exception as e:
                 logger.error("  添加版本 %d 失败: %s" % (i+1, str(e)))
                 raise
@@ -624,7 +625,7 @@ class XianyuPublisher:
 
             if not price_row.is_visible(timeout=3000):
                 logger.error("  %s: 未找到价格行" % version_name)
-                raise Exception("未找到价格行")
+                raise PublishError("未找到价格行")
 
             # 填写价格
             try:
@@ -680,7 +681,7 @@ class XianyuPublisher:
                 shipping_input.fill(config.xianyu_shipping)
                 logger.info("  发货方式已填: %s" % config.xianyu_shipping)
             else:
-                raise Exception("未找到发货方式输入框")
+                raise PublishError("未找到发货方式输入框")
         except Exception as e:
             logger.error("  填写发货方式失败: %s" % str(e))
             raise

@@ -15,6 +15,7 @@ from typing import Dict, Any, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from automation.config import config
+from automation.exceptions import PDFConvertError
 from automation.utils import logger
 from automation.summarizer.fonts import register_chinese_fonts, get_chinese_font
 
@@ -49,7 +50,7 @@ class SummaryPDFGenerator:
             from weasyprint import HTML
         except OSError as e:
             if "libgobject" in str(e) or "cannot load library" in str(e):
-                raise Exception("WeasyPrint缺少GTK3运行时库，自动跳过")
+                raise PDFConvertError("WeasyPrint缺少GTK3运行时库，自动跳过")
             raise
 
         markdown_content = content.get('content', '')
