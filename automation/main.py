@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from automation.database import DatabaseManager
 from automation.directory_scanner import scan_input_directory
 from automation.summarizer import generate_summary
-from automation.image import extract_images
 from automation.publishing import generate_copywriting
 from automation.link_importer import import_links
 from automation.config import config
@@ -181,11 +180,6 @@ def process(
         from automation.image import generate_main_image
         if not generate_main_image(book_id):
             console.print("[yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
-
-    with phase("提取图片"):
-        base_name = Path(input_path).stem.strip()
-        pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
-        extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
 
     with phase("生成文案"):
         generate_copywriting(book_id, {
@@ -457,7 +451,6 @@ def auto(
     """一键处理：扫描输入目录，自动处理所有新书籍"""
     from automation.directory_scanner import scan_input_directory
     from automation.translation import translate_book
-    from automation.image import extract_images
     from automation.publishing import generate_copywriting
     from automation.summarizer import generate_summary
     from automation.publishing import publish_to_xianyu
@@ -510,13 +503,6 @@ def auto(
                     from automation.image import generate_main_image
                     if not generate_main_image(book_id):
                         console.print("  [yellow]⚠ 主图生成失败（检查日志），继续处理其他步骤[/yellow]")
-
-                with phase("提取图片"):
-                    base_name = Path(input_path).stem.strip()
-                    pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
-                    extract_images(book_id, str(input_path), str(pdf_path) if pdf_path.exists() else None)
-            else:
-                console.print(f"[dim]跳过图片提取步骤[/dim]")
 
             if not skip_copywriting:
                 with phase("生成文案"):
@@ -594,7 +580,6 @@ def test(
 ):
     """测试模式：直接从 test_input_dir 读取文件处理（跳过闲鱼发布）"""
     from automation.translation import translate_book
-    from automation.image import extract_images
     from automation.publishing import generate_copywriting
     from automation.summarizer import generate_summary
     from automation.utils import is_valid_epub
@@ -669,13 +654,8 @@ def test(
                 from automation.image import generate_main_image
                 if not generate_main_image(book_id):
                     console.print(f"  [yellow]⚠ 主图生成失败（检查日志）[/yellow]")
-
-                console.print(f"  [dim]→ 提取图片...[/dim]")
-                base_name = epub_path.stem.strip()
-                pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
-                extract_images(book_id, str(epub_path), str(pdf_path) if pdf_path.exists() else None)
             else:
-                console.print(f"  [dim]→ 跳过图片提取步骤[/dim]")
+                console.print(f"  [dim]→ 跳过主图步骤[/dim]")
 
             if not skip_copywriting:
                 console.print(f"  [dim]→ 生成文案...[/dim]")

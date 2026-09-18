@@ -158,34 +158,15 @@ class ImageGenerationStage(Stage):
 
 
 class ImageExtractionStage(Stage):
-    """图片提取阶段 - 从 EPUB 提取封面和目录预览图"""
+    """图片提取阶段 - 已禁用（封面提取已移至 summarizer）"""
 
     name = "image_extraction"
 
     def should_skip(self, ctx: PipelineContext) -> bool:
-        return ctx.skip_images
+        return True  # 始终跳过
 
     def execute(self, ctx: PipelineContext) -> None:
-        from automation.image_extractor import extract_images
-
-        logger.info(f"[{self.name}] 开始提取图片: {ctx.book_id}")
-        self.db.add_log(ctx.book_id, "extracting", "start", "开始提取图片")
-
-        # 构建 PDF 路径
-        base_name = Path(ctx.epub_path).stem.strip()
-        pdf_path = Path(config.output_dir) / base_name / "PDF" / f"中英双语-{base_name}.pdf"
-        pdf_path_str = str(pdf_path) if pdf_path.exists() else None
-
-        extract_images(ctx.book_id, ctx.epub_path, pdf_path_str)
-
-        # 获取结果
-        output = self.db.get_book_output(ctx.book_id)
-        if output:
-            ctx.cover_image = output.cover_image or ""
-            ctx.toc_preview = output.toc_preview_image or ""
-
-        self.db.add_log(ctx.book_id, "extracting", "success", "图片提取完成")
-        logger.info(f"[{self.name}] 图片提取完成: {ctx.book_id}")
+        logger.info(f"[{self.name}] 图片提取已禁用，跳过: {ctx.book_id}")
 
 
 class CopywritingStage(Stage):

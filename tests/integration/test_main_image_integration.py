@@ -21,8 +21,7 @@ def test_process_calls_generate_main_image():
             with patch('automation.main.DatabaseManager.get_token_summary', return_value=None):
                 with patch('automation.main.generate_copywriting'):
                     with patch('automation.main.generate_summary'):
-                        with patch('automation.main.extract_images'):
-                            with patch('automation.publishing.xianyu_publisher.publish_to_xianyu'):
+                        with patch('automation.publishing.xianyu_publisher.publish_to_xianyu'):
                                 with patch('automation.translation.translate_book'):
                                     with patch('automation.image.generate_main_image') as mock_gen_main:
                                         with patch('automation.main.Path.exists', return_value=True):

@@ -256,7 +256,6 @@ bookfile_bat/
 │   ├── translation_processor.py   # 翻译处理器（调用ebook_translator）
 │   ├── translation_cache.py       # SQLite翻译缓存实现
 │   ├── directory_scanner.py       # 输入目录扫描
-│   ├── image_extractor.py         # EPUB图片提取
 │   ├── image_generator.py         # AI主图生成
 │   ├── metadata_writer.py         # metadata.json写入
 │   ├── xianyu_publisher.py        # 闲鱼Playwright自动化发布

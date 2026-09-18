@@ -33,9 +33,9 @@ python -m ebook_translator.main <input.epub> -o <output_dir> --test-mode
 
 ## 架构
 
-CLI 入口:`automation/main.py` (Typer)。`auto` 是核心命令,流水线为:扫描 → 翻译 → 摘要 → 主图 → 提取图片 → 文案 → 发布,每步 `--skip-*` 可控。`phase()` 上下文管理器(`automation/progress.py`)包裹每个耗时阶段输出进度。
+CLI 入口:`automation/main.py` (Typer)。`auto` 是核心命令,流水线为:扫描 → 翻译 → 摘要 → 主图 → 文案 → 发布,每步 `--skip-*` 可控。`phase()` 上下文管理器(`automation/progress.py`)包裹每个耗时阶段输出进度。
 
-`automation/` 下按流水线分模块:`directory_scanner` / `translation_processor` (包装 `ebook_translator.library`) / `translation_cache` / `content_summarizer` (大文件 74KB,先经 `suitability_evaluator` 评估再生成精简版 PDF) / `image_extractor` / `image_generator` / `ai_copywriter` / `xianyu_publisher` (大文件 31KB,Playwright 自动化) / `quality_checker` (大文件 27KB,纯规则 8 维度质检,零 API 成本)。
+`automation/` 下按流水线分模块:`directory_scanner` / `translation_processor` (包装 `ebook_translator.library`) / `translation_cache` / `content_summarizer` (大文件 74KB,先经 `suitability_evaluator` 评估再生成精简版 PDF) / `image_generator` / `ai_copywriter` / `xianyu_publisher` (大文件 31KB,Playwright 自动化) / `quality_checker` (大文件 27KB,纯规则 8 维度质检,零 API 成本)。
 
 `ebook_translator/` 是可独立运行的 EPUB 翻译子项目,`library.py` 是给 automation 调用的接口。
 
