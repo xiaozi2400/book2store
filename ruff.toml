@@ -1,7 +1,0 @@
-# Ruff configuration for Python linting
-
-line-length = 120
-target-version = "py39"
-
-[lint]
-select = ["E", "F", "W", "I"]

@@ -80,8 +80,9 @@ docs/archived_superpowers/
 docs/
 PRD.md
 
-# Claude Code Skills（本地配置，不纳入版本控制）
-.claude/skills/
+# Python 配置（统一到 pyproject.toml）
+ruff.toml
+pytest.ini
 
 # 辅助工具（独立子项目，不参与核心流程）
 tools/

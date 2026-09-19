@@ -1,0 +1,24 @@
+[project]
+name = "bookfile-bat"
+version = "0.1.0"
+description = "电子书自动化处理工具"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+markers = [
+    "unit: Unit tests - isolated, mocked dependencies, fast",
+    "integration: Integration tests - real I/O across components",
+    "e2e: End-to-end tests - full user flow, may involve browser",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
