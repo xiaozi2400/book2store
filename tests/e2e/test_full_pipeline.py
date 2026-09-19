@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from automation.database import get_session, close_session
-from automation.models import Book, BookOutput, ProcessingLog, TranslationCache
+from automation.models import Book, BookOutput, ProcessingLog
 from automation.config import config
 
 
@@ -42,11 +42,9 @@ def reset_database():
             from automation.models import ShareLink
             session.query(ShareLink).filter(ShareLink.book_id == book_id).delete()
 
-            # 6. 删除 Book 记录
+            # 6. 删除 Book 记录（TranslationCache 无外键关联 book，
+            #    且 Book/BookOutput 已删除后无法触发缓存命中，无需清理）
             session.delete(book)
-
-            # 7. 清空 TranslationCache 表（测试专用，强制重新翻译）
-            session.query(TranslationCache).delete()
 
             session.commit()
     except Exception as e:
