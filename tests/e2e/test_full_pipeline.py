@@ -124,7 +124,8 @@ class TestFullPipeline:
         cmd = [
             sys.executable, "-m", "automation.main",
             "auto",
-            "--skip-publish"
+            "--skip-publish",
+            "--skip-cache"
         ]
 
         result = subprocess.run(
