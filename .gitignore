@@ -75,3 +75,6 @@ scripts/process_files.py
 
 # 归档文档
 docs/archived_superpowers/
+
+# 辅助工具（独立子项目，不参与核心流程）
+tools/
