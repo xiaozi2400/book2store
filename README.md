@@ -29,8 +29,7 @@
 
 ```bash
 cd d:\project\bookfile_bat
-pip install -r requirements-automation.txt
-pip install -r ebook_translator/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 基础配置
@@ -280,7 +279,7 @@ bookfile_bat/
 ├── config.yaml                    # 主配置文件
 ├── config_template.yaml           # 精简版模板配置
 ├── pdf_config.json                # PDF排版配置
-├── requirements-automation.txt    # 自动化模块依赖
+├── requirements.txt              # 项目依赖
 ├── PRD.md                         # 产品需求文档
 └── README.md                      # 本文件
 ```

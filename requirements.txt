@@ -33,3 +33,9 @@ python-dotenv>=1.0.0
 
 # 代码检查
 ruff>=0.1.0
+
+# 电子书解析与生成
+ebooklib
+requests
+beautifulsoup4
+lxml

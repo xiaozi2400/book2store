@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # 安装
-pip install -r requirements-automation.txt
+pip install -r requirements.txt
 pip install -r ebook_translator/requirements.txt
 playwright install chromium
 
