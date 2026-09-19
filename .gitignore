@@ -76,6 +76,10 @@ scripts/process_files.py
 # 归档文档
 docs/archived_superpowers/
 
+# 文档（本地保留，不纳入版本控制）
+docs/
+PRD.md
+
 # Claude Code Skills（本地配置，不纳入版本控制）
 .claude/skills/
 
