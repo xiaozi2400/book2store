@@ -1,32 +1,32 @@
-# Run Tests Skill
+# 运行测试 Skill
 
-## Triggers
+## 触发条件
 
-- User invokes `/run-tests`
-- User requests "执行测试", "运行测试", "run tests", "测试"
+- 用户调用 `/run-tests`
+- 用户请求"执行测试"、"运行测试"、"run tests"、"测试"
 
-## Steps
+## 步骤
 
-### 1. Get Code Changes
+### 1. 获取代码变更
 
-Run `git diff --name-only HEAD~1` to get the list of modified files.
+运行 `git diff --name-only HEAD~1` 获取变更文件列表。
 
-### 2. Analyze Impact
+### 2. 分析影响范围
 
-Determine affected modules based on changed files:
+根据变更文件确定受影响的模块：
 
-| Trigger Condition | Strategy |
+| 触发条件 | 策略 |
 |-----------------|----------|
-| Changed `database.py`, `models.py`, `config.py`, `conftest.py` | Run all tests |
-| Changed config files (`.yaml`, `.json`) | Run all tests (skip E2E) |
-| Changed file count > 10 | Run all tests |
-| Changed `pipeline.py` | Run unit + integration + e2e |
-| Changed `main.py` | Run integration tests |
-| Single module change | Precise mapping |
+| 变更了 `database.py`、`models.py`、`config.py`、`conftest.py` | 运行所有测试 |
+| 变更了配置文件（`.yaml`、`.json`） | 运行所有测试（跳过 E2E） |
+| 变更文件数 > 10 | 运行所有测试 |
+| 变更了 `pipeline.py` | 运行单元测试 + 集成测试 + e2e |
+| 变更了 `main.py` | 运行集成测试 |
+| 单个模块变更 | 精确映射 |
 
-### 3. Build Test List
+### 3. 构建测试列表
 
-Use this mapping to determine which tests to run:
+使用以下映射确定要运行的测试：
 
 ```python
 MODULE_TEST_MAPPING = {
@@ -63,34 +63,34 @@ MODULE_TEST_MAPPING = {
         "tests/unit/test_xianyu_prompt_config.py",
         "tests/integration/test_republish_failed.py",
     ],
-    "automation/database.py": ["tests/"],  # Infrastructure - all tests
-    "automation/models.py": ["tests/"],     # Infrastructure - all tests
-    "automation/config.py": ["tests/"],      # Config driven - all tests
+    "automation/database.py": ["tests/"],  # 基础设施 - 所有测试
+    "automation/models.py": ["tests/"],     # 基础设施 - 所有测试
+    "automation/config.py": ["tests/"],      # 配置驱动 - 所有测试
     "automation/ai_client.py": [
         "tests/unit/test_ai_client_summary.py",
         "tests/unit/test_ai_client_tokens.py",
     ],
-    "tests/conftest.py": ["tests/"],       # Global fixture - all tests
+    "tests/conftest.py": ["tests/"],       # 全局 fixture - 所有测试
 }
 ```
 
-### 4. Execute Tests
+### 4. 执行测试
 
-Run pytest with selected test paths:
+使用选定的测试路径运行 pytest：
 ```bash
 pytest <test_files> -v --tb=short
 ```
 
-### 5. Report Results
+### 5. 报告结果
 
-Display:
-- Changed files list
-- Tests selected for execution
-- Pass/fail summary
-- Execution time
+展示：
+- 变更文件列表
+- 选中的测试
+- 通过/失败汇总
+- 执行时间
 
-## Notes
+## 注意事项
 
-- E2E tests are skipped by default unless `pipeline.py` or `main.py` changed
-- If no changes detected, prompt "No code changes detected"
-- Tests are de-duplicated automatically
+- 默认跳过 E2E 测试，除非 `pipeline.py` 或 `main.py` 发生变更
+- 如果未检测到变更，提示"未检测到代码变更"
+- 测试会自动去重

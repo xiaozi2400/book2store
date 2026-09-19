@@ -44,11 +44,11 @@ class TemplateGenerator:
         else:
             return '通用'
     
-    def detect_and_generate_prompt(self, book_info: Dict[str, Any], details: Optional[Dict] = None) -> TemplateResult:
+    def detect_and_generate_prompt(self, book_info: Dict[str, Any]) -> TemplateResult:
         """生成提示词"""
         title = book_info.get('title', '未知书籍')
         author = book_info.get('author', '未知作者')
-        book_type = self.detect_book_type(book_info, details)
+        book_type = self.detect_book_type(book_info)
         
         # 不要在这里格式化模板，保持原始占位符让 _build_summary_prompt 统一处理
         # 只返回原始模板字符串
@@ -58,7 +58,7 @@ class TemplateGenerator:
             book_type=book_type
         )
 
-def detect_and_generate_prompt(book_info: Dict[str, Any], details: Optional[Dict] = None) -> TemplateResult:
+def detect_and_generate_prompt(book_info: Dict[str, Any]) -> TemplateResult:
     """生成提示词（便捷函数）"""
     generator = TemplateGenerator()
-    return generator.detect_and_generate_prompt(book_info, details)
+    return generator.detect_and_generate_prompt(book_info)

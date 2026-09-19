@@ -33,15 +33,11 @@ class SummaryAIGenerator:
         if len(combined_content) < 100:
             logger.warning(f"章节内容过少: {combined_content}")
 
-        book_type = self.template_gen.detect_book_type(book_info, {
-            "details": suitability_result.details if suitability_result else {}
-        } if suitability_result else None)
+        book_type = self.template_gen.detect_book_type(book_info)
 
         logger.info(f"检测到书籍类型: {book_type}")
 
-        template_result = self.template_gen.detect_and_generate_prompt(book_info, {
-            "details": suitability_result.details if suitability_result else {}
-        } if suitability_result else None)
+        template_result = self.template_gen.detect_and_generate_prompt(book_info)
 
         try:
             prompt = self._build_summary_prompt(book_info, combined_content, template_result.prompt_for_ai)

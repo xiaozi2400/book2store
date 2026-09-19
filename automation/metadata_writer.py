@@ -2,14 +2,9 @@ import logging
 from pathlib import Path
 
 from automation.config import config
+from automation.utils import ensure_dir
 
 logger = logging.getLogger(__name__)
-
-
-def ensure_dir(path: Path) -> Path:
-    """确保目录存在"""
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 class MetadataWriter:

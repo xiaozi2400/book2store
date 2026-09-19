@@ -155,28 +155,6 @@ def save_json(data: Dict, filepath: str):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-class Result:
-    """统一返回结果"""
-
-    def __init__(self, success: bool, data: Any = None, error: str = None):
-        self.success = success
-        self.data = data
-        self.error = error
-
-    @staticmethod
-    def ok(data: Any = None) -> 'Result':
-        return Result(True, data, None)
-
-    @staticmethod
-    def fail(error: str) -> 'Result':
-        return Result(False, None, error)
-
-    def __repr__(self):
-        if self.success:
-            return f"<Result success=True, data={self.data}>"
-        return f"<Result success=False, error={self.error}>"
-
-
 def move_processed_epubs(input_dir: str) -> int:
     """将 input_dir 中的 epub 文件移到 '已处理' 子目录
 

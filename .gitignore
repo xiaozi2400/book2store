@@ -64,3 +64,14 @@ output/
 
 # 运行时数据(SQLite / 闲鱼 cookie)
 /data/
+
+# 本地配置和日志
+项目日志.md
+项目经验.md
+
+# 旧脚本
+scripts/ebook_organizer.py
+scripts/process_files.py
+
+# 归档文档
+docs/archived_superpowers/

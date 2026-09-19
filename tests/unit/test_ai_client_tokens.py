@@ -42,18 +42,6 @@ class TestAIClientChatReturnsTuple:
         assert usage["completion_tokens"] == 50
         assert usage["total_tokens"] == 150
 
-    def test_generate_summary_returns_parsed_dict(self, mock_translator):
-        """验证 generate_summary 仍然返回解析后的 dict"""
-        from automation.ai_client import AIClient
-
-        client = AIClient(provider="deepseek")
-        book_info = {"title": "测试书", "author": "测试作者"}
-        result = client.generate_summary(book_info, "测试内容")
-
-        assert isinstance(result, dict)
-        # 因为 mock 返回不是 JSON 格式，所以会走 error 路径
-        assert "error" in result
-
     def test_generate_xianyu_listing_returns_tuple(self, mock_translator):
         """验证 generate_xianyu_listing 返回 (text, usage) 元组"""
         from automation.ai_client import AIClient

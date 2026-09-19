@@ -40,51 +40,6 @@ class AIClient:
         usage = result.get("usage", {})
         return text, usage
 
-    def generate_summary(self, book_info: Dict[str, Any], content: str) -> Dict[str, Any]:
-        """生成书籍摘要"""
-        summarizer_cfg = config.summarizer_config()
-        
-        core_length = summarizer_cfg.get("core_insight_length", "300-500")
-        chapter_length = summarizer_cfg.get("chapter_summary_length", "150-200")
-        max_quotes = summarizer_cfg.get("max_quotes", 15)
-        max_content = summarizer_cfg.get("max_content_length", 10000)
-        
-        prompt_template = summarizer_cfg.get("prompt", """你是一位专业的书籍摘要专家。请为以下书籍内容生成精简摘要：
-
-【书名】: {title}
-【作者】: {author}
-
-【要求】:
-1. 核心观点：用 {core_insight_length} 字概括全书核心思想
-2. 章节摘要：为每个章节生成 {chapter_summary_length} 字摘要
-3. 金句摘录：提取 {max_quotes} 条最有价值的句子
-4. 适用人群：说明这本书适合谁阅读
-
-【内容】:
-{content}
-
-请以以下 JSON 格式输出：
-{{
-    "core_insight": "全书核心观点...",
-    "chapter_summaries": [
-        {{"chapter": "第1章标题", "summary": "摘要..."}}
-    ],
-    "quotes": ["金句1", "金句2", ...],
-    "target_audience": "适用人群..."
-}}""")
-        
-        prompt = prompt_template.format(
-            title=book_info.get('title', 'Unknown'),
-            author=book_info.get('author', 'Unknown'),
-            core_insight_length=core_length,
-            chapter_summary_length=chapter_length,
-            max_quotes=max_quotes,
-            content=content[:max_content]
-        )
-
-        response, _ = self.chat(prompt, max_tokens=2000)
-        return self._parse_json_response(response)
-
     def generate_xianyu_listing(self, book_info: Dict[str, Any]) -> str:
         """生成闲鱼商品文案，返回原始文案文本"""
         copywriting_cfg = config.copywriting_config
