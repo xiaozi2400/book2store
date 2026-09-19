@@ -76,5 +76,8 @@ scripts/process_files.py
 # 归档文档
 docs/archived_superpowers/
 
+# Claude Code Skills（本地配置，不纳入版本控制）
+.claude/skills/
+
 # 辅助工具（独立子项目，不参与核心流程）
 tools/
