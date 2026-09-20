@@ -41,4 +41,3 @@ jobs:
 
       - name: Run integration tests
         run: python -m pytest tests/integration -v --tb=short
-v 
