@@ -1,0 +1,30 @@
+# Ruff configuration for Python linting
+
+line-length = 120
+target-version = "py39"
+
+[lint]
+select = ["E", "F", "W", "I"]
+
+# 已知需要忽略的错误
+[lint.per-file-ignores]
+"automation/database.py" = ["F821", "E501"]  # F821: SQLAlchemy 局部导入类型注解; E501: 超长 docstring
+"automation/summarizer/pdf_generator.py" = ["F821", "E501"]  # reportlab 局部导入类型注解
+"automation/translation/translation_cache.py" = ["E402", "E501"]  # sys.path 修改后导入
+"automation/translation/translation_processor.py" = ["E402"]  # sys.path 修改后导入
+"automation/image/image_generator.py" = ["E501"]  # CSS 模板字符串故意较长
+"automation/main.py" = ["E501"]  # CLI 主体代码，超长行不影响可读性
+"automation/publishing/xianyu_publisher.py" = ["E501"]  # 超长 docstring/prompt
+"automation/quality_checker.py" = ["E501"]  # 超长 docstring
+"automation/summarizer/ai_generator.py" = ["E501"]  # 超长 docstring
+"automation/summarizer/content_summarizer.py" = ["E501"]  # 超长 docstring
+"automation/summarizer/suitability_evaluator.py" = ["E501"]  # 超长 docstring
+"automation/summarizer/template_generator.py" = ["E501"]  # 超长 docstring
+"tests/e2e/test_full_pipeline.py" = ["E501"]  # 超长行
+"tests/integration/test_republish_failed.py" = ["E501"]  # 超长行
+"tests/unit/test_copywriting_bugs.py" = ["E501"]  # 超长行
+"tests/unit/test_pdf_generator.py" = ["E501"]  # 超长行
+"tests/unit/test_pipeline.py" = ["E501", "E402"]  # sys.path 设置先于导入
+"tests/unit/test_quality_checker.py" = ["E501", "E402"]  # 内联导入用于避免循环
+"tests/integration/test_main_image_integration.py" = ["E501"]  # 超长行
+"ebook_translator/**" = ["E402", "E501"]  # 子项目有独立 sys.path 导入结构

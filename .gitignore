@@ -80,8 +80,7 @@ docs/archived_superpowers/
 docs/
 PRD.md
 
-# Python 配置（统一到 pyproject.toml）
-ruff.toml
+# Python 配置
 pytest.ini
 
 # 辅助工具（独立子项目，不参与核心流程）
