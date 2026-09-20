@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git 提交规范
+
+- **严禁自行执行 `git commit`** — 所有提交必须通过 `/auto-commit` skill 进行
+- 推送前必须获得用户明确批准
+- `提交git` / `提交` / `commit` → 触发 `/auto-commit` skill
+
 ## 常用命令
 
 ```bash
