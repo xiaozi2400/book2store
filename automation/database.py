@@ -10,7 +10,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base
+from .models import Base, Book, BookOutput
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +93,8 @@ class DatabaseManager:
     def __init__(self):
         init_database()
 
-    def create_book(self, filename: str, title: str = None, author: str = None) -> "Book":
+    def create_book(self, filename: str, title: str = None, author: str = None) -> Book:
         """创建书籍记录"""
-        from .models import Book
-
         session = get_session()
         try:
             book = Book(filename=filename, title=title or filename, author=author, status="pending")
@@ -107,20 +105,16 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def get_book_by_filename(self, filename: str) -> "Book":
+    def get_book_by_filename(self, filename: str) -> Book:
         """根据文件名获取书籍"""
-        from .models import Book
-
         session = get_session()
         try:
             return session.query(Book).filter(Book.filename == filename).first()
         finally:
             close_session(session)
 
-    def get_book_by_id(self, book_id: str) -> "Book":
+    def get_book_by_id(self, book_id: str) -> Book:
         """根据ID获取书籍"""
-        from .models import Book
-
         session = get_session()
         try:
             return session.query(Book).filter(Book.id == book_id).first()
@@ -155,10 +149,8 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def update_book_summary(self, book_id: str, summary_text: str) -> "Book":
+    def update_book_summary(self, book_id: str, summary_text: str) -> Book:
         """更新书籍摘要文本并返回 Book 对象"""
-        from .models import Book
-
         session = get_session()
         try:
             book = session.query(Book).filter(Book.id == book_id).first()
@@ -170,10 +162,8 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def create_book_output(self, book_id: str) -> "BookOutput":
+    def create_book_output(self, book_id: str) -> BookOutput:
         """创建书籍输出记录"""
-        from .models import BookOutput
-
         session = get_session()
         try:
             output = BookOutput(book_id=book_id)
@@ -184,10 +174,8 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def get_book_output(self, book_id: str) -> "BookOutput":
+    def get_book_output(self, book_id: str) -> BookOutput:
         """获取书籍输出记录"""
-        from .models import BookOutput
-
         session = get_session()
         try:
             return session.query(BookOutput).filter(BookOutput.book_id == book_id).first()
@@ -387,9 +375,10 @@ class DatabaseManager:
             close_session(session)
 
     def backfill_failed_publish_status(self) -> int:
-        """回填历史发布失败状态：把 processing_logs 里 publishing 阶段失败、但 publish_status 仍为 pending 的书标记为 failed。
+        """回填历史发布失败状态
 
-        返回回填的数量。幂等：重复运行返回 0。
+        把 processing_logs 里 publishing 阶段失败、但 publish_status 仍为
+        pending 的书标记为 failed。幂等：重复运行返回 0。
         """
         from .models import BookOutput, ProcessingLog
 

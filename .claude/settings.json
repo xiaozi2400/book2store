@@ -1,13 +1,15 @@
 {
   "hooks": {
-    "PreToolUse": [{
-      "matcher": "Bash",
-      "hooks": [{
-        "type": "command",
-        "command": "python \"C:/Users/Administrator/.claude/hooks/hook_git_no_verify.py\"",
-        "timeout": 10
-      }]
-    }],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "python \"C:/Users/Administrator/.claude/hooks/hook_git_no_verify.py\"",
+          "timeout": 10
+        }]
+      }
+    ],
     "PostToolUse": [{
       "matcher": "Edit|Write",
       "hooks": [{
@@ -16,5 +18,15 @@
         "timeout": 30
       }]
     }]
-  }
+  },
+  "permissions": {
+    "ask": [
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.json)",
+      "Edit(ruff.toml)",
+      "Write(ruff.toml)",
+      "Edit(.claude/settings.local.json)",
+      "Write(.claude/settings.local.json)"
+    ]
+  } 
 }

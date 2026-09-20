@@ -142,16 +142,17 @@ class TestFullPipeline:
         assert result.returncode == 0, f"命令执行失败: {result.stderr}"
 
     def test_xianyu_main_images(self):
-        """验证闲鱼主图：检查 metadata 目录下是否有主图 HTML/JPG"""
+        """验证闲鱼主图：检查 metadata 目录下是否有主图 JPG"""
         metadata_dir = Path(config.output_dir) / f"{BOOK_NAME}_metadata"
 
         # 检查是否有主图 JPG 文件
         main_images = list(metadata_dir.glob("main_image_*.jpg"))
         assert len(main_images) > 0, f"未找到闲鱼主图文件: {metadata_dir}/main_image_*.jpg"
 
-        # 检查是否有临时 HTML（主图生成过程中的中间产物）
-        _temp_html = metadata_dir / "_main_image_temp.html"
-        # _temp_html 不强制要求存在（可能已被清理）
+        # 验证图片文件大小合理（主图应该是真实图片，不是空文件）
+        for img in main_images:
+            size = img.stat().st_size
+            assert size > 1000, f"主图文件过小（可能是无效文件）: {img.name} ({size} bytes)"
 
         print(f"\n闲鱼主图: {[f.name for f in main_images]}")
 
@@ -167,6 +168,12 @@ class TestFullPipeline:
         content = xianyu_file.read_text(encoding="utf-8")
         assert len(content) > 50, "闲鱼文案内容过短"
 
+        # 验证文案包含书籍相关信息
+        # 文案中应包含"书"、"链接"或"价"等关键词（闲鱼文案特征）
+        assert any(
+            keyword in content for keyword in ["书", "链接", "价", "PDF", "EPUB", "双语"]
+        ), f"闲鱼文案内容不符合预期特征: {content[:200]}"
+
         print(f"\n闲鱼文案: {xianyu_file.name} ({len(content)} 字符)")
 
     def test_xiaohongshu_copywriting(self):
@@ -176,6 +183,10 @@ class TestFullPipeline:
 
         assert xhs_file.exists(), f"未找到小红书文案: {xhs_file}"
         assert xhs_file.stat().st_size > 0, "小红书文案文件为空"
+
+        # 验证内容长度合理
+        content = xhs_file.read_text(encoding="utf-8")
+        assert len(content) > 30, f"小红书文案内容过短: {content}"
 
         print(f"\n小红书文案: {xhs_file.name} ({xhs_file.stat().st_size} 字节)")
 
@@ -188,9 +199,15 @@ class TestFullPipeline:
         assert len(pdf_files) > 0, f"未找到中文 PDF: {chinese_dir}/*.pdf"
 
         pdf_path = pdf_files[0]
-        assert pdf_path.stat().st_size > 1000, f"中文 PDF 文件过小: {pdf_path.stat().st_size}"
+        pdf_size = pdf_path.stat().st_size
+        assert pdf_size > 1000, f"中文 PDF 文件过小: {pdf_path.stat().st_size}"
 
-        print(f"\n中文 PDF: {pdf_path.name} ({pdf_path.stat().st_size} 字节)")
+        # 验证 PDF 文件结构（通过 PyPDF2 或简单字节检查）
+        with open(pdf_path, "rb") as f:
+            header = f.read(4)
+            assert header == b"%PDF", f"PDF 文件头无效: {header}"
+
+        print(f"\n中文 PDF: {pdf_path.name} ({pdf_size} 字节)")
 
     def test_bilingual_epub(self):
         """验证双语 EPUB：检查 output/little-prince/双语-little-prince/ 下是否有 .epub"""
@@ -201,9 +218,15 @@ class TestFullPipeline:
         assert len(epub_files) > 0, f"未找到双语 EPUB: {bilingual_dir}/*.epub"
 
         epub_path = epub_files[0]
-        assert epub_path.stat().st_size > 1000, f"双语 EPUB 文件过小: {epub_path.stat().st_size}"
+        epub_size = epub_path.stat().st_size
+        assert epub_size > 1000, f"双语 EPUB 文件过小: {epub_size}"
 
-        print(f"\n双语 EPUB: {epub_path.name} ({epub_path.stat().st_size} 字节)")
+        # 验证 EPUB 文件结构（ZIP 文件格式）
+        import zipfile
+
+        assert zipfile.is_zipfile(epub_path), f"EPUB 文件格式无效: {epub_path}"
+
+        print(f"\n双语 EPUB: {epub_path.name} ({epub_size} 字节)")
 
     def test_english_pdf(self):
         """验证英文 PDF：检查 output/little-prince/英文-little-prince/ 下是否有 PDF"""
@@ -214,9 +237,15 @@ class TestFullPipeline:
         assert len(pdf_files) > 0, f"未找到英文 PDF: {english_dir}/*.pdf"
 
         pdf_path = pdf_files[0]
-        assert pdf_path.stat().st_size > 1000, f"英文 PDF 文件过小: {pdf_path.stat().st_size}"
+        pdf_size = pdf_path.stat().st_size
+        assert pdf_size > 1000, f"英文 PDF 文件过小: {pdf_size}"
 
-        print(f"\n英文 PDF: {pdf_path.name} ({pdf_path.stat().st_size} 字节)")
+        # 验证 PDF 文件头
+        with open(pdf_path, "rb") as f:
+            header = f.read(4)
+            assert header == b"%PDF", f"PDF 文件头无效: {header}"
+
+        print(f"\n英文 PDF: {pdf_path.name} ({pdf_size} 字节)")
 
     def test_summary_pdf(self):
         """验证精简版 PDF：检查 output/little-prince/ 下是否有 精简版.pdf"""
@@ -224,6 +253,86 @@ class TestFullPipeline:
         summary_pdf = book_output_dir / "精简版.pdf"
 
         assert summary_pdf.exists(), f"未找到精简版 PDF: {summary_pdf}"
-        assert summary_pdf.stat().st_size > 1000, f"精简版 PDF 文件过小: {summary_pdf.stat().st_size}"
 
-        print(f"\n精简版 PDF: {summary_pdf.name} ({summary_pdf.stat().st_size} 字节)")
+        pdf_size = summary_pdf.stat().st_size
+        assert pdf_size > 1000, f"精简版 PDF 文件过小: {pdf_size}"
+
+        # 验证 PDF 文件头
+        with open(summary_pdf, "rb") as f:
+            header = f.read(4)
+            assert header == b"%PDF", f"PDF 文件头无效: {header}"
+
+        # 尝试读取 PDF 页数（如果 PyPDF2 可用）
+        try:
+            from PyPDF2 import PdfReader
+
+            reader = PdfReader(summary_pdf)
+            page_count = len(reader.pages)
+            assert page_count > 0, "精简版 PDF 页数为 0"
+            assert page_count <= 50, f"精简版 PDF 页数过多，可能是原书: {page_count} 页"
+            print(f"\n精简版 PDF: {summary_pdf.name} ({pdf_size} 字节, {page_count} 页)")
+        except ImportError:
+            print(f"\n精简版 PDF: {summary_pdf.name} ({pdf_size} 字节)")
+
+    def test_summary_pdf_has_text_content(self):
+        """验证精简版 PDF 包含实际文本内容（不是空白 PDF）"""
+        book_output_dir = Path(config.output_dir) / BOOK_NAME
+        summary_pdf = book_output_dir / "精简版.pdf"
+
+        if not summary_pdf.exists():
+            pytest.skip("精简版 PDF 不存在")
+
+        try:
+            from PyPDF2 import PdfReader
+
+            reader = PdfReader(summary_pdf)
+
+            # 提取所有页面的文本
+            all_text = ""
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    all_text += text
+
+            # 验证提取到文本
+            assert len(all_text.strip()) > 100, f"精简版 PDF 文本内容过少，可能不是有效的摘要: {len(all_text)} 字符"
+
+            print(f"\n精简版 PDF 文本长度: {len(all_text)} 字符")
+        except ImportError:
+            pytest.skip("PyPDF2 不可用")
+
+    def test_xianyu_listing_has_required_structure(self):
+        """验证闲鱼文案包含必要的结构字段"""
+        metadata_dir = Path(config.output_dir) / f"{BOOK_NAME}_metadata"
+        xianyu_file = metadata_dir / "xianyu_listing.txt"
+
+        if not xianyu_file.exists():
+            pytest.skip("闲鱼文案不存在")
+
+        content = xianyu_file.read_text(encoding="utf-8")
+
+        # 验证包含书名（小王子）或相关关键词
+        assert (
+            "王子" in content or "prince" in content.lower() or "小王子" in content
+        ), f"闲鱼文案应包含书名相关关键词: {content[:200]}"
+
+        # 验证文案长度合理（不是占位符）
+        assert len(content) > 100, f"闲鱼文案过短: {len(content)} 字符"
+
+    def test_output_directory_structure(self):
+        """验证输出目录结构正确"""
+        book_output_dir = Path(config.output_dir) / BOOK_NAME
+
+        # 验证主要子目录存在
+        expected_dirs = [
+            f"中文-{BOOK_NAME}",
+            f"英文-{BOOK_NAME}",
+            f"双语-{BOOK_NAME}",
+        ]
+
+        for dir_name in expected_dirs:
+            dir_path = book_output_dir / dir_name
+            assert dir_path.exists(), f"目录不存在: {dir_path}"
+            assert dir_path.is_dir(), f"路径不是目录: {dir_path}"
+
+        print("\n输出目录结构验证通过")

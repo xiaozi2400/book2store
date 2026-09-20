@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from automation.database import get_session
 from automation.models import Base, Book
 
 # 确保 ebook_translator 在 sys.path 中（translation_cache.py 依赖 translator 模块）
@@ -27,14 +28,16 @@ def reset_db_engine():
 
 
 @pytest.fixture
-def in_memory_db():
-    """创建内存数据库引擎和会话"""
-    engine = create_engine("sqlite:///:memory:", echo=False)
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
+def in_memory_db(reset_db_engine):
+    """使用 reset_db_engine 设置的全局 engine 的 session
+
+    这样 DatabaseManager 的所有操作和测试查询都使用同一个 engine/session。
+    """
+    session = get_session()
     yield session
-    session.close()
+    # 不在这里关闭 session，因为 DatabaseManager 方法内部会关闭自己的 session，
+    # 而且多个测试共用 reset_db_engine 的全局 engine。
+    # 重复 close() 在 SQLAlchemy 中是安全的。
 
 
 @pytest.fixture

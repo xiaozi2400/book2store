@@ -108,7 +108,7 @@ def load_pdf_config():
         # 页眉页脚（简洁设计）
         "header_footer": {
             "header_template": "",  # 删除页眉
-            "footer_template": '<div style="text-align:center;font-size:11pt;color:#666;margin-top:8pt;">第 _PAGENUM_ 页 / 共 _TOTALPAGES_ 页</div>',
+            "footer_template": '<div style="text-align:center;font-size:11pt;color:#666;margin-top:8pt;">第 _PAGENUM_ 页 / 共 _TOTALPAGES_ 页</div>',  # noqa: E501
         },
         # 目录与书签
         "toc": {

@@ -112,7 +112,7 @@ class PDFConverter:
         line_height = css_config.get("paragraph_line_height", "2.2")
         text_indent = css_config.get("paragraph_text_indent", "0em")
 
-        extra_css = f"p, div {{ margin-top: 0 !important; text-indent: {text_indent} !important; margin-bottom: {margin_bottom} !important; line-height: {line_height} !important; }} li {{ margin-bottom: 0.3em !important; line-height: {line_height} !important; }} ol, ul {{ padding-left: 1.5em !important; margin: 0.3em 0 !important; }}"
+        extra_css = f"p, div {{ margin-top: 0 !important; text-indent: {text_indent} !important; margin-bottom: {margin_bottom} !important; line-height: {line_height} !important; }} li {{ margin-bottom: 0.3em !important; line-height: {line_height} !important; }} ol, ul {{ padding-left: 1.5em !important; margin: 0.3em 0 !important; }}"  # noqa: E501
         cmd.extend(["--extra-css", extra_css])
 
         # ==================== 页眉页脚（简洁设计）====================
@@ -212,7 +212,7 @@ class PDFConverter:
 
             try:
                 # 使用 PowerShell 以管理员身份运行
-                run_cmd = f'powershell -Command "Start-Process powershell -ArgumentList \'-ExecutionPolicy Bypass -File "{temp_script}"\' -Verb RunAs -Wait"'
+                run_cmd = f'powershell -Command "Start-Process powershell -ArgumentList \'-ExecutionPolicy Bypass -File "{temp_script}"\' -Verb RunAs -Wait"'  # noqa: E501
                 result = subprocess.run(run_cmd, shell=True, capture_output=True, encoding="utf-8", errors="replace")
 
                 if os.path.exists(pdf_path):

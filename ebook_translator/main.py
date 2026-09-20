@@ -1,3 +1,4 @@
+# noqa: E402 — subproject requires sys.path modification before imports
 import argparse
 import io
 import json
@@ -6,14 +7,15 @@ import signal
 import sys
 import time
 
+# noqa: E402 — subproject requires sys.path modification above
+from config import PDF_CONFIG, TRANSLATION_PROVIDER  # noqa: E402
+from translator.cache import CacheManager  # noqa: E402
+from translator.epub_generator import EPUBGenerator  # noqa: E402
+from translator.epub_parser import EPUBParser  # noqa: E402
+from translator.pdf_converter import PDFConverter  # noqa: E402
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-
-from config import PDF_CONFIG, TRANSLATION_PROVIDER
-from translator.cache import CacheManager
-from translator.epub_generator import EPUBGenerator
-from translator.epub_parser import EPUBParser
-from translator.pdf_converter import PDFConverter
 
 
 def get_translator():

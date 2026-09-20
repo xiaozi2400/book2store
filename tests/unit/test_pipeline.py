@@ -6,13 +6,6 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
-_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, _root)
-# 确保 ebook_translator 在 sys.path 中（translation 模块依赖 translator 子模块）
-_ebook_translator_path = os.path.join(_root, "ebook_translator")
-if _ebook_translator_path not in sys.path:
-    sys.path.insert(0, _ebook_translator_path)
-
 from automation.pipeline import (
     CopywritingStage,
     ImageGenerationStage,
@@ -25,6 +18,13 @@ from automation.pipeline import (
     build_pipeline,
     run_pipeline,
 )
+
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _root)
+# 确保 ebook_translator 在 sys.path 中（translation 模块依赖 translator 子模块）
+_ebook_translator_path = os.path.join(_root, "ebook_translator")
+if _ebook_translator_path not in sys.path:
+    sys.path.insert(0, _ebook_translator_path)
 
 
 class TestPipelineContext:

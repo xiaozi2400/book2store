@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 from automation.exceptions import PDFConvertError
 from automation.summarizer.fonts import get_chinese_font, register_chinese_fonts
 from automation.utils import logger
@@ -70,7 +76,7 @@ class SummaryPDFGenerator:
             subtitle = None
             body_html = html_body
 
-        full_html = self._build_weasyprint_html(title, subtitle, body_html, cover_path)
+        full_html = self._build_weasyprint_html(_title, subtitle, body_html, cover_path)
 
         HTML(string=full_html).write_pdf(output_path)
 
@@ -337,11 +343,7 @@ pre {{
         """使用reportlab直接生成PDF - 原生支持中文"""
         import re
 
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
         register_chinese_fonts()
 
@@ -522,7 +524,7 @@ pre {{
         author = content.get("author", "Unknown")
 
         if content.get("html_body"):
-            html_body = content["html_body"]
+            html_body = content.get("html_body", "")
         else:
             markdown_content = content.get("content", "")
             html_body = self._markdown_to_html(markdown_content)
@@ -539,14 +541,17 @@ pre {{
 <style>
 body {{ font-family: SimSun, 'Times New Roman', serif; margin: 1em; }}
 h1 {{ text-align: center; font-size: 1.5em; margin-top: 2em; margin-bottom: 1.5em; page-break-after: avoid; }}
-h2 {{ margin-top: 2em; margin-bottom: 1.5em; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; page-break-after: avoid; page-break-before: auto; }}
+h2 {{ margin-top: 2em; margin-bottom: 1.5em; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 0.3em;
+    page-break-after: avoid; page-break-before: auto; }}
 h3 {{ margin-top: 1.5em; margin-bottom: 1em; color: #555; page-break-after: avoid; }}
 h4 {{ margin-top: 1em; margin-bottom: 0.8em; color: #666; page-break-after: avoid; }}
 p {{ text-indent: 2.5em; line-height: 2.2; margin: 0 0 2.5em 0; text-align: justify; }}
 ul, ol {{ margin: 0.5em 0; padding-left: 2em; page-break-inside: avoid; }}
 li {{ margin: 0 0 1.2em 0; line-height: 1.8; page-break-inside: avoid; }}
-blockquote {{ margin: 2em 0; padding: 0.5em 2em; border-left: 4px solid #999; background: #f5f9fc; color: #333; page-break-inside: avoid; }}
-table {{ border-collapse: collapse; width: 100%; margin: 1.5em 0; page-break-inside: avoid; table-layout: auto; word-wrap: break-word; }}
+blockquote {{ margin: 2em 0; padding: 0.5em 2em; border-left: 4px solid #999;
+    background: #f5f9fc; color: #333; page-break-inside: avoid; }}
+table {{ border-collapse: collapse; width: 100%; margin: 1.5em 0; page-break-inside: avoid;
+    table-layout: auto; word-wrap: break-word; }}
 th, td {{ border: 1px solid #ddd; padding: 0.8em; text-align: left; word-wrap: break-word; }}
 th {{ background: #f5f5f5; }}
 code {{ background: #f0f0f0; padding: 0.2em 0.4em; border-radius: 3px; font-family: monospace; }}
@@ -738,8 +743,8 @@ hr {
 
             return f"""
 <div style="text-align: center; page-break-after: always;">
-    <img src="data:{mime_type};base64,{cover_data}" style="max-width: 100%; max-height: 90vh; display: block; margin: auto;">
-</div>"""
+    <img src="data:{mime_type};base64,{cover_data}" style="max-width: 100%; max-height: 90vh; display: block; margin: auto;" />
+</div>"""  # noqa: E501
         except Exception as e:
             logger.warning(f"嵌入封面失败: {e}")
             return ""
@@ -928,8 +933,6 @@ hr {
     def _create_pdf_fallback(self, content: Dict[str, Any], output_path: str):
         """备用PDF生成方法 - 支持Markdown内容和中文"""
         from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-        from reportlab.lib.styles import ParagraphStyle
-        from reportlab.lib.units import cm
 
         author = content.get("author", "Unknown")
         markdown_content = content.get("content", "")
@@ -964,7 +967,7 @@ hr {
                 logger.warning(f"注册字体 {name} 失败: {e}")
 
         from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+        from reportlab.platypus import Paragraph, Spacer
 
         doc = SimpleDocTemplate(
             output_path, pagesize=A4, rightMargin=2 * cm, leftMargin=2 * cm, topMargin=2 * cm, bottomMargin=2 * cm
@@ -1096,8 +1099,6 @@ hr {
 
     def _add_markdown_to_story(self, story: list, md: str, styles, font_name: str = "SimSun"):
         """将Markdown内容添加到PDF story"""
-        from reportlab.lib.units import cm
-        from reportlab.platypus import Table, TableStyle
 
         if not md:
             return

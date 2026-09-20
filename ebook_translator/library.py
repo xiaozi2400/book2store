@@ -1,26 +1,23 @@
-"""
-电子书翻译库 - 可被其他模块调用的编程接口
-"""
-
+# noqa: E402 — subproject requires sys.path modification before imports
 import logging
 import os
 import shutil
 import sys
 import time
 
-logger = logging.getLogger(__name__)
-
 # Add the current directory to path for relative imports
-if __name__ != "__main__":
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    if current_dir not in sys.path:
-        sys.path.insert(0, current_dir)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
-from config import PDF_CONFIG
-from translator.cache import CacheManager
-from translator.epub_generator import EPUBGenerator
-from translator.epub_parser import EPUBParser
-from translator.pdf_converter import PDFConverter
+# noqa: E402 — subproject requires sys.path modification above
+from config import PDF_CONFIG  # noqa: E402
+from translator.cache import CacheManager  # noqa: E402
+from translator.epub_generator import EPUBGenerator  # noqa: E402
+from translator.epub_parser import EPUBParser  # noqa: E402
+from translator.pdf_converter import PDFConverter  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 def get_translator():

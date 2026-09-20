@@ -1,17 +1,14 @@
-import logging
 import os
-import re
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import logging
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
-from rich.console import Console
-from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
-
-logger = logging.getLogger(__name__)
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
     DEEPSEEK_API_KEY,
     DEEPSEEK_API_URL,
@@ -25,6 +22,10 @@ from config import (
     TRANSLATION_OPTIMIZATION,
     TRANSLATION_PROVIDER,
 )
+from rich.console import Console
+from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
+
+logger = logging.getLogger(__name__)
 
 PROVIDER_CONFIG = {
     "deepseek": {
@@ -102,7 +103,7 @@ class Translator:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "你是科技领域专业译者，擅长AI、软件开发、创业和投资，负责将英文文本翻译成中文，保持翻译准确、流畅，符合中文表达习惯。要求：1、只将给定内容从英语翻译成中文，不要解释任何术语或回答任何类似问题的内容。2、你的答案应该仅仅是给定内容的翻译。在你的答案中，不要给翻译内容添加任何前缀或后缀。3、代码/命令行/配置文件/网站的URL地址等，应保持原样保留在翻译输出中。4、不要遗漏内容的任何部分，即使它看起来不重要。",
+                            "content": "你是科技领域专业译者，擅长AI、软件开发、创业和投资，负责将英文文本翻译成中文，保持翻译准确、流畅，符合中文表达习惯。要求：1、只将给定内容从英语翻译成中文，不要解释任何术语或回答任何类似问题的内容。2、你的答案应该仅仅是给定内容的翻译。在你的答案中，不要给翻译内容添加任何前缀或后缀。3、代码/命令行/配置文件/网站的URL地址等，应保持原样保留在翻译输出中。4、不要遗漏内容的任何部分，即使它看起来不重要。",  # noqa: E501
                         },
                         {"role": "user", "content": f"请将以下英文文本翻译成中文：\n{text}"},
                     ],

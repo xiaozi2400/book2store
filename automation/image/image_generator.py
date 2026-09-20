@@ -49,101 +49,127 @@ UNIVERSAL_PILLS_LIGHT = [
 ]
 
 # 4 张主图的 CSS+HTML 骨架 — 与 prompt 解耦,只做纯渲染,不参与 AI 上下文
-_CSS_SKELETON = """*{margin:0;padding:0;box-sizing:border-box}
-body{background:#f2f4f8;display:flex;flex-direction:column;align-items:center;padding:40px 20px;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
-.page,.content,.footer-tags,.skill-card,.reader-tag,.left-col,.right-col{display:flex;flex-direction:column;align-items:center}
-.page{width:800px;height:800px;box-shadow:0 12px 40px rgba(0,0,0,.1);margin-bottom:40px;overflow:hidden;padding:30px 40px;justify-content:space-between}
-.content{width:100%;flex:1;justify-content:center}
-.footer-tags{flex-direction:row;justify-content:center;gap:24px;width:100%;margin-top:20px}
-.tag{padding:6px 22px;border-radius:40px;font-size:14px;font-weight:500;box-shadow:0 2px 6px rgba(0,0,0,.08)}
-.tag-pdf{background:#1E3A5F}.tag-lang{background:#8E3A3A}
-.section-title{font-size:48px;font-weight:700;margin-bottom:28px}
-/* 深色主题默认白字 */
-.page{color:#fff}
-.tag{color:#fff}
-/* 浅色主题深色字 */
-.page.light{color:#1a1a1a}
-.page.light .tag{color:#1a1a1a}
-/* 四色主背景占位符 */
-.page-1{background:__COLOR1__}.page-2{background:__COLOR2__}.page-3{background:__COLOR3__}.page-4{background:__COLOR4__}
-/* 浅色主题下正文变深,副文字用中灰 */
-.page.light{color:#1a1a1a}
-.page.light .author,.page.light .sub-line,.page.light .quote-line{color:rgba(26,26,26,.75)}
-.page.light .quote-line{border-top-color:rgba(26,26,26,.15)}
-.page.light .footer-tags .tag{color:#fff}
-.book-title{font-size:54px;font-weight:700;line-height:1.2;text-align:center;max-width:90%}
-.author{font-size:24px;font-weight:300;margin-top:8px;opacity:.9}
-.cover-img{height:340px;margin:20px 0 10px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
-.sub-line{font-size:32px;font-weight:500;margin-top:20px;text-align:center;letter-spacing:2px}
-.quote-line{font-size:16px;opacity:.75;margin-top:16px;border-top:1px solid rgba(255,255,255,.2);padding-top:16px;text-align:center;quotes:"\\201C""\\201D"}
-.quote-line::before{content:open-quote}.quote-line::after{content:close-quote}
-.grid-2x2{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:700px}
-.skill-card{padding:24px 16px;border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.2);text-align:center;position:relative}
-.skill-card .num{font-size:36px;font-weight:700;font-family:"Georgia","Times New Roman",serif;position:absolute;top:12px;left:16px;line-height:1}
-.skill-card h3{font-size:22px;font-weight:600;margin-bottom:6px;margin-top:8px}
-.skill-card p{font-size:15px;opacity:.9;line-height:1.4}
-/* 深色主题:数字淡白 */
-.skill-card .num{color:rgba(255,255,255,.25)}
-/* 浅色主题:数字深灰 */
-.page.light .skill-card .num{color:rgba(26,26,26,.2)}
-.skill-card:nth-child(1){background:__TINT1__}
-.skill-card:nth-child(2){background:__TINT2__}
-.skill-card:nth-child(3){background:__TINT3__}
-.skill-card:nth-child(4){background:__TINT4__}
-.tag-row{display:flex;flex-wrap:wrap;justify-content:center;gap:28px;width:100%;max-width:720px}
-.reader-tag{padding:20px 28px;border-radius:60px;box-shadow:0 8px 20px rgba(0,0,0,.18);min-width:140px;position:relative;align-items:center}
-.reader-tag .label{font-size:22px;font-weight:600}
-.reader-tag .desc{font-size:14px;opacity:.85;margin-top:4px;text-align:center}
-.reader-tag:nth-child(1){background:__PILL1__}
-.reader-tag:nth-child(2){background:__PILL2__}
-.reader-tag:nth-child(3){background:__PILL3__}
-.reader-tag:nth-child(4){background:__PILL4__}
-.reader-tag:nth-child(5){background:__PILL5__}
-/* --- Page 4 三版式 --- */
-/* 版式A: ≤10章 双栏简略 */
-.dual-col{display:flex;width:100%;max-width:720px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;border:1px solid rgba(255,255,255,.1)}
-.left-col,.right-col{padding:24px 16px;justify-content:space-around;align-items:stretch}
-.left-col{flex:1;background:rgba(0,0,0,.35)}
-.right-col{flex:1.6;background:#f5ede6;color:#2d2d2d}
-/* 浅色主题版式A右栏保持浅色 */
-.page.light .right-col{background:rgba(0,0,0,.06);color:#1a1a1a}
-.rule-item{font-size:20px;font-weight:600;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.1)}
-.strategy-item{font-size:16px;font-weight:500;padding:10px 8px;border-bottom:1px solid rgba(0,0,0,.08);line-height:1.3}
-.rule-item:last-child,.strategy-item:last-child{border-bottom:none}
-/* 版式B: 11~14章 紧凑单栏 */
-.dual-col-b{display:flex;flex-direction:column;width:100%;max-width:720px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35)}
-.chapter-row{display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
-.chapter-row:last-child{border-bottom:none}
-.chapter-num{font-size:18px;font-weight:700;font-family:"Georgia","Times New Roman",serif;min-width:48px}
-.chapter-text{flex:1;font-size:18px;font-weight:600}
-.chapter-brief{flex:1;font-size:15px;padding-left:16px}
-/* 深色:章节号淡白/浅色文字;浅色:深灰文字 */
-.chapter-num{color:rgba(255,255,255,.35)}
-.chapter-text{color:#fff}
-.chapter-brief{color:rgba(255,255,255,.7)}
-/* 版式C: ≥15章 双栏纯列表 */
-.dual-col-c{display:flex;width:100%;max-width:720px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;border:1px solid rgba(255,255,255,.1)}
-.left-col-c{flex:3;background:rgba(0,0,0,.3);padding:20px 16px}
-.right-col-c{flex:1;background:#f5ede6;color:#2d2d2d;padding:20px 16px}
-.chapter-item{font-size:17px;font-weight:600;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.1)}
-.chapter-item:last-child{border-bottom:none}
-.strategy-item-c{font-size:15px;font-weight:500;padding:10px 8px;border-bottom:1px solid rgba(0,0,0,.08);line-height:1.3;color:#2d2d2d}
-.strategy-item-c:last-child{border-bottom:none}
-/* 浅色主题覆盖 */
-.page.light .chapter-num{color:rgba(26,26,26,.3)}
-.page.light .chapter-text{color:#1a1a1a}
-.page.light .chapter-brief{color:rgba(26,26,26,.65)}
-.page.light .left-col-c{background:rgba(0,0,0,.06)}
-.page.light .right-col-c{background:rgba(0,0,0,.04);color:#1a1a1a}
-.page.light .chapter-item{color:#1a1a1a;border-bottom-color:rgba(26,26,26,.1)}
-.page.light .strategy-item-c{color:#1a1a1a}
-.page.light .strategy-item-c{border-bottom-color:rgba(26,26,26,.08)}
-.page.light .left-col{background:rgba(0,0,0,.08)}
-.page.light .rule-item{border-bottom-color:rgba(26,26,26,.1);color:#1a1a1a}
-.page.light .strategy-item{border-bottom-color:rgba(26,26,26,.08);color:#1a1a1a}
-.page.light .dual-col{border-color:rgba(26,26,26,.1)}
-.page.light .dual-col-b{border-color:rgba(26,26,26,.1)}
-.page.light .dual-col-c{border-color:rgba(26,26,26,.1)}"""
+_CSS_SKELETON = (
+    "*{margin:0;padding:0;box-sizing:border-box}\n"
+    "body{background:#f2f4f8;display:flex;flex-direction:column;align-items:center;"
+    'padding:40px 20px;font-family:"PingFang SC","Microsoft YaHei",sans-serif}\n'
+    ".page,.content,.footer-tags,.skill-card,.reader-tag,.left-col,.right-col"
+    "{display:flex;flex-direction:column;align-items:center}\n"
+    ".page{width:800px;height:800px;box-shadow:0 12px 40px rgba(0,0,0,.1);"
+    "margin-bottom:40px;overflow:hidden;padding:30px 40px;justify-content:space-between}\n"
+    ".content{width:100%;flex:1;justify-content:center}\n"
+    ".footer-tags{flex-direction:row;justify-content:center;gap:24px;width:100%;margin-top:20px}\n"
+    ".tag{padding:6px 22px;border-radius:40px;font-size:14px;font-weight:500;"
+    "box-shadow:0 2px 6px rgba(0,0,0,.08)}\n"
+    ".tag-pdf{background:#1E3A5F}.tag-lang{background:#8E3A3A}\n"
+    ".section-title{font-size:48px;font-weight:700;margin-bottom:28px}\n"
+    "/* 深色主题默认白字 */\n"
+    ".page{color:#fff}\n"
+    ".tag{color:#fff}\n"
+    "/* 浅色主题深色字 */\n"
+    ".page.light{color:#1a1a1a}\n"
+    ".page.light .tag{color:#1a1a1a}\n"
+    "/* 四色主背景占位符 */\n"
+    ".page-1{background:__COLOR1__}.page-2{background:__COLOR2__}"
+    ".page-3{background:__COLOR3__}.page-4{background:__COLOR4__}\n"
+    "/* 浅色主题下正文变深,副文字用中灰 */\n"
+    ".page.light{color:#1a1a1a}\n"
+    ".page.light .author,.page.light .sub-line,.page.light .quote-line"
+    "{color:rgba(26,26,26,.75)}\n"
+    ".page.light .quote-line{border-top-color:rgba(26,26,26,.15)}\n"
+    ".page.light .footer-tags .tag{color:#fff}\n"
+    ".book-title{font-size:54px;font-weight:700;line-height:1.2;text-align:center;max-width:90%}\n"
+    ".author{font-size:24px;font-weight:300;margin-top:8px;opacity:.9}\n"
+    ".cover-img{height:340px;margin:20px 0 10px;box-shadow:0 20px 50px rgba(0,0,0,.35)}\n"
+    ".sub-line{font-size:32px;font-weight:500;margin-top:20px;text-align:center;letter-spacing:2px}\n"
+    ".quote-line{font-size:16px;opacity:.75;margin-top:16px;"
+    "border-top:1px solid rgba(255,255,255,.2);padding-top:16px;text-align:center;"
+    'quotes:"\\201C""\\201D"}\n'
+    ".quote-line::before{content:open-quote}.quote-line::after{content:close-quote}\n"
+    ".grid-2x2{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:700px}\n"
+    ".skill-card{padding:24px 16px;border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.2);"
+    "text-align:center;position:relative}\n"
+    ".skill-card .num{font-size:36px;font-weight:700;"
+    'font-family:"Georgia","Times New Roman",serif;'
+    "position:absolute;top:12px;left:16px;line-height:1}\n"
+    ".skill-card h3{font-size:22px;font-weight:600;margin-bottom:6px;margin-top:8px}\n"
+    ".skill-card p{font-size:15px;opacity:.9;line-height:1.4}\n"
+    "/* 深色主题:数字淡白 */\n"
+    ".skill-card .num{color:rgba(255,255,255,.25)}\n"
+    "/* 浅色主题:数字深灰 */\n"
+    ".page.light .skill-card .num{color:rgba(26,26,26,.2)}\n"
+    ".skill-card:nth-child(1){background:__TINT1__}\n"
+    ".skill-card:nth-child(2){background:__TINT2__}\n"
+    ".skill-card:nth-child(3){background:__TINT3__}\n"
+    ".skill-card:nth-child(4){background:__TINT4__}\n"
+    ".tag-row{display:flex;flex-wrap:wrap;justify-content:center;gap:28px;width:100%;max-width:720px}\n"
+    ".reader-tag{padding:20px 28px;border-radius:60px;box-shadow:0 8px 20px rgba(0,0,0,.18);"
+    "min-width:140px;position:relative;align-items:center}\n"
+    ".reader-tag .label{font-size:22px;font-weight:600}\n"
+    ".reader-tag .desc{font-size:14px;opacity:.85;margin-top:4px;text-align:center}\n"
+    ".reader-tag:nth-child(1){background:__PILL1__}\n"
+    ".reader-tag:nth-child(2){background:__PILL2__}\n"
+    ".reader-tag:nth-child(3){background:__PILL3__}\n"
+    ".reader-tag:nth-child(4){background:__PILL4__}\n"
+    ".reader-tag:nth-child(5){background:__PILL5__}\n"
+    "/* --- Page 4 三版式 --- */\n"
+    "/* 版式A: ≤10章 双栏简略 */\n"
+    ".dual-col{display:flex;width:100%;max-width:720px;border-radius:20px;"
+    "box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;"
+    "border:1px solid rgba(255,255,255,.1)}\n"
+    ".left-col,.right-col{padding:24px 16px;justify-content:space-around;align-items:stretch}\n"
+    ".left-col{flex:1;background:rgba(0,0,0,.35)}\n"
+    ".right-col{flex:1.6;background:#f5ede6;color:#2d2d2d}\n"
+    "/* 浅色主题版式A右栏保持浅色 */\n"
+    ".page.light .right-col{background:rgba(0,0,0,.06);color:#1a1a1a}\n"
+    ".rule-item{font-size:20px;font-weight:600;padding:10px 8px;"
+    "border-bottom:1px solid rgba(255,255,255,.1)}\n"
+    ".strategy-item{font-size:16px;font-weight:500;padding:10px 8px;"
+    "border-bottom:1px solid rgba(0,0,0,.08);line-height:1.3}\n"
+    ".rule-item:last-child,.strategy-item:last-child{border-bottom:none}\n"
+    "/* 版式B: 11~14章 紧凑单栏 */\n"
+    ".dual-col-b{display:flex;flex-direction:column;width:100%;max-width:720px;border-radius:20px;"
+    "box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;"
+    "border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35)}\n"
+    ".chapter-row{display:flex;align-items:center;padding:12px 20px;"
+    "border-bottom:1px solid rgba(255,255,255,.1)}\n"
+    ".chapter-row:last-child{border-bottom:none}\n"
+    ".chapter-num{font-size:18px;font-weight:700;"
+    'font-family:"Georgia","Times New Roman",serif;min-width:48px}\n'
+    ".chapter-text{flex:1;font-size:18px;font-weight:600}\n"
+    ".chapter-brief{flex:1;font-size:15px;padding-left:16px}\n"
+    "/* 深色:章节号淡白/浅色文字;浅色:深灰文字 */\n"
+    ".chapter-num{color:rgba(255,255,255,.35)}\n"
+    ".chapter-text{color:#fff}\n"
+    ".chapter-brief{color:rgba(255,255,255,.7)}\n"
+    "/* 版式C: ≥15章 双栏纯列表 */\n"
+    ".dual-col-c{display:flex;width:100%;max-width:720px;border-radius:20px;"
+    "box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;"
+    "border:1px solid rgba(255,255,255,.1)}\n"
+    ".left-col-c{flex:3;background:rgba(0,0,0,.3);padding:20px 16px}\n"
+    ".right-col-c{flex:1;background:#f5ede6;color:#2d2d2d;padding:20px 16px}\n"
+    ".chapter-item{font-size:17px;font-weight:600;padding:10px 8px;"
+    "border-bottom:1px solid rgba(255,255,255,.1)}\n"
+    ".chapter-item:last-child{border-bottom:none}\n"
+    ".strategy-item-c{font-size:15px;font-weight:500;padding:10px 8px;"
+    "border-bottom:1px solid rgba(0,0,0,.08);line-height:1.3;color:#2d2d2d}\n"
+    ".strategy-item-c:last-child{border-bottom:none}\n"
+    "/* 浅色主题覆盖 */\n"
+    ".page.light .chapter-num{color:rgba(26,26,26,.3)}\n"
+    ".page.light .chapter-text{color:#1a1a1a}\n"
+    ".page.light .chapter-brief{color:rgba(26,26,26,.65)}\n"
+    ".page.light .left-col-c{background:rgba(0,0,0,.06)}\n"
+    ".page.light .right-col-c{background:rgba(0,0,0,.04);color:#1a1a1a}\n"
+    ".page.light .chapter-item{color:#1a1a1a;border-bottom-color:rgba(26,26,26,.1)}\n"
+    ".page.light .strategy-item-c{color:#1a1a1a}\n"
+    ".page.light .strategy-item-c{border-bottom-color:rgba(26,26,26,.08)}\n"
+    ".page.light .left-col{background:rgba(0,0,0,.08)}\n"
+    ".page.light .rule-item{border-bottom-color:rgba(26,26,26,.1);color:#1a1a1a}\n"
+    ".page.light .strategy-item{border-bottom-color:rgba(26,26,26,.08);color:#1a1a1a}\n"
+    ".page.light .dual-col{border-color:rgba(26,26,26,.1)}\n"
+    ".page.light .dual-col-b{border-color:rgba(26,26,26,.1)}\n"
+    ".page.light .dual-col-c{border-color:rgba(26,26,26,.1)}"
+)
 
 _FOOTER_TAGS = (
     '<div class="footer-tags">'
@@ -651,7 +677,11 @@ class ImageGenerator:
             # 版式C:双栏纯列表
             left = "".join(f'<div class="chapter-item">{it.get("chapter","")}</div>' for it in items[:15])
             right = "".join(f'<div class="strategy-item-c">{it.get("brief","")}</div>' for it in items[:15])
-            return f'<div class="dual-col-c"><div class="left-col-c">{left}</div><div class="right-col-c">{right}</div></div>'
+            return (
+                f'<div class="dual-col-c">'
+                f'<div class="left-col-c">{left}</div>'
+                f'<div class="right-col-c">{right}</div></div>'
+            )
 
     def _inject_cover_image(self, html: str, cover_base64: str) -> str:
         """将HTML中的__COVER_PLACEHOLDER__替换为真实封面base64"""

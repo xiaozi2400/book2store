@@ -1,78 +1,250 @@
-"""tests/test_quality_checker.py"""
+"""tests/unit/test_quality_checker.py"""
 
-from automation.database import close_session, get_session, init_database
+# Standard library
+import json
+import os
+from unittest.mock import MagicMock, patch
+
+import fitz
+
+# Third-party
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+
+# Application
+from automation.config import config
+from automation.database import DatabaseManager, close_session, get_session, init_database
 from automation.models import Book, BookOutput
+from automation.quality_checker import (
+    CompletenessChecker,
+    ConsistencyChecker,
+    CulturalAdaptationChecker,
+    DimensionResult,
+    FidelityChecker,
+    FluencyChecker,
+    FormatIntegrityChecker,
+    PdfTocLinkChecker,
+    QualityChecker,
+    QualityReport,
+    TerminologyChecker,
+)
+
+# ===== 维度 1：忠实度检查器 =====
 
 
-def test_quality_report_field_exists():
-    """验证 BookOutput 表有 quality_report 字段"""
-    init_database()
-    session = get_session()
-    try:
-        book = Book(filename="test_quality.epub", title="Test Quality Book", status="completed")
-        session.add(book)
-        session.flush()
-
-        output = BookOutput(book_id=book.id, quality_report='{"overall_score": 85, "overall_grade": "良好"}')
-        session.add(output)
-        session.commit()
-
-        retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
-        assert retrieved is not None
-        assert retrieved.quality_report is not None
-        import json
-
-        report = json.loads(retrieved.quality_report)
-        assert report["overall_score"] == 85
-        assert report["overall_grade"] == "良好"
-    finally:
-        close_session(session)
+def test_fidelity_all_translated():
+    """所有段落完整翻译，译文长度合理"""
+    cache_data = {
+        "h1": {"source": "Hello World", "translated": "你好世界"},
+        "h2": {"source": "Good Morning", "translated": "早上好"},
+    }
+    source_paragraphs = ["Hello World", "Good Morning"]
+    checker = FidelityChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] >= 90
+    assert result["missing_count"] == 0
 
 
-def test_quality_report_defaults_to_none():
-    """新建 BookOutput 时 quality_report 默认为 None"""
-    init_database()
-    session = get_session()
-    try:
-        book = Book(filename="test_no_report.epub", title="No Report Book", status="completed")
-        session.add(book)
-        session.flush()
-
-        output = BookOutput(book_id=book.id)
-        session.add(output)
-        session.commit()
-
-        retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
-        assert retrieved.quality_report is None
-    finally:
-        close_session(session)
+def test_fidelity_partial_missing():
+    """部分段落缺失翻译"""
+    cache_data = {
+        "h1": {"source": "Hello", "translated": "你好"},
+    }
+    source_paragraphs = ["Hello", "World", "Test"]
+    checker = FidelityChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] < 100
+    assert result["missing_count"] == 2
 
 
-def test_quality_check_default_config():
-    """验证质量检查默认配置存在"""
-    from automation.config import config
+def test_fidelity_empty_translation():
+    """译文为空字符串"""
+    cache_data = {
+        "h1": {"source": "Hello", "translated": ""},
+    }
+    source_paragraphs = ["Hello"]
+    checker = FidelityChecker()
+    result = checker.check(cache_data, source_paragraphs)
+    assert result["score"] < 50
+    assert result["empty_count"] == 1
 
-    qc_config = config.get("quality_check", {})
-    assert isinstance(qc_config, dict)
-    assert "enabled" in qc_config
-    assert "thresholds" in qc_config
-    assert "dimensions" in qc_config
-    assert "model" not in qc_config  # 纯程序化检查，无模型配置
+
+# ===== 维度 2：流畅度检查器 =====
 
 
-def test_quality_check_enabled_by_default():
-    """验证质量检查默认开启"""
-    from automation.config import config
+def test_fluency_good_chinese():
+    """优质中文翻译"""
+    text = "今天天气很好，适合出去散步。我们一起去公园吧！"
+    checker = FluencyChecker()
+    result = checker.check(text)
+    assert result["score"] >= 90
+    assert result["chinese_ratio"] > 0.9
+    assert result["english_word_count"] == 0
 
-    enabled = config.get_quality_check_enabled()
-    assert enabled is True
+
+def test_fluency_mixed_english():
+    """包含遗留英文单词"""
+    text = "这个功能需要 review 一下，然后 deploy 到 server"
+    checker = FluencyChecker()
+    result = checker.check(text)
+    assert result["score"] < 100
+    assert result["english_word_count"] > 0
+
+
+def test_fluency_no_chinese():
+    """完全没有中文"""
+    text = "Hello world, this is English text."
+    checker = FluencyChecker()
+    result = checker.check(text)
+    assert result["score"] == 0
+    assert result["chinese_ratio"] == 0
+
+
+def test_fluency_empty_text():
+    """空文本"""
+    checker = FluencyChecker()
+    result = checker.check("")
+    assert result["score"] == 100
+
+
+# ===== 维度 3：一致性检查器 =====
+
+
+def test_consistency_perfect():
+    """同一英文术语始终翻译一致"""
+    cache_data = {
+        "h1": {"source": "Apple", "translated": "苹果"},
+        "h2": {"source": "Apple", "translated": "苹果"},
+        "h3": {"source": "Banana", "translated": "香蕉"},
+    }
+    checker = ConsistencyChecker()
+    result = checker.check(cache_data)
+    assert result["score"] == 100
+    assert result["inconsistent_terms"] == 0
+
+
+def test_consistency_inconsistent():
+    """同一英文术语出现不一致翻译"""
+    cache_data = {
+        "h1": {"source": "Apple", "translated": "苹果"},
+        "h2": {"source": "Apple", "translated": "苹果公司"},
+        "h3": {"source": "Banana", "translated": "香蕉"},
+    }
+    checker = ConsistencyChecker()
+    result = checker.check(cache_data)
+    assert result["score"] < 100
+    assert result["inconsistent_terms"] > 0
+
+
+def test_consistency_empty_cache():
+    """空缓存"""
+    checker = ConsistencyChecker()
+    result = checker.check({})
+    assert result["score"] == 100
+
+
+# ===== 维度 4：格式完整性检查器 =====
+
+
+def test_format_paragraphs_preserved():
+    """段落结构完整保留"""
+    source = ["Heading 1", "This is a paragraph.", "Item 1", "Item 2"]
+    translated = ["标题 1", "这是一个段落。", "项目 1", "项目 2"]
+    checker = FormatIntegrityChecker()
+    result = checker.check(source, translated)
+    assert result["score"] == 100
+    assert result["para_count_match"] is True
+
+
+def test_format_paragraphs_mismatch():
+    """段落数量不匹配"""
+    source = ["P1", "P2", "P3"]
+    translated = ["T1", "T2"]
+    checker = FormatIntegrityChecker()
+    result = checker.check(source, translated)
+    assert result["score"] < 100
+    assert result["para_count_match"] is False
+
+
+def test_format_empty_lists():
+    """空列表"""
+    checker = FormatIntegrityChecker()
+    result = checker.check([], [])
+    assert result["score"] == 100
+
+
+# ===== 维度 5：术语准确性检查器 =====
+
+
+def test_terminology_all_correct():
+    """所有术语翻译正确"""
+    cache_data = {
+        "h1": {"source": "API", "translated": "API"},
+        "h2": {"source": "database", "translated": "数据库"},
+    }
+    checker = TerminologyChecker()
+    result = checker.check(cache_data)
+    assert result["score"] >= 90
+    assert result["matched_count"] > 0
+
+
+def test_terminology_wrong():
+    """术语翻译错误"""
+    cache_data = {
+        "h1": {"source": "API", "translated": "应用程序"},
+        "h2": {"source": "database", "translated": "数据库"},
+    }
+    checker = TerminologyChecker()
+    result = checker.check(cache_data)
+    assert result["incorrect_count"] > 0
+
+
+def test_terminology_empty_cache():
+    """空缓存"""
+    checker = TerminologyChecker()
+    result = checker.check({})
+    assert result["score"] == 100
+
+
+# ===== 维度 6：文化适配检查器 =====
+
+
+def test_cultural_well_adapted():
+    """日期格式已适配中文"""
+    text = "2024年1月15日，我们在北京召开了会议。"
+    checker = CulturalAdaptationChecker()
+    result = checker.check(text)
+    assert result["score"] >= 90
+    assert result["western_date_count"] == 0
+
+
+def test_cultural_western_dates():
+    """存在英文日期格式"""
+    text = "The event is on 01/15/2024, please join us."
+    checker = CulturalAdaptationChecker()
+    result = checker.check(text)
+    assert result["western_date_count"] > 0
+    assert result["score"] < 100
+
+
+def test_cultural_measurement_units():
+    """存在英制度量衡"""
+    text = "The screen is 15 inches and weighs 2 pounds."
+    checker = CulturalAdaptationChecker()
+    result = checker.check(text)
+    assert result["imperial_units"] > 0
+
+
+def test_cultural_empty_text():
+    """空文本"""
+    checker = CulturalAdaptationChecker()
+    result = checker.check("")
+    assert result["score"] == 100
 
 
 # ============================================================
 # CompletenessChecker 测试（维度 7：翻译完整性）
 # ============================================================
-
-from automation.quality_checker import CompletenessChecker
 
 
 def test_completeness_all_translated():
@@ -138,10 +310,6 @@ def test_completeness_empty_source():
 # PdfTocLinkChecker 测试（维度 8：PDF 目录链接检查）
 # ============================================================
 
-import os
-
-from automation.quality_checker import PdfTocLinkChecker
-
 
 def test_pdf_toc_checker_no_pdf():
     """PDF 文件不存在"""
@@ -161,9 +329,6 @@ def test_pdf_toc_checker_not_pdf():
 
 def test_pdf_toc_checker_simple_pdf(tmp_path):
     """生成一个简单 PDF 并检查其目录链接"""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
-
     pdf_path = os.path.join(tmp_path, "test_toc.pdf")
     c = canvas.Canvas(pdf_path, pagesize=A4)
     c.drawString(100, 700, "Chapter 1")
@@ -173,8 +338,6 @@ def test_pdf_toc_checker_simple_pdf(tmp_path):
     c.drawString(100, 700, "Chapter 3")
     c.showPage()
     c.save()
-
-    import fitz
 
     doc = fitz.open(pdf_path)
     toc = [
@@ -196,10 +359,6 @@ def test_pdf_toc_checker_simple_pdf(tmp_path):
 
 def test_pdf_toc_checker_broken_links(tmp_path):
     """目录链接指向不存在的页码"""
-    import fitz
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
-
     pdf_path = os.path.join(tmp_path, "test_broken_toc.pdf")
     c = canvas.Canvas(pdf_path, pagesize=A4)
     c.drawString(100, 700, "Page 1")
@@ -223,230 +382,9 @@ def test_pdf_toc_checker_broken_links(tmp_path):
     assert result["score"] == 50
 
 
-# ===== 维度 1：忠实度检查器 =====
-from automation.quality_checker import FidelityChecker
-
-
-def test_fidelity_all_translated():
-    """所有段落完整翻译，译文长度合理"""
-    cache_data = {
-        "h1": {"source": "Hello World", "translated": "你好世界"},
-        "h2": {"source": "Good Morning", "translated": "早上好"},
-    }
-    source_paragraphs = ["Hello World", "Good Morning"]
-    checker = FidelityChecker()
-    result = checker.check(cache_data, source_paragraphs)
-    assert result["score"] >= 90
-    assert result["missing_count"] == 0
-
-
-def test_fidelity_partial_missing():
-    """部分段落缺失翻译"""
-    cache_data = {
-        "h1": {"source": "Hello", "translated": "你好"},
-    }
-    source_paragraphs = ["Hello", "World", "Test"]
-    checker = FidelityChecker()
-    result = checker.check(cache_data, source_paragraphs)
-    assert result["score"] < 100
-    assert result["missing_count"] == 2
-
-
-def test_fidelity_empty_translation():
-    """译文为空字符串"""
-    cache_data = {
-        "h1": {"source": "Hello", "translated": ""},
-    }
-    source_paragraphs = ["Hello"]
-    checker = FidelityChecker()
-    result = checker.check(cache_data, source_paragraphs)
-    assert result["score"] < 50
-    assert result["empty_count"] == 1
-
-
-# ===== 维度 2：流畅度检查器 =====
-from automation.quality_checker import FluencyChecker
-
-
-def test_fluency_good_chinese():
-    """优质中文翻译"""
-    text = "今天天气很好，适合出去散步。我们一起去公园吧！"
-    checker = FluencyChecker()
-    result = checker.check(text)
-    assert result["score"] >= 90
-    assert result["chinese_ratio"] > 0.9
-    assert result["english_word_count"] == 0
-
-
-def test_fluency_mixed_english():
-    """包含遗留英文单词"""
-    text = "这个功能需要 review 一下，然后 deploy 到 server"
-    checker = FluencyChecker()
-    result = checker.check(text)
-    assert result["score"] < 100
-    assert result["english_word_count"] > 0
-
-
-def test_fluency_no_chinese():
-    """完全没有中文"""
-    text = "Hello world, this is English text."
-    checker = FluencyChecker()
-    result = checker.check(text)
-    assert result["score"] == 0
-    assert result["chinese_ratio"] == 0
-
-
-def test_fluency_empty_text():
-    """空文本"""
-    checker = FluencyChecker()
-    result = checker.check("")
-    assert result["score"] == 100
-
-
-# ===== 维度 3：一致性检查器 =====
-from automation.quality_checker import ConsistencyChecker
-
-
-def test_consistency_perfect():
-    """同一英文术语始终翻译一致"""
-    cache_data = {
-        "h1": {"source": "Apple", "translated": "苹果"},
-        "h2": {"source": "Apple", "translated": "苹果"},
-        "h3": {"source": "Banana", "translated": "香蕉"},
-    }
-    checker = ConsistencyChecker()
-    result = checker.check(cache_data)
-    assert result["score"] == 100
-    assert result["inconsistent_terms"] == 0
-
-
-def test_consistency_inconsistent():
-    """同一英文术语出现不一致翻译"""
-    cache_data = {
-        "h1": {"source": "Apple", "translated": "苹果"},
-        "h2": {"source": "Apple", "translated": "苹果公司"},
-        "h3": {"source": "Banana", "translated": "香蕉"},
-    }
-    checker = ConsistencyChecker()
-    result = checker.check(cache_data)
-    assert result["score"] < 100
-    assert result["inconsistent_terms"] > 0
-
-
-def test_consistency_empty_cache():
-    """空缓存"""
-    checker = ConsistencyChecker()
-    result = checker.check({})
-    assert result["score"] == 100
-
-
-# ===== 维度 4：格式完整性检查器 =====
-from automation.quality_checker import FormatIntegrityChecker
-
-
-def test_format_paragraphs_preserved():
-    """段落结构完整保留"""
-    source = ["Heading 1", "This is a paragraph.", "Item 1", "Item 2"]
-    translated = ["标题 1", "这是一个段落。", "项目 1", "项目 2"]
-    checker = FormatIntegrityChecker()
-    result = checker.check(source, translated)
-    assert result["score"] == 100
-    assert result["para_count_match"] is True
-
-
-def test_format_paragraphs_mismatch():
-    """段落数量不匹配"""
-    source = ["P1", "P2", "P3"]
-    translated = ["T1", "T2"]
-    checker = FormatIntegrityChecker()
-    result = checker.check(source, translated)
-    assert result["score"] < 100
-    assert result["para_count_match"] is False
-
-
-def test_format_empty_lists():
-    """空列表"""
-    checker = FormatIntegrityChecker()
-    result = checker.check([], [])
-    assert result["score"] == 100
-
-
-# ===== 维度 5：术语准确性检查器 =====
-from automation.quality_checker import TerminologyChecker
-
-
-def test_terminology_all_correct():
-    """所有术语翻译正确"""
-    cache_data = {
-        "h1": {"source": "API", "translated": "API"},
-        "h2": {"source": "database", "translated": "数据库"},
-    }
-    checker = TerminologyChecker()
-    result = checker.check(cache_data)
-    assert result["score"] >= 90
-    assert result["matched_count"] > 0
-
-
-def test_terminology_wrong():
-    """术语翻译错误"""
-    cache_data = {
-        "h1": {"source": "API", "translated": "应用程序"},
-        "h2": {"source": "database", "translated": "数据库"},
-    }
-    checker = TerminologyChecker()
-    result = checker.check(cache_data)
-    assert result["incorrect_count"] > 0
-
-
-def test_terminology_empty_cache():
-    """空缓存"""
-    checker = TerminologyChecker()
-    result = checker.check({})
-    assert result["score"] == 100
-
-
-# ===== 维度 6：文化适配检查器 =====
-from automation.quality_checker import CulturalAdaptationChecker
-
-
-def test_cultural_well_adapted():
-    """日期格式已适配中文"""
-    text = "2024年1月15日，我们在北京召开了会议。"
-    checker = CulturalAdaptationChecker()
-    result = checker.check(text)
-    assert result["score"] >= 90
-    assert result["western_date_count"] == 0
-
-
-def test_cultural_western_dates():
-    """存在英文日期格式"""
-    text = "The event is on 01/15/2024, please join us."
-    checker = CulturalAdaptationChecker()
-    result = checker.check(text)
-    assert result["western_date_count"] > 0
-    assert result["score"] < 100
-
-
-def test_cultural_measurement_units():
-    """存在英制度量衡"""
-    text = "The screen is 15 inches and weighs 2 pounds."
-    checker = CulturalAdaptationChecker()
-    result = checker.check(text)
-    assert result["imperial_units"] > 0
-
-
-def test_cultural_empty_text():
-    """空文本"""
-    checker = CulturalAdaptationChecker()
-    result = checker.check("")
-    assert result["score"] == 100
-
-
-"""tests/test_quality_checker.py — QualityChecker main class tests"""
-import json
-from unittest.mock import MagicMock, patch
-
-from automation.quality_checker import DimensionResult, QualityChecker, QualityReport
+# ============================================================
+# QualityChecker 主类测试
+# ============================================================
 
 
 def test_grade_excellent():
@@ -555,16 +493,11 @@ def test_quality_check_saves_report_to_db(mock_check):
     )
     mock_check.return_value = mock_report
 
-    from automation.database import DatabaseManager, init_database
-    from automation.models import BookOutput
-
     init_database()
     db = DatabaseManager()
     book = db.create_book("test_quality.epub", "Test Quality")
 
     # 创建 BookOutput
-    from automation.database import close_session, get_session
-
     session = get_session()
     try:
         output = BookOutput(book_id=book.id)
@@ -574,9 +507,66 @@ def test_quality_check_saves_report_to_db(mock_check):
         session.commit()
 
         retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
-        import json
-
         report = json.loads(retrieved.quality_report)
         assert report["overall_score"] == 90
     finally:
         close_session(session)
+
+
+def test_quality_report_field_exists():
+    """验证 BookOutput 表有 quality_report 字段"""
+    init_database()
+    session = get_session()
+    try:
+        book = Book(filename="test_quality.epub", title="Test Quality Book", status="completed")
+        session.add(book)
+        session.flush()
+
+        output = BookOutput(book_id=book.id, quality_report='{"overall_score": 85, "overall_grade": "良好"}')
+        session.add(output)
+        session.commit()
+
+        retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
+        assert retrieved is not None
+        assert retrieved.quality_report is not None
+
+        report = json.loads(retrieved.quality_report)
+        assert report["overall_score"] == 85
+        assert report["overall_grade"] == "良好"
+    finally:
+        close_session(session)
+
+
+def test_quality_report_defaults_to_none():
+    """新建 BookOutput 时 quality_report 默认为 None"""
+    init_database()
+    session = get_session()
+    try:
+        book = Book(filename="test_no_report.epub", title="No Report Book", status="completed")
+        session.add(book)
+        session.flush()
+
+        output = BookOutput(book_id=book.id)
+        session.add(output)
+        session.commit()
+
+        retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
+        assert retrieved.quality_report is None
+    finally:
+        close_session(session)
+
+
+def test_quality_check_default_config():
+    """验证质量检查默认配置存在"""
+    qc_config = config.get("quality_check", {})
+    assert isinstance(qc_config, dict)
+    assert "enabled" in qc_config
+    assert "thresholds" in qc_config
+    assert "dimensions" in qc_config
+    assert "model" not in qc_config  # 纯程序化检查，无模型配置
+
+
+def test_quality_check_enabled_by_default():
+    """验证质量检查默认开启"""
+    enabled = config.get_quality_check_enabled()
+    assert enabled is True
