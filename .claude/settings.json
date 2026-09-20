@@ -1,10 +1,18 @@
 {
   "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "python \"C:/Users/Administrator/.claude/hooks/hook_git_no_verify.py\"",
+        "timeout": 10
+      }]
+    }],
     "PostToolUse": [{
       "matcher": "Edit|Write",
       "hooks": [{
         "type": "command",
-        "command": "f=$(jq -r '.tool_input.file_path' 2>/dev/null); if echo \"$f\" | grep -q '\\.py$'; then ruff check --fix \"$f\"; fi",
+        "command": "python \"C:/Users/Administrator/.claude/hooks/hook_ruff.py\"",
         "timeout": 30
       }]
     }]

@@ -17,5 +17,10 @@ repos:
         entry: python -m pytest tests/unit -v --tb=short
         language: system
         pass_filenames: false
-        types: [python]
-        stages: [pre-push]
+        stages: [pre-commit, pre-push]
+      - id: integration-tests
+        name: Integration Tests
+        entry: python -m pytest tests/integration -v --tb=short
+        language: system
+        pass_filenames: false
+        stages: [pre-commit, pre-push]

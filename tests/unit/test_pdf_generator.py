@@ -1,6 +1,5 @@
 """SummaryPDFGenerator 测试"""
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -10,18 +9,6 @@ from automation.summarizer.pdf_generator import SummaryPDFGenerator
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-def mock_config():
-    """配置 mock"""
-    with patch("automation.summarizer.pdf_generator.config") as mock:
-        mock.output_dir = Path("/tmp/output")
-        mock.get.side_effect = lambda k, d=None: {
-            "paths.output_dir": "/tmp/output",
-            "paths.data_dir": "/tmp/data",
-        }.get(k, d)
-        yield mock
 
 
 @pytest.fixture
@@ -50,7 +37,7 @@ def sample_content():
 class TestCreateMethod:
     """SummaryPDFGenerator.create 方法的测试"""
 
-    def test_create_weasyprint_success(self, mock_config, mock_logger, sample_content, tmp_path):
+    def test_create_weasyprint_success(self, mock_logger, sample_content, tmp_path):
         """WeasyPrint 成功时生成 PDF"""
         output_path = tmp_path / "output.pdf"
 
@@ -61,7 +48,7 @@ class TestCreateMethod:
             mock_weasy.assert_called_once()
             mock_logger.info.assert_any_call("WeasyPrint PDF生成成功: " + str(output_path))
 
-    def test_create_weasyprint_fails_then_playwright_success(self, mock_config, mock_logger, sample_content, tmp_path):
+    def test_create_weasyprint_fails_then_playwright_success(self, mock_logger, sample_content, tmp_path):
         """WeasyPrint 失败时回退到 Playwright"""
         output_path = tmp_path / "output.pdf"
 
@@ -79,9 +66,7 @@ class TestCreateMethod:
             mock_pw.assert_called_once()
             mock_logger.warning.assert_called()
 
-    def test_create_weasyprint_and_playwright_fails_then_reportlab(
-        self, mock_config, mock_logger, sample_content, tmp_path
-    ):
+    def test_create_weasyprint_and_playwright_fails_then_reportlab(self, mock_logger, sample_content, tmp_path):
         """WeasyPrint 和 Playwright 都失败时回退到 ReportLab"""
         output_path = tmp_path / "output.pdf"
 
@@ -103,7 +88,7 @@ class TestCreateMethod:
             # 应该有两条 warning（WeasyPrint 失败和 Playwright 失败）
             assert mock_logger.warning.call_count >= 2
 
-    def test_create_with_cover_path(self, mock_config, mock_logger, sample_content, tmp_path):
+    def test_create_with_cover_path(self, mock_logger, sample_content, tmp_path):
         """带封面路径的 PDF 生成"""
         output_path = tmp_path / "output.pdf"
         cover_path = tmp_path / "cover.jpg"
