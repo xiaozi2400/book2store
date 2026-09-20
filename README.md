@@ -12,7 +12,7 @@
 | ✂️ **精简版生成** | AI分析书籍内容，生成约100页精简版（含AI适合度评估机制） |
 | 🖼️ **图片处理** | 自动生成主图、提取封面图、目录预览图 |
 | ✍️ **AI文案生成** | 自动生成闲鱼商品标题/描述、小红书种草笔记 |
-| 🚀 **闲鱼发布** | 通过Playwright自动化发布到闲鱼（需闲管家账号） |
+| 🚀 **闲鱼发布** | 通过Playwright自动化发布到闲鱼（需登录闲鱼卖家工作台） |
 
 ---
 
@@ -28,8 +28,10 @@
 ### 安装依赖
 
 ```bash
-cd d:\project\bookfile_bat
+cd D:\project\bookfile_bat
 pip install -r requirements.txt
+pip install -r ebook_translator/requirements.txt
+playwright install chromium
 ```
 
 ### 基础配置
@@ -237,6 +239,33 @@ python -m ebook_translator.main <input.epub> -o <output_dir> -k <api_key>
 
 ---
 
+## CI/CD
+
+本项目使用 GitHub Actions 进行持续集成，并配置了 Dependabot 自动更新依赖。
+
+### GitHub Actions 流水线
+
+| Job | 说明 |
+|-----|------|
+| `ruff` | 代码风格检查 (ruff lint) |
+| `pytest` | 测试 (unit + integration) |
+
+### pre-commit 钩子
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+自动在提交前运行 ruff 格式化和测试。
+
+### Dependabot
+
+- **Python 依赖**: 每周一 09:00 (Asia/Shanghai) 自动创建 PR
+- **GitHub Actions**: 每周一 09:00 (Asia/Shanghai) 自动创建 PR
+
+---
+
 ## 项目结构
 
 ```
@@ -246,42 +275,55 @@ bookfile_bat/
 │   ├── config.py                  # 配置加载
 │   ├── database.py                # SQLite数据库管理
 │   ├── models.py                  # ORM模型定义
-│   ├── utils.py                   # 工具函数（日志、EPUB验证等）
-│   ├── ai_client.py               # AI客户端（DeepSeek API封装）
-│   ├── ai_copywriter.py           # 文案生成（闲鱼/小红书）
-│   ├── content_summarizer.py      # 精简版生成（含PDF生成）
-│   ├── suitability_evaluator.py   # 适合度评估（AI+规则）
-│   ├── template_generator.py      # 动态模板生成
-│   ├── translation_processor.py   # 翻译处理器（调用ebook_translator）
-│   ├── translation_cache.py       # SQLite翻译缓存实现
-│   ├── directory_scanner.py       # 输入目录扫描
-│   ├── image_generator.py         # AI主图生成
-│   ├── metadata_writer.py         # metadata.json写入
-│   ├── xianyu_publisher.py        # 闲鱼Playwright自动化发布
-│   ├── link_importer.py           # Excel分享链接导入
-│   ├── quality_checker.py         # 翻译质量检查
-│   └── 精简版生成提示词.md         # AI精简版提示词
+│   ├── pipeline.py                # 流水线编排（Stage模式）
+│   ├── progress.py                # 阶段进度输出
+│   ├── utils.py                   # 工具函数
+│   ├── exceptions.py              # 自定义异常
+│   ├── quality_checker.py         # 翻译质量检查（8维度）
+│   │
+│   ├── publishing/                # 发布相关
+│   │   ├── __init__.py
+│   │   ├── ai_copywriter.py       # AI文案生成
+│   │   └── xianyu_publisher.py    # 闲鱼Playwright发布
+│   │
+│   ├── summarizer/                # 精简版生成
+│   │   ├── content_summarizer.py  # 精简版主逻辑
+│   │   ├── suitability_evaluator.py # 适合度评估
+│   │   ├── template_generator.py  # 动态模板
+│   │   ├── pdf_generator.py       # PDF生成
+│   │   ├── chapter_extractor.py   # 章节提取
+│   │   ├── cover_extractor.py     # 封面提取
+│   │   └── fonts.py               # 字体处理
+│   │
+│   ├── translation/               # 翻译处理
+│   │   ├── translation_processor.py # 翻译处理器
+│   │   └── translation_cache.py   # SQLite翻译缓存
+│   │
+│   └── image/                     # 图片处理
+│       └── image_generator.py     # AI主图生成
 │
-├── ebook_translator/              # EPUB翻译模块
+├── ebook_translator/              # EPUB翻译子项目（可独立运行）
 │   ├── main.py                    # 独立翻译主程序
-│   ├── library.py                 # 库函数接口（供automation调用）
+│   ├── library.py                 # 库函数接口
 │   ├── config.py                  # 翻译配置
-│   ├── translator/
-│   │   ├── epub_parser.py         # EPUB解析（提取段落）
-│   │   ├── epub_generator.py      # EPUB生成（双语/中文）
-│   │   ├── pdf_converter.py       # EPUB转PDF
-│   │   ├── translator.py          # 翻译器（智能分层）
-│   │   ├── deepseek_api.py        # DeepSeek API调用
-│   │   ├── cache.py               # JSON缓存管理
-│   │   └── cache_interface.py     # 缓存抽象接口
-│   └── requirements.txt
+│   └── translator/
+│       ├── epub_parser.py         # EPUB解析
+│       ├── epub_generator.py      # EPUB生成
+│       ├── pdf_converter.py       # EPUB转PDF
+│       ├── translator.py          # 翻译器
+│       └── deepseek_api.py        # DeepSeek API
+│
+├── tests/                         # 测试
+│   ├── unit/                      # 单元测试
+│   └── integration/                # 集成测试
 │
 ├── config.yaml                    # 主配置文件
-├── config_template.yaml           # 精简版模板配置
 ├── pdf_config.json                # PDF排版配置
 ├── requirements.txt              # 项目依赖
-├── PRD.md                         # 产品需求文档
-└── README.md                      # 本文件
+├── ruff.toml                     # Ruff配置
+├── .pre-commit-config.yaml       # pre-commit配置
+├── PRD.md                        # 产品需求文档
+└── README.md                     # 本文件
 ```
 
 ---
@@ -465,13 +507,15 @@ A: 运行 `python -m automation.main regenerate-images <书名关键词>` 或 `-
 - **BeautifulSoup / lxml** - HTML/EPUB解析
 - **Typer** - CLI框架
 - **Rich** - 终端美化
+- **Ruff** - 代码风格检查（lint + format）
+- **pre-commit** - Git钩子自动化
 
 ---
 
-## 后续规划
+## 详细文档
 
-- [ ] 支持更多书籍类型识别
-- [ ] 优化适合度评估规则
-- [ ] 支持更多电商平台
-- [ ] 添加Web管理界面
-- [ ] 多账号发布支持
+- `README.md` — 完整命令参考 + 配置 + 输出结构 + FAQ
+- `PRD.md` / `TECH_SPEC.md` — 产品需求与技术方案
+- `PDF排版配置说明.md` — PDF 排版字段说明
+- `ebook_translator/README.md` — standalone 翻译器
+- `docs/superpowers/plans/` — 历史规划文档
