@@ -1,8 +1,10 @@
 """
 字体注册模块 - 中文字体注册供 ReportLab 使用
 """
-import os
+
 import glob
+import os
+
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
@@ -43,7 +45,7 @@ def register_chinese_fonts():
         for font_path in glob.glob(pattern):
             try:
                 font_name = os.path.splitext(os.path.basename(font_path))[0]
-                if any(keyword in font_name.lower() for keyword in ['kai', 'song', 'hei', 'ming', 'ti', 'yahei']):
+                if any(keyword in font_name.lower() for keyword in ["kai", "song", "hei", "ming", "ti", "yahei"]):
                     pdfmetrics.registerFont(TTFont(font_name, font_path))
                     _font_registered = True
                     _registered_font_name = font_name

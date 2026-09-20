@@ -1,15 +1,16 @@
 """
 工具函数模块
 """
+
+import hashlib
+import json
+import logging
 import os
 import re
-import json
-import hashlib
-import logging
 import shutil
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional
 
 
 def setup_logging(log_dir: str = "./logs"):
@@ -20,11 +21,8 @@ def setup_logging(log_dir: str = "./logs"):
 
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler()
-        ]
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file, encoding="utf-8"), logging.StreamHandler()],
     )
     # 仅终端输出 WARNING 及以上（保留错误和警告），细节日志只写入文件
     for handler in logging.getLogger().handlers:
@@ -40,8 +38,8 @@ logger = setup_logging()
 def calculate_file_hash(filepath: str) -> str:
     """计算文件MD5哈希"""
     hasher = hashlib.md5()
-    with open(filepath, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
             hasher.update(chunk)
     return hasher.hexdigest()
 
@@ -60,15 +58,15 @@ def get_file_size(filepath: str) -> int:
 
 def clean_filename(filename: str) -> str:
     """清理文件名"""
-    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
     return filename
 
 
 def extract_title_from_filename(filename: str) -> str:
     """从文件名提取书名"""
     name = os.path.splitext(filename)[0]
-    name = re.sub(r'[-_]+', ' ', name)
-    name = re.sub(r'\s+', ' ', name).strip()
+    name = re.sub(r"[-_]+", " ", name)
+    name = re.sub(r"\s+", " ", name).strip()
     return name
 
 
@@ -76,13 +74,13 @@ def is_valid_epub(filepath: str) -> bool:
     """验证EPUB文件"""
     import zipfile
 
-    if not filepath.lower().endswith('.epub'):
+    if not filepath.lower().endswith(".epub"):
         return False
 
     try:
-        with zipfile.ZipFile(filepath, 'r') as zf:
+        with zipfile.ZipFile(filepath, "r") as zf:
             namelist = zf.namelist()
-            has_html = any(f.endswith(('.html', '.xhtml', '.htm')) for f in namelist)
+            has_html = any(f.endswith((".html", ".xhtml", ".htm")) for f in namelist)
             return has_html
     except Exception as e:
         logger.warning(f"验证EPUB失败: {filepath}, 错误: {e}")
@@ -91,7 +89,7 @@ def is_valid_epub(filepath: str) -> bool:
 
 def parse_author_from_metadata(metadata: Dict) -> Optional[str]:
     """从元数据解析作者"""
-    author = metadata.get('author') or metadata.get('creator')
+    author = metadata.get("author") or metadata.get("creator")
     if isinstance(author, list):
         author = author[0] if author else None
     return author
@@ -99,7 +97,7 @@ def parse_author_from_metadata(metadata: Dict) -> Optional[str]:
 
 def parse_title_from_metadata(metadata: Dict) -> Optional[str]:
     """从元数据解析标题"""
-    title = metadata.get('title')
+    title = metadata.get("title")
     if isinstance(title, list):
         title = title[0] if title else None
     return title
@@ -114,7 +112,7 @@ def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
     """截断文本"""
     if len(text) <= max_length:
         return text
-    return text[:max_length - len(suffix)] + suffix
+    return text[: max_length - len(suffix)] + suffix
 
 
 def similarity_score(s1: str, s2: str) -> float:
@@ -129,12 +127,13 @@ def similarity_score(s1: str, s2: str) -> float:
         return 0.8
 
     from difflib import SequenceMatcher
+
     return SequenceMatcher(None, s1, s2).ratio()
 
 
 def match_filename_to_book(filename: str, book_title: str) -> float:
     """匹配文件名和书名"""
-    filename_clean = re.sub(r'[_\-\.]+', ' ', filename.lower())
+    filename_clean = re.sub(r"[_\-\.]+", " ", filename.lower())
     book_title_clean = book_title.lower()
 
     return similarity_score(filename_clean, book_title_clean)
@@ -143,7 +142,7 @@ def match_filename_to_book(filename: str, book_title: str) -> float:
 def load_json(filepath: str) -> Dict:
     """加载JSON文件"""
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
@@ -151,7 +150,7 @@ def load_json(filepath: str) -> Dict:
 def save_json(data: Dict, filepath: str):
     """保存JSON文件"""
     ensure_dir(os.path.dirname(filepath))
-    with open(filepath, 'w', encoding='utf-8') as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
@@ -185,6 +184,7 @@ def move_processed_epubs(input_dir: str) -> int:
 def check_unbackfilled_failed_books():
     """启动时静默检测：若有历史发布失败未回填则打印黄色提示。不修改数据。"""
     from .database import DatabaseManager
+
     try:
         db = DatabaseManager()
         count = db.count_unbackfilled_failed()

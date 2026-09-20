@@ -1,7 +1,9 @@
 """测试闲鱼提示词配置"""
-import sys
+
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from automation.config import config
 

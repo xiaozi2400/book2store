@@ -1,7 +1,8 @@
 """测试 TokenUsage 模型和 DatabaseManager Token 统计方法"""
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 
 class TestTokenUsageModel:
@@ -18,7 +19,7 @@ class TestTokenUsageModel:
             input_tokens=1000,
             output_tokens=500,
             total_tokens=1500,
-            cost=0.002
+            cost=0.002,
         )
         in_memory_db.add(record)
         in_memory_db.commit()
@@ -53,12 +54,7 @@ class TestTokenUsageModel:
         """测试 TokenUsage 与 Book 的关系"""
         from automation.models import TokenUsage
 
-        record = TokenUsage(
-            book_id=sample_book.id,
-            step="xianyu",
-            input_tokens=100,
-            output_tokens=50
-        )
+        record = TokenUsage(book_id=sample_book.id, step="xianyu", input_tokens=100, output_tokens=50)
         in_memory_db.add(record)
         in_memory_db.commit()
 
@@ -73,10 +69,7 @@ class TestTokenUsageModel:
         steps = ["translation", "summary", "xianyu", "xiaohongshu"]
         for i, step in enumerate(steps):
             record = TokenUsage(
-                book_id=sample_book.id,
-                step=step,
-                input_tokens=100 * (i + 1),
-                output_tokens=50 * (i + 1)
+                book_id=sample_book.id, step=step, input_tokens=100 * (i + 1), output_tokens=50 * (i + 1)
             )
             in_memory_db.add(record)
         in_memory_db.commit()
@@ -92,17 +85,11 @@ class TestDatabaseManagerTokenMethods:
     def test_record_token_usage(self, monkeypatch):
         """测试 record_token_usage 写入数据库"""
         from automation.database import DatabaseManager
-        from automation.models import TokenUsage
 
         monkeypatch.setattr("automation.database.get_database_url", lambda: "sqlite:///:memory:")
 
         db = DatabaseManager()
-        db.record_token_usage(
-            book_id="test-book-001",
-            step="translation",
-            input_tokens=1000,
-            output_tokens=500
-        )
+        db.record_token_usage(book_id="test-book-001", step="translation", input_tokens=1000, output_tokens=500)
 
         records = db.get_token_usage("test-book-001")
         assert len(records) == 1

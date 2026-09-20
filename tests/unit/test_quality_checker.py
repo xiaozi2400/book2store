@@ -1,8 +1,7 @@
 """tests/test_quality_checker.py"""
-import pytest
-from automation.models import BookOutput, Book, generate_uuid
-from automation.database import init_database, get_session, close_session
-from datetime import datetime
+
+from automation.database import close_session, get_session, init_database
+from automation.models import Book, BookOutput
 
 
 def test_quality_report_field_exists():
@@ -10,27 +9,19 @@ def test_quality_report_field_exists():
     init_database()
     session = get_session()
     try:
-        book = Book(
-            filename="test_quality.epub",
-            title="Test Quality Book",
-            status="completed"
-        )
+        book = Book(filename="test_quality.epub", title="Test Quality Book", status="completed")
         session.add(book)
         session.flush()
 
-        output = BookOutput(
-            book_id=book.id,
-            quality_report='{"overall_score": 85, "overall_grade": "良好"}'
-        )
+        output = BookOutput(book_id=book.id, quality_report='{"overall_score": 85, "overall_grade": "良好"}')
         session.add(output)
         session.commit()
 
-        retrieved = session.query(BookOutput).filter(
-            BookOutput.book_id == book.id
-        ).first()
+        retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
         assert retrieved is not None
         assert retrieved.quality_report is not None
         import json
+
         report = json.loads(retrieved.quality_report)
         assert report["overall_score"] == 85
         assert report["overall_grade"] == "良好"
@@ -43,11 +34,7 @@ def test_quality_report_defaults_to_none():
     init_database()
     session = get_session()
     try:
-        book = Book(
-            filename="test_no_report.epub",
-            title="No Report Book",
-            status="completed"
-        )
+        book = Book(filename="test_no_report.epub", title="No Report Book", status="completed")
         session.add(book)
         session.flush()
 
@@ -55,9 +42,7 @@ def test_quality_report_defaults_to_none():
         session.add(output)
         session.commit()
 
-        retrieved = session.query(BookOutput).filter(
-            BookOutput.book_id == book.id
-        ).first()
+        retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
         assert retrieved.quality_report is None
     finally:
         close_session(session)
@@ -66,6 +51,7 @@ def test_quality_report_defaults_to_none():
 def test_quality_check_default_config():
     """验证质量检查默认配置存在"""
     from automation.config import config
+
     qc_config = config.get("quality_check", {})
     assert isinstance(qc_config, dict)
     assert "enabled" in qc_config
@@ -77,6 +63,7 @@ def test_quality_check_default_config():
 def test_quality_check_enabled_by_default():
     """验证质量检查默认开启"""
     from automation.config import config
+
     enabled = config.get_quality_check_enabled()
     assert enabled is True
 
@@ -152,6 +139,7 @@ def test_completeness_empty_source():
 # ============================================================
 
 import os
+
 from automation.quality_checker import PdfTocLinkChecker
 
 
@@ -187,6 +175,7 @@ def test_pdf_toc_checker_simple_pdf(tmp_path):
     c.save()
 
     import fitz
+
     doc = fitz.open(pdf_path)
     toc = [
         [1, "Chapter 1", 1],
@@ -454,9 +443,10 @@ def test_cultural_empty_text():
 
 
 """tests/test_quality_checker.py — QualityChecker main class tests"""
-from automation.quality_checker import QualityChecker, QualityReport, DimensionResult
-from unittest.mock import patch, MagicMock
 import json
+from unittest.mock import MagicMock, patch
+
+from automation.quality_checker import DimensionResult, QualityChecker, QualityReport
 
 
 def test_grade_excellent():
@@ -504,11 +494,7 @@ def test_report_to_json():
     """报告可正确序列化为 JSON"""
     dimensions = {
         "fidelity": DimensionResult(score=90, issues=[]),
-        "completeness": DimensionResult(
-            score=95,
-            issues=[],
-            details={"translated_paragraphs": 10, "missing_count": 0}
-        )
+        "completeness": DimensionResult(score=95, issues=[], details={"translated_paragraphs": 10, "missing_count": 0}),
     }
     report = QualityReport(
         book_title="Test Book",
@@ -516,7 +502,7 @@ def test_report_to_json():
         overall_grade="优秀",
         dimensions=dimensions,
         summary="整体质量高",
-        recommendation="可直接发布"
+        recommendation="可直接发布",
     )
     json_str = report.to_json()
     parsed = json.loads(json_str)
@@ -531,7 +517,7 @@ def test_report_to_json():
 # ============================================================
 
 
-@patch.object(QualityChecker, 'check')
+@patch.object(QualityChecker, "check")
 def test_quality_checker_called_after_translation(mock_check):
     """验证质量检查在翻译完成后被调用"""
     mock_check.return_value = MagicMock(
@@ -540,7 +526,7 @@ def test_quality_checker_called_after_translation(mock_check):
         overall_score=85,
         overall_grade="良好",
         summary="良好",
-        recommendation="可直接发布"
+        recommendation="可直接发布",
     )
 
     checker = QualityChecker()
@@ -549,14 +535,14 @@ def test_quality_checker_called_after_translation(mock_check):
         book_id="test-id",
         output_dir="/tmp/output",
         source_paragraphs=["Hello World"],
-        translated_paragraphs=["你好世界"]
+        translated_paragraphs=["你好世界"],
     )
 
     mock_check.assert_called_once()
     assert report.overall_score == 85
 
 
-@patch('automation.quality_checker.QualityChecker.check')
+@patch("automation.quality_checker.QualityChecker.check")
 def test_quality_check_saves_report_to_db(mock_check):
     """验证质量报告保存到数据库"""
     mock_report = MagicMock(
@@ -565,7 +551,7 @@ def test_quality_check_saves_report_to_db(mock_check):
         overall_score=90,
         overall_grade="优秀",
         summary="优秀",
-        recommendation="可直接发布"
+        recommendation="可直接发布",
     )
     mock_check.return_value = mock_report
 
@@ -577,7 +563,8 @@ def test_quality_check_saves_report_to_db(mock_check):
     book = db.create_book("test_quality.epub", "Test Quality")
 
     # 创建 BookOutput
-    from automation.database import get_session, close_session
+    from automation.database import close_session, get_session
+
     session = get_session()
     try:
         output = BookOutput(book_id=book.id)
@@ -586,10 +573,9 @@ def test_quality_check_saves_report_to_db(mock_check):
         output.quality_report = mock_report.to_json()
         session.commit()
 
-        retrieved = session.query(BookOutput).filter(
-            BookOutput.book_id == book.id
-        ).first()
+        retrieved = session.query(BookOutput).filter(BookOutput.book_id == book.id).first()
         import json
+
         report = json.loads(retrieved.quality_report)
         assert report["overall_score"] == 90
     finally:

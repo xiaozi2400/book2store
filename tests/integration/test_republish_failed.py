@@ -1,6 +1,8 @@
 """发布失败书籍重新发布功能测试"""
+
 import pytest
-from automation.database import DatabaseManager, get_session, close_session
+
+from automation.database import DatabaseManager, close_session, get_session
 from automation.models import Book, BookOutput, ProcessingLog
 
 
@@ -20,7 +22,9 @@ def test_get_books_by_publish_status_returns_only_failed(db_session):
     db_session.add(Book(id="book-published-1", filename="p1.epub", title="已发布书", status="published"))
     db_session.add(BookOutput(book_id="book-failed-1", publish_status="failed", publish_error="登录超时"))
     db_session.add(BookOutput(book_id="book-failed-2", publish_status="failed", publish_error="扫码失败"))
-    db_session.add(BookOutput(book_id="book-published-1", publish_status="published", xianyu_listing_url="https://example.com/1"))
+    db_session.add(
+        BookOutput(book_id="book-published-1", publish_status="published", xianyu_listing_url="https://example.com/1")
+    )
     db_session.commit()
 
     db = DatabaseManager()
@@ -33,8 +37,8 @@ def test_get_books_by_publish_status_returns_only_failed(db_session):
 
 def test_publish_failure_writes_publish_status_failed(db_session, monkeypatch, tmp_path):
     """XianyuPublisher.publish() 失败时回写 BookOutput.publish_status='failed' 和 publish_error"""
-    from automation.publishing.xianyu_publisher import XianyuPublisher
     from automation.config import config
+    from automation.publishing.xianyu_publisher import XianyuPublisher
 
     real_output_dir = tmp_path / "output"
     real_output_dir.mkdir()
@@ -49,6 +53,7 @@ def test_publish_failure_writes_publish_status_failed(db_session, monkeypatch, t
 
     def mock_start_browser(self):
         raise RuntimeError("浏览器启动失败：playwright 未安装")
+
     monkeypatch.setattr(XianyuPublisher, "_start_browser", mock_start_browser)
 
     publisher = XianyuPublisher()
@@ -68,11 +73,14 @@ def test_publish_failure_writes_publish_status_failed(db_session, monkeypatch, t
 def test_list_failed_command_shows_failed_books(db_session, monkeypatch):
     """list-failed 命令输出含失败书名 + 提示运行 republish-failed"""
     from typer.testing import CliRunner
+
     from automation.main import app
 
     db_session.add(Book(id="book-failed-1", filename="f1.epub", title="失败的书", status="completed"))
     db_session.add(BookOutput(book_id="book-failed-1", publish_status="failed", publish_error="登录超时，请重试"))
-    db_session.add(ProcessingLog(book_id="book-failed-1", stage="publishing", status="error", message="登录超时，请重试"))
+    db_session.add(
+        ProcessingLog(book_id="book-failed-1", stage="publishing", status="error", message="登录超时，请重试")
+    )
     db_session.commit()
 
     runner = CliRunner()
@@ -88,6 +96,7 @@ def test_list_failed_command_shows_failed_books(db_session, monkeypatch):
 def test_republish_failed_command_retries_all(db_session, monkeypatch):
     """republish-failed --all --auto 重新发布所有失败书籍"""
     from typer.testing import CliRunner
+
     from automation.main import app
     from automation.publishing.xianyu_publisher import XianyuPublisher
 
@@ -105,6 +114,7 @@ def test_republish_failed_command_retries_all(db_session, monkeypatch):
             self.db.update_book_output(book_id, publish_status="published", xianyu_listing_url="https://example.com/2")
             self.db.update_book_status(book_id, "published")
             return True
+
     monkeypatch.setattr(XianyuPublisher, "publish", mock_publish)
 
     runner = CliRunner()
@@ -122,6 +132,7 @@ def test_republish_failed_command_retries_all(db_session, monkeypatch):
 def test_republish_failed_book_id_not_found_warns(db_session, monkeypatch):
     """republish-failed --book-id <not_found> 警告并跳过"""
     from typer.testing import CliRunner
+
     from automation.main import app
 
     runner = CliRunner()
@@ -138,7 +149,9 @@ def test_backfill_failed_publish_status_marks_pending_as_failed(db_session):
     db_session.add(ProcessingLog(book_id="book-hist-1", stage="publishing", status="error", message="历史登录超时"))
     db_session.add(Book(id="book-pub-1", filename="p1.epub", title="已成功", status="published"))
     db_session.add(BookOutput(book_id="book-pub-1", publish_status="published"))
-    db_session.add(ProcessingLog(book_id="book-pub-1", stage="publishing", status="error", message="早期错误但后来成功了"))
+    db_session.add(
+        ProcessingLog(book_id="book-pub-1", stage="publishing", status="error", message="早期错误但后来成功了")
+    )
     db_session.add(ProcessingLog(book_id="book-pub-1", stage="publishing", status="success", message="成功发布"))
     db_session.add(Book(id="book-clean-1", filename="c1.epub", title="干净", status="completed"))
     db_session.add(BookOutput(book_id="book-clean-1", publish_status="pending"))
@@ -188,6 +201,7 @@ def test_count_unbackfilled_failed(db_session):
 def test_backfill_publish_status_command_runs(db_session):
     """backfill-publish-status 命令回填并打印数量"""
     from typer.testing import CliRunner
+
     from automation.main import app
 
     db_session.add(Book(id="book-bf-1", filename="b1.epub", title="BF1", status="completed"))

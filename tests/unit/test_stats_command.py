@@ -1,9 +1,10 @@
 """
 测试 format_token_summary 和 stats 命令
 """
-import sys
+
 import os
-from unittest.mock import patch, MagicMock, PropertyMock
+import sys
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -16,10 +17,8 @@ class TestFormatTokenSummary:
         from automation.main import format_token_summary
 
         steps = {
-            "translation": {"input_tokens": 5000, "output_tokens": 3000,
-                            "total_tokens": 8000, "cost": 0.011},
-            "summarizing": {"input_tokens": 500, "output_tokens": 200,
-                            "total_tokens": 700, "cost": 0.0009},
+            "translation": {"input_tokens": 5000, "output_tokens": 3000, "total_tokens": 8000, "cost": 0.011},
+            "summarizing": {"input_tokens": 500, "output_tokens": 200, "total_tokens": 700, "cost": 0.0009},
         }
         result = format_token_summary(steps)
 
@@ -33,8 +32,7 @@ class TestFormatTokenSummary:
         from automation.main import format_token_summary
 
         steps = {
-            "translation": {"input_tokens": 10000, "output_tokens": 5000,
-                            "total_tokens": 15000, "cost": 0.02},
+            "translation": {"input_tokens": 10000, "output_tokens": 5000, "total_tokens": 15000, "cost": 0.02},
         }
         result = format_token_summary(steps)
 
@@ -66,8 +64,7 @@ class TestFormatTokenSummary:
         from automation.main import format_token_summary
 
         steps = {
-            "translation": {"input_tokens": 1000000, "output_tokens": 500000,
-                            "total_tokens": 1500000, "cost": 2.0},
+            "translation": {"input_tokens": 1000000, "output_tokens": 500000, "total_tokens": 1500000, "cost": 2.0},
         }
         result = format_token_summary(steps)
 
@@ -81,14 +78,14 @@ class TestStatsCommand:
         """stats 命令应调用 format_token_summary 并显示结果"""
         with patch("automation.main.DatabaseManager") as MockDB:
             mock_steps = {
-                "translation": {"input_tokens": 5000, "output_tokens": 3000,
-                                "total_tokens": 8000, "cost": 0.011},
+                "translation": {"input_tokens": 5000, "output_tokens": 3000, "total_tokens": 8000, "cost": 0.011},
             }
             db_instance = MagicMock()
             db_instance.get_token_summary.return_value = mock_steps
             MockDB.return_value = db_instance
 
-            from automation.main import format_token_summary, stats
+            from automation.main import format_token_summary
+
             result = format_token_summary(mock_steps)
             assert isinstance(result, str)
             assert "8,000" in result
@@ -101,5 +98,6 @@ class TestStatsCommand:
             MockDB.return_value = db_instance
 
             from automation.main import format_token_summary
+
             result = format_token_summary(None)
             assert isinstance(result, str)

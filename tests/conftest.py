@@ -1,14 +1,16 @@
 """测试配置 - 使用内存数据库"""
 
-import pytest
 import os
 import sys
+
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from automation.models import Base, Book
 
 # 确保 ebook_translator 在 sys.path 中（translation_cache.py 依赖 translator 模块）
-_ebook_translator_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ebook_translator')
+_ebook_translator_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ebook_translator")
 if _ebook_translator_path not in sys.path:
     sys.path.insert(0, _ebook_translator_path)
 
@@ -17,6 +19,7 @@ if _ebook_translator_path not in sys.path:
 def reset_db_engine():
     """每个测试前重置 DatabaseManager 全局缓存，使用独立内存数据库"""
     import automation.database as db_module
+
     url = "sqlite:///:memory:"
     db_module._db_engine = create_engine(url, echo=False)
     db_module._SessionLocal = sessionmaker(bind=db_module._db_engine)
@@ -37,13 +40,7 @@ def in_memory_db():
 @pytest.fixture
 def sample_book(in_memory_db):
     """创建测试用书籍记录"""
-    book = Book(
-        id="test-book-001",
-        filename="test.epub",
-        title="测试书籍",
-        author="测试作者",
-        status="pending"
-    )
+    book = Book(id="test-book-001", filename="test.epub", title="测试书籍", author="测试作者", status="pending")
     in_memory_db.add(book)
     in_memory_db.commit()
     return book

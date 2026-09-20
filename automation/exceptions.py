@@ -5,6 +5,7 @@
 
 class BookfileBaseError(Exception):
     """所有自定义异常的基类"""
+
     def __init__(self, message: str = "", book_id: str = ""):
         self.message = message
         self.book_id = book_id
@@ -19,89 +20,105 @@ class BookfileBaseError(Exception):
 # ===== 流水线相关 =====
 class PipelineError(BookfileBaseError):
     """流水线执行错误"""
+
     pass
 
 
 # ===== 翻译相关 =====
 class TranslationError(PipelineError):
     """翻译失败"""
+
     pass
 
 
 class TranslationCacheError(BookfileBaseError):
     """翻译缓存错误"""
+
     pass
 
 
 # ===== 精简版相关 =====
 class SummaryError(BookfileBaseError):
     """精简版生成失败"""
+
     pass
 
 
 class SuitabilityError(BookfileBaseError):
     """适合度评估失败"""
+
     pass
 
 
 # ===== 图片相关 =====
 class ImageError(BookfileBaseError):
     """图片处理失败（生成或提取）"""
+
     pass
 
 
 class ImageGenerationError(ImageError):
     """主图生成失败"""
+
     pass
 
 
 # ===== 文案相关 =====
 class CopywritingError(BookfileBaseError):
     """文案生成失败"""
+
     pass
 
 
 # ===== 发布相关 =====
 class PublishError(PipelineError):
     """发布到闲鱼失败"""
+
     pass
 
 
 class LoginError(PublishError):
     """闲鱼登录失败"""
+
     pass
 
 
 class SKUConfigError(PublishError):
     """SKU 配置失败"""
+
     pass
 
 
 # ===== 文件相关 =====
 class FileError(BookfileBaseError):
     """文件操作失败"""
+
     pass
 
 
 class EPUBParseError(FileError):
     """EPUB 解析失败"""
+
     pass
 
 
 class PDFConvertError(FileError):
     """PDF 转换失败"""
+
     pass
 
 
 # ===== 数据库相关 =====
 class DatabaseError(BookfileBaseError):
     """数据库操作失败"""
+
     pass
 
 
 # ===== 配置相关 =====
 class ConfigError(BookfileBaseError):
     """配置错误"""
+
     pass
 
 

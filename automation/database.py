@@ -1,11 +1,15 @@
 """
 数据库连接管理
 """
-import os
+
+from __future__ import annotations
+
 import logging
 from pathlib import Path
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
+
 from .models import Base
 
 logger = logging.getLogger(__name__)
@@ -37,11 +41,7 @@ def init_database():
 
     if _db_engine is None:
         database_url = get_database_url()
-        _db_engine = create_engine(
-            database_url,
-            echo=False,
-            connect_args={"check_same_thread": False}
-        )
+        _db_engine = create_engine(database_url, echo=False, connect_args={"check_same_thread": False})
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_db_engine)
 
     Base.metadata.create_all(bind=_db_engine)
@@ -52,22 +52,23 @@ def init_database():
 def _migrate_database(engine):
     """数据库迁移：新增字段等"""
     from sqlalchemy import inspect, text
+
     inspector = inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('books')]
-    if 'summary_text' not in columns:
+    columns = [col["name"] for col in inspector.get_columns("books")]
+    if "summary_text" not in columns:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE books ADD COLUMN summary_text TEXT"))
             conn.commit()
 
-    output_columns = [col['name'] for col in inspector.get_columns('book_outputs')]
-    if 'main_image_count' not in output_columns:
+    output_columns = [col["name"] for col in inspector.get_columns("book_outputs")]
+    if "main_image_count" not in output_columns:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE book_outputs ADD COLUMN main_image_count INTEGER DEFAULT 0"))
             conn.commit()
 
     # quality_report 字段迁移
-    output_columns2 = [col['name'] for col in inspector.get_columns('book_outputs')]
-    if 'quality_report' not in output_columns2:
+    output_columns2 = [col["name"] for col in inspector.get_columns("book_outputs")]
+    if "quality_report" not in output_columns2:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE book_outputs ADD COLUMN quality_report TEXT"))
             conn.commit()
@@ -92,18 +93,13 @@ class DatabaseManager:
     def __init__(self):
         init_database()
 
-    def create_book(self, filename: str, title: str = None, author: str = None) -> 'Book':
+    def create_book(self, filename: str, title: str = None, author: str = None) -> "Book":
         """创建书籍记录"""
         from .models import Book
 
         session = get_session()
         try:
-            book = Book(
-                filename=filename,
-                title=title or filename,
-                author=author,
-                status="pending"
-            )
+            book = Book(filename=filename, title=title or filename, author=author, status="pending")
             session.add(book)
             session.commit()
             session.refresh(book)
@@ -111,7 +107,7 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def get_book_by_filename(self, filename: str) -> 'Book':
+    def get_book_by_filename(self, filename: str) -> "Book":
         """根据文件名获取书籍"""
         from .models import Book
 
@@ -121,7 +117,7 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def get_book_by_id(self, book_id: str) -> 'Book':
+    def get_book_by_id(self, book_id: str) -> "Book":
         """根据ID获取书籍"""
         from .models import Book
 
@@ -159,7 +155,7 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def update_book_summary(self, book_id: str, summary_text: str) -> 'Book':
+    def update_book_summary(self, book_id: str, summary_text: str) -> "Book":
         """更新书籍摘要文本并返回 Book 对象"""
         from .models import Book
 
@@ -174,7 +170,7 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def create_book_output(self, book_id: str) -> 'BookOutput':
+    def create_book_output(self, book_id: str) -> "BookOutput":
         """创建书籍输出记录"""
         from .models import BookOutput
 
@@ -188,7 +184,7 @@ class DatabaseManager:
         finally:
             close_session(session)
 
-    def get_book_output(self, book_id: str) -> 'BookOutput':
+    def get_book_output(self, book_id: str) -> "BookOutput":
         """获取书籍输出记录"""
         from .models import BookOutput
 
@@ -204,15 +200,16 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            output = session.query(BookOutput).filter(
-                (BookOutput.book_id == book_id) | 
-                (BookOutput.book_id.startswith(book_id))
-            ).first()
-            
+            output = (
+                session.query(BookOutput)
+                .filter((BookOutput.book_id == book_id) | (BookOutput.book_id.startswith(book_id)))
+                .first()
+            )
+
             if not output:
                 logger.warning(f"未找到书籍输出记录: {book_id}")
                 return
-                
+
             if output:
                 for key, value in kwargs.items():
                     if hasattr(output, key):
@@ -227,9 +224,7 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            output = session.query(BookOutput).filter(
-                BookOutput.book_id == book_id
-            ).first()
+            output = session.query(BookOutput).filter(BookOutput.book_id == book_id).first()
             if output:
                 output.quality_report = report_json
                 session.commit()
@@ -246,9 +241,7 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            output = session.query(BookOutput).filter(
-                BookOutput.book_id == book_id
-            ).first()
+            output = session.query(BookOutput).filter(BookOutput.book_id == book_id).first()
             if output:
                 return output.quality_report
             return None
@@ -264,12 +257,7 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            log = ProcessingLog(
-                book_id=book_id,
-                stage=stage,
-                status=status,
-                message=message
-            )
+            log = ProcessingLog(book_id=book_id, stage=stage, status=status, message=message)
             session.add(log)
             session.commit()
         finally:
@@ -281,9 +269,12 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            return session.query(ProcessingLog).filter(
-                ProcessingLog.book_id == book_id
-            ).order_by(ProcessingLog.created_at).all()
+            return (
+                session.query(ProcessingLog)
+                .filter(ProcessingLog.book_id == book_id)
+                .order_by(ProcessingLog.created_at)
+                .all()
+            )
         finally:
             close_session(session)
 
@@ -295,7 +286,13 @@ class DatabaseManager:
         try:
             total = session.query(Book).count()
             pending = session.query(Book).filter(Book.status == "pending").count()
-            processing = session.query(Book).filter(Book.status.in_(["scanning", "parsing", "translating", "summarizing", "extracting", "copywriting"])).count()
+            processing = (
+                session.query(Book)
+                .filter(
+                    Book.status.in_(["scanning", "parsing", "translating", "summarizing", "extracting", "copywriting"])
+                )
+                .count()
+            )
             completed = session.query(Book).filter(Book.status == "completed").count()
             published = session.query(Book).filter(Book.status == "published").count()
             failed = session.query(Book).filter(Book.status == "failed").count()
@@ -306,7 +303,7 @@ class DatabaseManager:
                 "processing": processing,
                 "completed": completed,
                 "published": published,
-                "failed": failed
+                "failed": failed,
             }
         finally:
             close_session(session)
@@ -314,9 +311,9 @@ class DatabaseManager:
     def record_token_usage(self, book_id, step, input_tokens, output_tokens, model="deepseek-chat"):
         """记录Token消耗"""
         from .models import TokenUsage
+
         total_tokens = input_tokens + output_tokens
-        cost = (input_tokens / 1_000_000 * INPUT_PRICE_PER_MILLION +
-                output_tokens / 1_000_000 * OUTPUT_PRICE_PER_MILLION)
+        cost = input_tokens / 1_000_000 * INPUT_PRICE_PER_MILLION + output_tokens / 1_000_000 * OUTPUT_PRICE_PER_MILLION
         session = get_session()
         try:
             record = TokenUsage(
@@ -326,13 +323,15 @@ class DatabaseManager:
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_tokens=total_tokens,
-                cost=round(cost, 6)
+                cost=round(cost, 6),
             )
             session.add(record)
             session.commit()
-            logger.info(f"TokenUsage - book_id={book_id} step={step} "
-                        f"input={input_tokens} output={output_tokens} "
-                        f"total={total_tokens} cost=¥{cost:.4f}")
+            logger.info(
+                f"TokenUsage - book_id={book_id} step={step} "
+                f"input={input_tokens} output={output_tokens} "
+                f"total={total_tokens} cost=¥{cost:.4f}"
+            )
             return record
         finally:
             close_session(session)
@@ -340,6 +339,7 @@ class DatabaseManager:
     def get_token_usage(self, book_id=None):
         """查询Token消耗记录"""
         from .models import TokenUsage
+
         session = get_session()
         try:
             query = session.query(TokenUsage)
@@ -376,11 +376,13 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            return session.query(Book).join(
-                BookOutput, Book.id == BookOutput.book_id
-            ).filter(
-                BookOutput.publish_status == status
-            ).order_by(Book.updated_at.desc()).all()
+            return (
+                session.query(Book)
+                .join(BookOutput, Book.id == BookOutput.book_id)
+                .filter(BookOutput.publish_status == status)
+                .order_by(Book.updated_at.desc())
+                .all()
+            )
         finally:
             close_session(session)
 
@@ -389,27 +391,38 @@ class DatabaseManager:
 
         返回回填的数量。幂等：重复运行返回 0。
         """
-        from .models import Book, BookOutput, ProcessingLog
+        from .models import BookOutput, ProcessingLog
 
         session = get_session()
         try:
-            failed_book_ids_subq = session.query(ProcessingLog.book_id).filter(
-                ProcessingLog.stage == "publishing",
-                ProcessingLog.status == "error",
-            ).distinct().subquery()
-
-            targets = session.query(BookOutput).join(
-                failed_book_ids_subq, BookOutput.book_id == failed_book_ids_subq.c.book_id
-            ).filter(
-                BookOutput.publish_status.in_(["pending", None])
-            ).all()
-
-            for output in targets:
-                last_err = session.query(ProcessingLog).filter(
-                    ProcessingLog.book_id == output.book_id,
+            failed_book_ids_subq = (
+                session.query(ProcessingLog.book_id)
+                .filter(
                     ProcessingLog.stage == "publishing",
                     ProcessingLog.status == "error",
-                ).order_by(ProcessingLog.created_at.desc()).first()
+                )
+                .distinct()
+                .subquery()
+            )
+
+            targets = (
+                session.query(BookOutput)
+                .join(failed_book_ids_subq, BookOutput.book_id == failed_book_ids_subq.c.book_id)
+                .filter(BookOutput.publish_status.in_(["pending", None]))
+                .all()
+            )
+
+            for output in targets:
+                last_err = (
+                    session.query(ProcessingLog)
+                    .filter(
+                        ProcessingLog.book_id == output.book_id,
+                        ProcessingLog.stage == "publishing",
+                        ProcessingLog.status == "error",
+                    )
+                    .order_by(ProcessingLog.created_at.desc())
+                    .first()
+                )
 
                 output.publish_status = "failed"
                 if last_err:
@@ -427,15 +440,21 @@ class DatabaseManager:
 
         session = get_session()
         try:
-            failed_book_ids_subq = session.query(ProcessingLog.book_id).filter(
-                ProcessingLog.stage == "publishing",
-                ProcessingLog.status == "error",
-            ).distinct().subquery()
+            failed_book_ids_subq = (
+                session.query(ProcessingLog.book_id)
+                .filter(
+                    ProcessingLog.stage == "publishing",
+                    ProcessingLog.status == "error",
+                )
+                .distinct()
+                .subquery()
+            )
 
-            return session.query(BookOutput).join(
-                failed_book_ids_subq, BookOutput.book_id == failed_book_ids_subq.c.book_id
-            ).filter(
-                BookOutput.publish_status.in_(["pending", None])
-            ).count()
+            return (
+                session.query(BookOutput)
+                .join(failed_book_ids_subq, BookOutput.book_id == failed_book_ids_subq.c.book_id)
+                .filter(BookOutput.publish_status.in_(["pending", None]))
+                .count()
+            )
         finally:
             close_session(session)

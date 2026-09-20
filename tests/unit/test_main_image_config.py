@@ -1,4 +1,5 @@
 """测试图片生成器配置"""
+
 from automation.config import Config
 
 

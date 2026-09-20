@@ -1,9 +1,10 @@
 """
 测试 SummaryAIGenerator 的 token 记录功能
 """
-import sys
+
 import os
-from unittest.mock import patch, MagicMock
+import sys
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -52,9 +53,7 @@ class TestSummaryAIGeneratorTokenRecording:
         generator.db = MagicMock()
         generator.template_gen = MagicMock()
         generator.template_gen.detect_book_type.return_value = "general"
-        generator.template_gen.detect_and_generate_prompt.return_value = MagicMock(
-            prompt_for_ai="请总结：{content}"
-        )
+        generator.template_gen.detect_and_generate_prompt.return_value = MagicMock(prompt_for_ai="请总结：{content}")
 
         book_info = {"title": "Test", "author": "Author"}
         chapters = [{"title": "第1章", "content": "内容。"}]
@@ -62,8 +61,7 @@ class TestSummaryAIGeneratorTokenRecording:
         generator.generate("test-book-id", book_info, chapters)
 
         generator.db.record_token_usage.assert_called_once_with(
-            "test-book-id", "summarizing",
-            input_tokens=500, output_tokens=300
+            "test-book-id", "summarizing", input_tokens=500, output_tokens=300
         )
 
     def test_generate_handles_missing_usage(self):
@@ -80,9 +78,7 @@ class TestSummaryAIGeneratorTokenRecording:
         generator.db = MagicMock()
         generator.template_gen = MagicMock()
         generator.template_gen.detect_book_type.return_value = "general"
-        generator.template_gen.detect_and_generate_prompt.return_value = MagicMock(
-            prompt_for_ai="请总结：{content}"
-        )
+        generator.template_gen.detect_and_generate_prompt.return_value = MagicMock(prompt_for_ai="请总结：{content}")
 
         book_info = {"title": "Test", "author": "Author"}
         chapters = [{"title": "第1章", "content": "内容。"}]

@@ -1,10 +1,11 @@
 """
 配置管理模块
 """
-import os
-import yaml
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+import yaml
 
 
 class Config:
@@ -24,7 +25,7 @@ class Config:
         config_path = Path(__file__).parent.parent / "config.yaml"
 
         if config_path.exists():
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 self._config = yaml.safe_load(f) or {}
         else:
             self._config = self._get_default_config()
@@ -36,19 +37,15 @@ class Config:
                 "input_dir": "E:\\ebooks\\input",
                 "output_dir": "./output",
                 "data_dir": "./data",
-                "log_dir": "./logs"
+                "log_dir": "./logs",
             },
             "sku": [
-                {
-                    "name": "纯英文原版",
-                    "price": 3.99,
-                    "includes": ["english_pdf"]
-                },
+                {"name": "纯英文原版", "price": 3.99, "includes": ["english_pdf"]},
                 {
                     "name": "完整套装",
                     "price": 8.99,
-                    "includes": ["english_pdf", "chinese_pdf", "bilingual_pdf", "summary_pdf"]
-                }
+                    "includes": ["english_pdf", "chinese_pdf", "bilingual_pdf", "summary_pdf"],
+                },
             ],
             "ai": {
                 "provider": "deepseek",
@@ -56,7 +53,7 @@ class Config:
                 "max_tokens": 4096,
                 "temperature": 0.7,
                 "retry_times": 3,
-                "retry_delay": 5
+                "retry_delay": 5,
             },
             "minimax": {
                 "enabled": True,
@@ -66,39 +63,34 @@ class Config:
                 "api_url": "https://api.minimax.chat/v1/chat/completions",
                 "max_tokens": 4096,
                 "temperature": 0.7,
-                "retry_times": 3
+                "retry_times": 3,
             },
-            "image": {
-                "max_width": 1200,
-                "max_height": 1600,
-                "quality": 85,
-                "format": "jpg"
-            },
+            "image": {"max_width": 1200, "max_height": 1600, "quality": 85, "format": "jpg"},
             "xianyu": {
                 "login_method": "qr_code",
                 "base_url": "https://www.xianyu.com",
                 "timeout": 30,
-                "auto_retry": True
+                "auto_retry": True,
             },
             "error_handling": {
                 "api_error": "retry",
                 "file_error": "skip",
                 "parse_error": "skip",
-                "publish_error": "manual"
+                "publish_error": "manual",
             },
             "summarizer": {
                 "core_insight_length": "300-500",
                 "chapter_summary_length": "150-200",
                 "max_quotes": 15,
                 "max_content_length": 10000,
-                "prompt": "你是一位专业的书籍摘要专家..."
+                "prompt": "你是一位专业的书籍摘要专家...",
             },
             "quality_check": {
-                "enabled": True,            # 纯程序化检查，零 API 成本
+                "enabled": True,  # 纯程序化检查，零 API 成本
                 "thresholds": {
-                    "excellent": 90,        # 优秀
-                    "good": 75,             # 良好
-                    "pass": 60              # 合格
+                    "excellent": 90,  # 优秀
+                    "good": 75,  # 良好
+                    "pass": 60,  # 合格
                 },
                 "dimensions": {
                     "fidelity": True,
@@ -108,9 +100,9 @@ class Config:
                     "terminology": True,
                     "cultural": True,
                     "completeness": True,
-                    "pdf_toc_links": True
-                }
-            }
+                    "pdf_toc_links": True,
+                },
+            },
         }
 
     def get(self, key: str, default: Any = None) -> Any:

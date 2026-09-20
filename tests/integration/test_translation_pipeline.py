@@ -1,24 +1,24 @@
 """tests/test_translation_pipeline.py — 翻译流水线集成测试"""
+
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from unittest.mock import patch, MagicMock
-import pytest
-
+from unittest.mock import MagicMock, patch
 
 # ============================================================
 # Test 1: translate_epub 空翻译检测
 # ============================================================
 
-@patch('ebook_translator.library.PDFConverter')
-@patch('ebook_translator.library.EPUBGenerator')
-@patch('ebook_translator.library.CacheManager')
-@patch('ebook_translator.library.get_translator')
-@patch('ebook_translator.library.EPUBParser')
+
+@patch("ebook_translator.library.PDFConverter")
+@patch("ebook_translator.library.EPUBGenerator")
+@patch("ebook_translator.library.CacheManager")
+@patch("ebook_translator.library.get_translator")
+@patch("ebook_translator.library.EPUBParser")
 def test_translate_epub_empty_translation_detection(
-    mock_parser_cls, mock_get_translator, mock_cache_cls,
-    mock_gen_cls, mock_pdf_cls, tmp_path
+    mock_parser_cls, mock_get_translator, mock_cache_cls, mock_gen_cls, mock_pdf_cls, tmp_path
 ):
     """翻译 API 全部返回空时，translate_epub 返回 success=False"""
     from ebook_translator.library import translate_epub
@@ -27,15 +27,15 @@ def test_translate_epub_empty_translation_detection(
     mock_parser.parse.return_value = True
     mock_parser.get_content_items.return_value = [MagicMock()]
     mock_parser.get_paragraphs.return_value = [
-        {'id': 'p1', 'text': 'Hello world', 'html': '<p>Hello world</p>', 'tier': 'normal'},
-        {'id': 'p2', 'text': 'This is a test', 'html': '<p>This is a test</p>', 'tier': 'normal'},
+        {"id": "p1", "text": "Hello world", "html": "<p>Hello world</p>", "tier": "normal"},
+        {"id": "p2", "text": "This is a test", "html": "<p>This is a test</p>", "tier": "normal"},
     ]
     mock_parser_cls.return_value = mock_parser
 
     mock_translator = MagicMock()
     mock_translator.translate_smart.return_value = [
-        {'id': 'p1', 'original': 'Hello world', 'translated': '', 'is_duplicate': False},
-        {'id': 'p2', 'original': 'This is a test', 'translated': '', 'is_duplicate': False},
+        {"id": "p1", "original": "Hello world", "translated": "", "is_duplicate": False},
+        {"id": "p2", "original": "This is a test", "translated": "", "is_duplicate": False},
     ]
     mock_get_translator.return_value = mock_translator
 
@@ -43,12 +43,7 @@ def test_translate_epub_empty_translation_detection(
     epub_path = tmp_path / "dummy.epub"
     epub_path.touch()
 
-    result = translate_epub(
-        epub_path=str(epub_path),
-        output_dir=str(tmp_path),
-        skip_cache=True,
-        test_mode=True
-    )
+    result = translate_epub(epub_path=str(epub_path), output_dir=str(tmp_path), skip_cache=True, test_mode=True)
 
     assert result["success"] is False
     assert "翻译 API 返回全部为空" in result["error"]
@@ -59,15 +54,15 @@ def test_translate_epub_empty_translation_detection(
 # Test 2: translate_epub 成功时返回质量检查数据
 # ============================================================
 
-@patch('ebook_translator.library.shutil.copy2')
-@patch('ebook_translator.library.PDFConverter')
-@patch('ebook_translator.library.EPUBGenerator')
-@patch('ebook_translator.library.CacheManager')
-@patch('ebook_translator.library.get_translator')
-@patch('ebook_translator.library.EPUBParser')
+
+@patch("ebook_translator.library.shutil.copy2")
+@patch("ebook_translator.library.PDFConverter")
+@patch("ebook_translator.library.EPUBGenerator")
+@patch("ebook_translator.library.CacheManager")
+@patch("ebook_translator.library.get_translator")
+@patch("ebook_translator.library.EPUBParser")
 def test_translate_epub_success_returns_quality_data(
-    mock_parser_cls, mock_get_translator, mock_cache_cls,
-    mock_gen_cls, mock_pdf_cls, mock_copy2, tmp_path
+    mock_parser_cls, mock_get_translator, mock_cache_cls, mock_gen_cls, mock_pdf_cls, mock_copy2, tmp_path
 ):
     """翻译成功时，返回 source_paragraphs、translated_paragraphs、cache_data"""
     from ebook_translator.library import translate_epub
@@ -76,15 +71,15 @@ def test_translate_epub_success_returns_quality_data(
     mock_parser.parse.return_value = True
     mock_parser.get_content_items.return_value = [MagicMock()]
     mock_parser.get_paragraphs.return_value = [
-        {'id': 'p1', 'text': 'Hello world', 'html': '<p>Hello world</p>', 'tier': 'normal'},
-        {'id': 'p2', 'text': 'This is a test', 'html': '<p>This is a test</p>', 'tier': 'normal'},
+        {"id": "p1", "text": "Hello world", "html": "<p>Hello world</p>", "tier": "normal"},
+        {"id": "p2", "text": "This is a test", "html": "<p>This is a test</p>", "tier": "normal"},
     ]
     mock_parser_cls.return_value = mock_parser
 
     mock_translator = MagicMock()
     mock_translator.translate_smart.return_value = [
-        {'id': 'p1', 'original': 'Hello world', 'translated': '你好世界', 'is_duplicate': False},
-        {'id': 'p2', 'original': 'This is a test', 'translated': '这是一个测试', 'is_duplicate': False},
+        {"id": "p1", "original": "Hello world", "translated": "你好世界", "is_duplicate": False},
+        {"id": "p2", "original": "This is a test", "translated": "这是一个测试", "is_duplicate": False},
     ]
     mock_translator.get_stats.return_value = {}
     mock_get_translator.return_value = mock_translator
@@ -93,12 +88,7 @@ def test_translate_epub_success_returns_quality_data(
     epub_path = tmp_path / "dummy.epub"
     epub_path.touch()
 
-    result = translate_epub(
-        epub_path=str(epub_path),
-        output_dir=str(tmp_path),
-        skip_cache=True,
-        test_mode=True
-    )
+    result = translate_epub(epub_path=str(epub_path), output_dir=str(tmp_path), skip_cache=True, test_mode=True)
 
     assert result["success"] is True
 
@@ -119,8 +109,9 @@ def test_translate_epub_success_returns_quality_data(
 # Test 3: TranslationProcessor 处理失败场景
 # ============================================================
 
-@patch('automation.translation.translation_processor.translate_epub')
-@patch('automation.translation.translation_processor.DatabaseManager')
+
+@patch("automation.translation.translation_processor.translate_epub")
+@patch("automation.translation.translation_processor.DatabaseManager")
 def test_translation_processor_failed_translation(mock_db_cls, mock_translate, tmp_path):
     """translate_epub 返回 success=False 时，process 返回 False"""
     from automation.translation.translation_processor import TranslationProcessor

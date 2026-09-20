@@ -1,22 +1,22 @@
 """翻译质量检查模块"""
+
 import json
-import logging
 import re
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, List, Optional
 
 from .config import config
-from .utils import logger
-
 
 # ============================================================
 # 数据模型
 # ============================================================
 
+
 @dataclass
 class DimensionResult:
     """单维度检查结果"""
+
     score: float
     issues: List[str] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)
@@ -25,6 +25,7 @@ class DimensionResult:
 @dataclass
 class QualityReport:
     """质量检查报告"""
+
     book_title: str
     overall_score: float
     overall_grade: str
@@ -39,7 +40,7 @@ class QualityReport:
             "overall_grade": self.overall_grade,
             "summary": self.summary,
             "recommendation": self.recommendation,
-            "dimensions": {}
+            "dimensions": {},
         }
         for dim_name, dim_result in self.dimensions.items():
             result["dimensions"][dim_name] = asdict(dim_result)
@@ -53,6 +54,7 @@ class QualityReport:
 # 维度 7：翻译完整性检查
 # ============================================================
 
+
 class CompletenessChecker:
     """检查翻译完整性——所有源段落是否都已成功翻译，无遗漏"""
 
@@ -64,7 +66,7 @@ class CompletenessChecker:
                 "translated_paragraphs": 0,
                 "missing_count": 0,
                 "empty_paragraphs": 0,
-                "issues": []
+                "issues": [],
             }
 
         translated_count = 0
@@ -102,7 +104,7 @@ class CompletenessChecker:
             "translated_paragraphs": translated_count,
             "missing_count": missing_count,
             "empty_paragraphs": empty_count,
-            "issues": issues
+            "issues": issues,
         }
 
 
@@ -110,18 +112,13 @@ class CompletenessChecker:
 # 维度 8：PDF 目录链接检查
 # ============================================================
 
+
 class PdfTocLinkChecker:
     """检查 PDF 目录链接——解析 TOC 树并验证每个链接目标页是否存在"""
 
     def check(self, pdf_path: str) -> Dict:
         if not pdf_path or not Path(pdf_path).exists():
-            return {
-                "score": 0,
-                "toc_entries": 0,
-                "valid_links": 0,
-                "broken_links": 0,
-                "issues": ["PDF 文件不存在"]
-            }
+            return {"score": 0, "toc_entries": 0, "valid_links": 0, "broken_links": 0, "issues": ["PDF 文件不存在"]}
 
         try:
             import fitz
@@ -131,7 +128,7 @@ class PdfTocLinkChecker:
                 "toc_entries": 0,
                 "valid_links": 0,
                 "broken_links": 0,
-                "issues": ["pymupdf 库未安装，无法检查 PDF 目录"]
+                "issues": ["pymupdf 库未安装，无法检查 PDF 目录"],
             }
 
         try:
@@ -146,7 +143,7 @@ class PdfTocLinkChecker:
                     "toc_entries": 0,
                     "valid_links": 0,
                     "broken_links": 0,
-                    "issues": ["PDF 没有目录结构"]
+                    "issues": ["PDF 没有目录结构"],
                 }
 
             valid = 0
@@ -154,7 +151,7 @@ class PdfTocLinkChecker:
             broken_items = []
 
             for item in toc:
-                level = item[0]
+                _ = item[0]
                 title = item[1]
                 page = item[2]
 
@@ -179,7 +176,7 @@ class PdfTocLinkChecker:
                 "toc_entries": total,
                 "valid_links": valid,
                 "broken_links": broken,
-                "issues": issues
+                "issues": issues,
             }
 
         except Exception as e:
@@ -188,7 +185,7 @@ class PdfTocLinkChecker:
                 "toc_entries": 0,
                 "valid_links": 0,
                 "broken_links": 0,
-                "issues": [f"PDF 解析失败: {str(e)}"]
+                "issues": [f"PDF 解析失败: {str(e)}"],
             }
 
 
@@ -197,8 +194,7 @@ class FidelityChecker:
 
     def check(self, cache_data: Dict, source_paragraphs: List[str]) -> Dict:
         if not source_paragraphs:
-            return {"score": 100, "missing_count": 0, "empty_count": 0,
-                    "avg_length_ratio": 0, "issues": []}
+            return {"score": 100, "missing_count": 0, "empty_count": 0, "avg_length_ratio": 0, "issues": []}
 
         total = len(source_paragraphs)
         missing_count = 0
@@ -223,8 +219,7 @@ class FidelityChecker:
                 missing_count += 1
 
         translated_count = total - missing_count - empty_count
-        avg_length_ratio = (sum(length_ratios) / len(length_ratios)
-                            if length_ratios else 0)
+        avg_length_ratio = sum(length_ratios) / len(length_ratios) if length_ratios else 0
 
         score_parts = []
         score_parts.append((translated_count / total) * 40)
@@ -245,30 +240,30 @@ class FidelityChecker:
             issues.append(f"译文/原文长度比例异常: {avg_length_ratio:.2f}")
 
         return {
-            "score": score, "missing_count": missing_count,
-            "empty_count": empty_count, "avg_length_ratio": round(avg_length_ratio, 2),
-            "issues": issues
+            "score": score,
+            "missing_count": missing_count,
+            "empty_count": empty_count,
+            "avg_length_ratio": round(avg_length_ratio, 2),
+            "issues": issues,
         }
 
 
 class FluencyChecker:
     """维度 2：流畅度检查——基于中文密度和遗留英文检测"""
 
-    ENGLISH_WORD_PATTERN = re.compile(r'\b[a-zA-Z]{2,}\b')
-    CHINESE_CHAR_PATTERN = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]')
+    ENGLISH_WORD_PATTERN = re.compile(r"\b[a-zA-Z]{2,}\b")
+    CHINESE_CHAR_PATTERN = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]")
 
     def check(self, translated_text: str) -> Dict:
         if not translated_text or not translated_text.strip():
-            return {"score": 100, "chinese_ratio": 1.0,
-                    "english_word_count": 0, "issues": []}
+            return {"score": 100, "chinese_ratio": 1.0, "english_word_count": 0, "issues": []}
 
         text = translated_text.strip()
         total_chars = len(text)
         chinese_chars = len(self.CHINESE_CHAR_PATTERN.findall(text))
         english_words = self.ENGLISH_WORD_PATTERN.findall(text)
 
-        english_words = [w for w in english_words
-                         if not w.startswith(('http', 'www'))]
+        english_words = [w for w in english_words if not w.startswith(("http", "www"))]
         english_word_count = len(english_words)
         chinese_ratio = chinese_chars / total_chars if total_chars > 0 else 0
 
@@ -287,8 +282,10 @@ class FluencyChecker:
             issues.append(f"发现 {english_word_count} 个遗留英文词汇: {english_words[:5]}")
 
         return {
-            "score": score, "chinese_ratio": round(chinese_ratio, 4),
-            "english_word_count": english_word_count, "issues": issues
+            "score": score,
+            "chinese_ratio": round(chinese_ratio, 4),
+            "english_word_count": english_word_count,
+            "issues": issues,
         }
 
 
@@ -297,8 +294,7 @@ class ConsistencyChecker:
 
     def check(self, cache_data: Dict) -> Dict:
         if not cache_data:
-            return {"score": 100, "total_terms": 0,
-                    "inconsistent_terms": 0, "issues": []}
+            return {"score": 100, "total_terms": 0, "inconsistent_terms": 0, "issues": []}
 
         source_groups = {}
         for entry in cache_data.values():
@@ -314,51 +310,39 @@ class ConsistencyChecker:
 
         for source, translations in multi_occurrence.items():
             if len(translations) > 1:
-                inconsistent_sources.append({
-                    "source": source,
-                    "translations": list(translations)
-                })
+                inconsistent_sources.append({"source": source, "translations": list(translations)})
 
         inconsistent_count = len(inconsistent_sources)
         total_terms = len(source_groups)
 
         if total_terms == 0:
-            return {"score": 100, "total_terms": 0,
-                    "inconsistent_terms": 0, "issues": []}
+            return {"score": 100, "total_terms": 0, "inconsistent_terms": 0, "issues": []}
 
         score = round(max(0, 100 - (inconsistent_count / total_terms) * 100), 1)
         issues = []
         if inconsistent_count > 0:
-            items = [f"'{s['source']}'→{s['translations']}"
-                     for s in inconsistent_sources[:3]]
+            items = [f"'{s['source']}'→{s['translations']}" for s in inconsistent_sources[:3]]
             issues.append(f"有 {inconsistent_count} 个术语翻译不一致: {', '.join(items)}")
 
-        return {
-            "score": score, "total_terms": total_terms,
-            "inconsistent_terms": inconsistent_count, "issues": issues
-        }
+        return {"score": score, "total_terms": total_terms, "inconsistent_terms": inconsistent_count, "issues": issues}
 
 
 class FormatIntegrityChecker:
     """维度 4：格式完整性检查——段落结构、标题、列表保留情况"""
 
-    LIST_PATTERN = re.compile(r'^[\s]*[-*]\s|\d+[.)]\s')
-    HEADING_PATTERN = re.compile(r'^#{1,6}\s|^[A-Z][^。！？\n]{0,30}$', re.MULTILINE)
+    LIST_PATTERN = re.compile(r"^[\s]*[-*]\s|\d+[.)]\s")
+    HEADING_PATTERN = re.compile(r"^#{1,6}\s|^[A-Z][^。！？\n]{0,30}$", re.MULTILINE)
 
-    def check(self, source_paragraphs: List[str],
-              translated_paragraphs: List[str]) -> Dict:
+    def check(self, source_paragraphs: List[str], translated_paragraphs: List[str]) -> Dict:
         if not source_paragraphs and not translated_paragraphs:
-            return {"score": 100, "para_count_match": True,
-                    "issues": []}
+            return {"score": 100, "para_count_match": True, "issues": []}
 
         source_count = len(source_paragraphs)
         trans_count = len(translated_paragraphs)
         para_count_match = source_count == trans_count
 
-        source_lists = sum(1 for p in source_paragraphs
-                           if self.LIST_PATTERN.match(p))
-        trans_lists = sum(1 for p in translated_paragraphs
-                          if self.LIST_PATTERN.match(p))
+        source_lists = sum(1 for p in source_paragraphs if self.LIST_PATTERN.match(p))
+        trans_lists = sum(1 for p in translated_paragraphs if self.LIST_PATTERN.match(p))
 
         score_parts = []
         score_parts.append(40 if para_count_match else 0)
@@ -379,10 +363,13 @@ class FormatIntegrityChecker:
             issues.append(f"列表项数不匹配: 原文 {source_lists} 个 ≠ 译文 {trans_lists} 个")
 
         return {
-            "score": score, "para_count_match": para_count_match,
-            "source_paragraphs": source_count, "translated_paragraphs": trans_count,
-            "source_lists": source_lists, "translated_lists": trans_lists,
-            "issues": issues
+            "score": score,
+            "para_count_match": para_count_match,
+            "source_paragraphs": source_count,
+            "translated_paragraphs": trans_count,
+            "source_lists": source_lists,
+            "translated_lists": trans_lists,
+            "issues": issues,
         }
 
 
@@ -406,8 +393,7 @@ class TerminologyChecker:
 
     def check(self, cache_data: Dict) -> Dict:
         if not cache_data:
-            return {"score": 100, "total_terms": 0,
-                    "matched_count": 0, "incorrect_count": 0, "issues": []}
+            return {"score": 100, "total_terms": 0, "matched_count": 0, "incorrect_count": 0, "issues": []}
 
         correct = 0
         incorrect = 0
@@ -427,8 +413,7 @@ class TerminologyChecker:
                     incorrect_items.append(f"'{source}'→'{translated}' (期望: '{expected}')")
 
         if total == 0:
-            return {"score": 100, "total_terms": 0,
-                    "matched_count": 0, "incorrect_count": 0, "issues": []}
+            return {"score": 100, "total_terms": 0, "matched_count": 0, "incorrect_count": 0, "issues": []}
 
         score = round((correct / total) * 100, 1)
         issues = []
@@ -436,29 +421,28 @@ class TerminologyChecker:
             issues.append(f"有 {incorrect}/{total} 个术语翻译不准确: {'; '.join(incorrect_items[:3])}")
 
         return {
-            "score": score, "total_terms": total,
-            "matched_count": correct, "incorrect_count": incorrect,
-            "issues": issues
+            "score": score,
+            "total_terms": total,
+            "matched_count": correct,
+            "incorrect_count": incorrect,
+            "issues": issues,
         }
 
 
 class CulturalAdaptationChecker:
     """维度 6：文化适配检查——日期格式、度量衡、货币符号检测"""
 
-    WESTERN_DATE = re.compile(
-        r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}'
-    )
+    WESTERN_DATE = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
     IMPERIAL_UNITS = re.compile(
-        r'\b\d+\.?\d*\s*(inches?|inch|feet|foot|ft|pounds?|lbs?|'
-        r'miles?|yards?|ounces?|oz|gallons?|gals?|fahrenheit|°f)\b',
-        re.IGNORECASE
+        r"\b\d+\.?\d*\s*(inches?|inch|feet|foot|ft|pounds?|lbs?|"
+        r"miles?|yards?|ounces?|oz|gallons?|gals?|fahrenheit|°f)\b",
+        re.IGNORECASE,
     )
-    WESTERN_CURRENCY = re.compile(r'[\$€£¥]')
+    WESTERN_CURRENCY = re.compile(r"[\$€£¥]")
 
     def check(self, translated_text: str) -> Dict:
         if not translated_text or not translated_text.strip():
-            return {"score": 100, "western_date_count": 0,
-                    "imperial_units": 0, "western_currency": 0, "issues": []}
+            return {"score": 100, "western_date_count": 0, "imperial_units": 0, "western_currency": 0, "issues": []}
 
         text = translated_text.strip()
         western_dates = self.WESTERN_DATE.findall(text)
@@ -480,9 +464,11 @@ class CulturalAdaptationChecker:
             issues.append(f"发现 {currency_count} 处西式货币符号")
 
         return {
-            "score": score, "western_date_count": western_date_count,
-            "imperial_units": imperial_count, "western_currency": currency_count,
-            "issues": issues
+            "score": score,
+            "western_date_count": western_date_count,
+            "imperial_units": imperial_count,
+            "western_currency": currency_count,
+            "issues": issues,
         }
 
 
@@ -502,12 +488,17 @@ class QualityChecker:
         self.completeness_checker = CompletenessChecker()
         self.pdf_toc_checker = PdfTocLinkChecker()
 
-    def check(self, book_title: str, book_id: str, output_dir: str,
-              bilingual_pdf_path: Optional[str] = None,
-              chinese_pdf_path: Optional[str] = None,
-              cache_data: Optional[Dict] = None,
-              source_paragraphs: Optional[List[str]] = None,
-              translated_paragraphs: Optional[List[str]] = None) -> QualityReport:
+    def check(
+        self,
+        book_title: str,
+        book_id: str,
+        output_dir: str,
+        bilingual_pdf_path: Optional[str] = None,
+        chinese_pdf_path: Optional[str] = None,
+        cache_data: Optional[Dict] = None,
+        source_paragraphs: Optional[List[str]] = None,
+        translated_paragraphs: Optional[List[str]] = None,
+    ) -> QualityReport:
         """执行全维度质量检查"""
         dimensions = {}
         all_scores = []
@@ -521,8 +512,8 @@ class QualityChecker:
                 details={
                     "missing_count": fidelity_result["missing_count"],
                     "empty_count": fidelity_result["empty_count"],
-                    "avg_length_ratio": fidelity_result["avg_length_ratio"]
-                }
+                    "avg_length_ratio": fidelity_result["avg_length_ratio"],
+                },
             )
             all_scores.append(fidelity_result["score"])
 
@@ -535,8 +526,8 @@ class QualityChecker:
                 issues=fluency_result["issues"],
                 details={
                     "chinese_ratio": fluency_result["chinese_ratio"],
-                    "english_word_count": fluency_result["english_word_count"]
-                }
+                    "english_word_count": fluency_result["english_word_count"],
+                },
             )
             all_scores.append(fluency_result["score"])
 
@@ -548,8 +539,8 @@ class QualityChecker:
                 issues=consistency_result["issues"],
                 details={
                     "total_terms": consistency_result["total_terms"],
-                    "inconsistent_terms": consistency_result["inconsistent_terms"]
-                }
+                    "inconsistent_terms": consistency_result["inconsistent_terms"],
+                },
             )
             all_scores.append(consistency_result["score"])
 
@@ -562,8 +553,8 @@ class QualityChecker:
                 details={
                     "para_count_match": format_result["para_count_match"],
                     "source_paragraphs": format_result["source_paragraphs"],
-                    "translated_paragraphs": format_result["translated_paragraphs"]
-                }
+                    "translated_paragraphs": format_result["translated_paragraphs"],
+                },
             )
             all_scores.append(format_result["score"])
 
@@ -575,8 +566,8 @@ class QualityChecker:
                 issues=term_result["issues"],
                 details={
                     "matched_count": term_result["matched_count"],
-                    "incorrect_count": term_result["incorrect_count"]
-                }
+                    "incorrect_count": term_result["incorrect_count"],
+                },
             )
             all_scores.append(term_result["score"])
 
@@ -589,16 +580,14 @@ class QualityChecker:
                 issues=cultural_result["issues"],
                 details={
                     "western_date_count": cultural_result["western_date_count"],
-                    "imperial_units": cultural_result["imperial_units"]
-                }
+                    "imperial_units": cultural_result["imperial_units"],
+                },
             )
             all_scores.append(cultural_result["score"])
 
         # 维度 7：翻译完整性
         if cache_data is not None and source_paragraphs is not None:
-            completeness_result = self.completeness_checker.check(
-                cache_data, source_paragraphs
-            )
+            completeness_result = self.completeness_checker.check(cache_data, source_paragraphs)
             dimensions["completeness"] = DimensionResult(
                 score=completeness_result["score"],
                 issues=completeness_result["issues"],
@@ -606,8 +595,8 @@ class QualityChecker:
                     "source_paragraphs": completeness_result["source_paragraphs"],
                     "translated_paragraphs": completeness_result["translated_paragraphs"],
                     "missing_count": completeness_result["missing_count"],
-                    "empty_paragraphs": completeness_result["empty_paragraphs"]
-                }
+                    "empty_paragraphs": completeness_result["empty_paragraphs"],
+                },
             )
             all_scores.append(completeness_result["score"])
 
@@ -619,16 +608,9 @@ class QualityChecker:
                 toc_result = self.pdf_toc_checker.check(pdf_path)
                 pdf_scores.append(toc_result["score"])
 
-            pdf_toc_details = {
-                "checked_pdfs": pdf_paths,
-                "scores_per_pdf": dict(zip(pdf_paths, pdf_scores))
-            }
+            pdf_toc_details = {"checked_pdfs": pdf_paths, "scores_per_pdf": dict(zip(pdf_paths, pdf_scores))}
             avg_pdf_score = sum(pdf_scores) / len(pdf_scores) if pdf_scores else 0
-            dimensions["pdf_toc_links"] = DimensionResult(
-                score=avg_pdf_score,
-                issues=[],
-                details=pdf_toc_details
-            )
+            dimensions["pdf_toc_links"] = DimensionResult(score=avg_pdf_score, issues=[], details=pdf_toc_details)
             all_scores.append(avg_pdf_score)
 
         # 如果没有任何维度被评分，返回默认报告
@@ -639,9 +621,7 @@ class QualityChecker:
         overall_grade = self._determine_grade(overall_score)
 
         # 生成总结和建议
-        summary, recommendation = self._generate_summary_and_recommendation(
-            overall_score, dimensions
-        )
+        summary, recommendation = self._generate_summary_and_recommendation(overall_score, dimensions)
 
         return QualityReport(
             book_title=book_title,
@@ -649,7 +629,7 @@ class QualityChecker:
             overall_grade=overall_grade,
             dimensions=dimensions,
             summary=summary,
-            recommendation=recommendation
+            recommendation=recommendation,
         )
 
     def _calc_overall_score(self, dimensions: Dict[str, "DimensionResult"]) -> float:
@@ -674,8 +654,9 @@ class QualityChecker:
         else:
             return "需改进"
 
-    def _generate_summary_and_recommendation(self, overall_score: float,
-                                              dimensions: Dict[str, "DimensionResult"]) -> tuple:
+    def _generate_summary_and_recommendation(
+        self, overall_score: float, dimensions: Dict[str, "DimensionResult"]
+    ) -> tuple:
         """生成总结和建议"""
         all_issues = []
         for dim_name, dim_result in dimensions.items():
@@ -708,5 +689,5 @@ class QualityChecker:
             overall_grade="无法评估",
             dimensions={},
             summary=f"质量检查无法完成: {reason}",
-            recommendation="请检查翻译数据完整性后重试"
+            recommendation="请检查翻译数据完整性后重试",
         )

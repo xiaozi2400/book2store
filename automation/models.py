@@ -1,10 +1,11 @@
 """
 数据库模型定义
 """
+
 import uuid
 from datetime import datetime
-from typing import Optional, List
-from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey, JSON
+
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -16,6 +17,7 @@ def generate_uuid() -> str:
 
 class Book(Base):
     """书籍基础信息表"""
+
     __tablename__ = "books"
 
     id = Column(String, primary_key=True, default=generate_uuid)
@@ -41,6 +43,7 @@ class Book(Base):
 
 class BookOutput(Base):
     """书籍输出文件表"""
+
     __tablename__ = "book_outputs"
 
     id = Column(String, primary_key=True, default=generate_uuid)
@@ -84,6 +87,7 @@ class BookOutput(Base):
 
 class ProcessingLog(Base):
     """处理日志表"""
+
     __tablename__ = "processing_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -101,6 +105,7 @@ class ProcessingLog(Base):
 
 class SystemConfig(Base):
     """系统配置表"""
+
     __tablename__ = "system_config"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -114,6 +119,7 @@ class SystemConfig(Base):
 
 class ShareLink(Base):
     """网盘分享链接表"""
+
     __tablename__ = "share_links"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -130,6 +136,7 @@ class ShareLink(Base):
 
 class TokenUsage(Base):
     """Token消耗记录"""
+
     __tablename__ = "token_usage"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -150,8 +157,9 @@ class TokenUsage(Base):
 
 class TranslationCache(Base):
     """翻译缓存表"""
+
     __tablename__ = "translation_cache"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_hash = Column(String(32), unique=True, nullable=False, index=True)
     source_text = Column(Text, nullable=False)
@@ -159,6 +167,6 @@ class TranslationCache(Base):
     model = Column(String(64))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     def __repr__(self):
         return f"<TranslationCache(hash={self.source_hash[:12]}...)>"

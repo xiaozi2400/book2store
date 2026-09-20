@@ -1,25 +1,25 @@
+import logging
 import os
 import re
-import logging
-import ebooklib
-from ebooklib import epub
-from bs4 import BeautifulSoup, Tag, NavigableString
-import shutil
 import tempfile
 import zipfile
 
+from bs4 import BeautifulSoup, NavigableString
+
 logger = logging.getLogger(__name__)
+
 
 def normalize_text(text):
     """标准化文本：去除多余空格，统一Unicode特殊字符"""
     if not text:
         return ""
-    text = text.replace('\u2014', '-').replace('\u2013', '-')
-    text = text.replace('\u2018', "'").replace('\u2019', "'")
-    text = text.replace('\u201c', '"').replace('\u201d', '"')
-    text = text.replace('\u2026', '...')
-    text = ' '.join(text.split()).strip()
+    text = text.replace("\u2014", "-").replace("\u2013", "-")
+    text = text.replace("\u2018", "'").replace("\u2019", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    text = text.replace("\u2026", "...")
+    text = " ".join(text.split()).strip()
     return text
+
 
 # 专业电子书翻译 CSS 样式
 BILINGUAL_CSS = """
@@ -306,12 +306,13 @@ a:hover {
 }
 """
 
+
 class EPUBGenerator:
     """EPUB 生成器 - 支持新ID映射"""
 
     def __init__(self, original_book, config=None):
         """初始化生成器
-        
+
         Args:
             original_book: 原始EPUB书籍对象
             config: PDF配置字典，用于读取CSS样式设置
@@ -324,31 +325,38 @@ class EPUBGenerator:
         translation_map = {}
 
         for para in translated_paragraphs:
-            original = para.get('original')
-            translated = para.get('translated')
+            original = para.get("original")
+            translated = para.get("translated")
             if original and translated:
                 normalized = normalize_text(original)
                 translation_map[normalized] = {
-                    'original': original,
-                    'translated': translated,
-                    'html': para.get('html', ''),
-                    'is_duplicate': para.get('is_duplicate', False)
+                    "original": original,
+                    "translated": translated,
+                    "html": para.get("html", ""),
+                    "is_duplicate": para.get("is_duplicate", False),
                 }
 
         admonition_labels = {
-            'Note': '注意', 'NOTE': '注意', 'note': '注意',
-            'Tip': '提示', 'TIP': '提示', 'tip': '提示',
-            'Warning': '警告', 'WARNING': '警告', 'warning': '警告',
-            'Caution': '注意', 'CAUTION': '注意', 'caution': '注意',
-            'Important': '重要', 'IMPORTANT': '重要', 'important': '重要',
+            "Note": "注意",
+            "NOTE": "注意",
+            "note": "注意",
+            "Tip": "提示",
+            "TIP": "提示",
+            "tip": "提示",
+            "Warning": "警告",
+            "WARNING": "警告",
+            "warning": "警告",
+            "Caution": "注意",
+            "CAUTION": "注意",
+            "caution": "注意",
+            "Important": "重要",
+            "IMPORTANT": "重要",
+            "important": "重要",
         }
         for en, zh in admonition_labels.items():
             normalized = normalize_text(en)
             if normalized not in translation_map:
-                translation_map[normalized] = {
-                    'original': en, 'translated': zh,
-                    'html': en, 'is_duplicate': False
-                }
+                translation_map[normalized] = {"original": en, "translated": zh, "html": en, "is_duplicate": False}
 
         return translation_map
 
@@ -360,24 +368,24 @@ class EPUBGenerator:
                 t = str(child).strip()
                 if t:
                     parts.append(t)
-            elif hasattr(child, 'name') and not child.get('data-original'):
+            elif hasattr(child, "name") and not child.get("data-original"):
                 t = child.get_text(strip=True)
                 if t:
                     parts.append(t)
-        return ' '.join(parts)
+        return " ".join(parts)
 
     def _replace_non_link_text(self, tag, translation):
         """替换标签中非 <a> 标签的文本为翻译内容"""
-        
+
         # 移除所有非 <a> 标签的 NavigableString
         to_remove = []
         for child in tag.children:
             if isinstance(child, NavigableString):
                 to_remove.append(child)
-        
+
         for child in to_remove:
             child.extract()
-        
+
         # 在第一个子元素前插入翻译文本
         first = next(tag.children, None)
         if first:
@@ -396,141 +404,171 @@ class EPUBGenerator:
         """
         # 导航文件特殊处理：先处理块级标签，再处理 a 标签
         if is_nav:
-            soup = BeautifulSoup(content, 'lxml')
-            
+            soup = BeautifulSoup(content, "lxml")
+
             total_matched = 0
             total_checked = 0
             unmatched_samples = []
-            
+
             # 首先处理块级标签（这是关键修复！处理 <p>, <div>, 标题等）
-            block_tags = ['blockquote', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-                          'li', 'dt', 'dd', 'figcaption', 'td', 'th', 'caption', 'div']
-            
+            block_tags = [
+                "blockquote",
+                "p",
+                "h1",
+                "h2",
+                "h3",
+                "h4",
+                "h5",
+                "h6",
+                "li",
+                "dt",
+                "dd",
+                "figcaption",
+                "td",
+                "th",
+                "caption",
+                "div",
+            ]
+
             for tag_name in block_tags:
                 for tag in soup.find_all(tag_name):
                     # 如果标签已有 data-original 属性，说明已处理
-                    if tag.get('data-original'):
+                    if tag.get("data-original"):
                         continue
-                    
+
                     text = tag.get_text(strip=True)
                     normalized_text = normalize_text(text)
-                    
+
                     if not normalized_text or len(normalized_text) <= 1:
                         continue
-                    
+
                     total_checked += 1
                     para_data = translation_map.get(normalized_text)
-                    
+
                     if not para_data:
                         para_data = self._fuzzy_find(normalized_text, translation_map)
-                    
+
                     if not para_data:
                         if len(unmatched_samples) < 10:
                             unmatched_samples.append(text[:100])
                         continue
-                    
-                    translation = para_data['translated']
+
+                    translation = para_data["translated"]
                     total_matched += 1
-                    
-                    tag['data-original'] = text
-                    
+
+                    tag["data-original"] = text
+
                     # 清空标签并设置翻译
                     tag.clear()
-                    tag['data-original'] = text
-                    
-                    if mode == 'bilingual':
+                    tag["data-original"] = text
+
+                    if mode == "bilingual":
                         # 双语模式
                         tag.append(text)
-                        tag.append(soup.new_tag('br'))
-                        span = soup.new_tag('span')
-                        span['class'] = 'translated'
+                        tag.append(soup.new_tag("br"))
+                        span = soup.new_tag("span")
+                        span["class"] = "translated"
                         span.string = translation
                         tag.append(span)
                     else:
                         # 中文模式
                         tag.string = translation
-            
+
             # 然后专门处理剩余的 a 标签（避免重复翻译）
-            for a_tag in soup.find_all('a', href=True):
-                if a_tag.get('data-original'):
+            for a_tag in soup.find_all("a", href=True):
+                if a_tag.get("data-original"):
                     continue
-                
+
                 # 检查是否有已处理的祖先
-                has_processed_ancestor = any(
-                    p.get('data-original') for p in a_tag.parents
-                    if hasattr(p, 'get')
-                )
+                has_processed_ancestor = any(p.get("data-original") for p in a_tag.parents if hasattr(p, "get"))
                 if has_processed_ancestor:
                     continue
-                
+
                 text = a_tag.get_text(strip=True)
                 normalized_text = normalize_text(text)
-                
+
                 if not normalized_text or len(normalized_text) <= 1:
                     continue
-                
+
                 total_checked += 1
                 para_data = translation_map.get(normalized_text)
-                
+
                 if not para_data:
                     para_data = self._fuzzy_find(normalized_text, translation_map)
-                
+
                 if not para_data:
                     continue
-                
-                translation = para_data['translated']
+
+                translation = para_data["translated"]
                 total_matched += 1
-                
-                a_tag['data-original'] = text
-                href = a_tag['href']
+
+                a_tag["data-original"] = text
+                href = a_tag["href"]
                 a_tag.clear()
-                a_tag['href'] = href
-                if mode == 'bilingual':
+                a_tag["href"] = href
+                if mode == "bilingual":
                     a_tag.append(text)
-                    a_tag.append(soup.new_tag('br'))
-                    span = soup.new_tag('span')
-                    span['class'] = 'translated'
+                    a_tag.append(soup.new_tag("br"))
+                    span = soup.new_tag("span")
+                    span["class"] = "translated"
                     span.string = translation
                     a_tag.append(span)
                 else:
                     a_tag.string = translation
-            
+
             # 统计日志
             if unmatched_samples:
-                logger.info(f"[{mode}] [NAV] Total tags: {total_checked}, Matched: {total_matched}, "
-                      f"Unmatched: {total_checked - total_matched} "
-                      f"({(total_matched / total_checked * 100):.1f}%)")
+                logger.info(
+                    f"[{mode}] [NAV] Total tags: {total_checked}, Matched: {total_matched}, "
+                    f"Unmatched: {total_checked - total_matched} "
+                    f"({(total_matched / total_checked * 100):.1f}%)"
+                )
                 logger.info(f"[{mode}] [NAV] Unmatched samples: {unmatched_samples[:3]}")
-            
+
             return str(soup)
-        
+
         # 正常内容的处理逻辑
-        soup = BeautifulSoup(content, 'lxml')
+        soup = BeautifulSoup(content, "lxml")
 
         total_matched = 0
         total_checked = 0
         unmatched_samples = []
 
         # 块级标签（先处理，blockquote最优先避免子元素先被处理）
-        block_tags = ['blockquote', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'dt', 'dd',
-                      'figcaption', 'td', 'th', 'caption']
+        block_tags = [
+            "blockquote",
+            "p",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "li",
+            "dt",
+            "dd",
+            "figcaption",
+            "td",
+            "th",
+            "caption",
+        ]
 
         # 回退匹配列表
         fallback_list = []
         agg_sigs = {}
         for k, v in translation_map.items():
-            orig = v.get('original', '')
+            orig = v.get("original", "")
             if orig:
                 fallback_list.append((normalize_text(orig)[:80], v))
                 if len(orig) > 50:
-                    sig = ''.join(ch.lower() for ch in orig[:200] if ch.isalnum())
+                    sig = "".join(ch.lower() for ch in orig[:200] if ch.isalnum())
                     agg_sigs[sig] = v
         translation_list = fallback_list
 
         # 处理块级标签
         for tag_name in block_tags:
             for tag in soup.find_all(tag_name):
-                if tag.find(class_='translated'):
+                if tag.find(class_="translated"):
                     continue
 
                 text = tag.get_text(strip=True)
@@ -548,14 +586,14 @@ class EPUBGenerator:
                             para_data = entry
                             break
                     if not para_data and agg_sigs:
-                        sig = ''.join(ch.lower() for ch in text[:200] if ch.isalnum())
+                        sig = "".join(ch.lower() for ch in text[:200] if ch.isalnum())
                         para_data = agg_sigs.get(sig)
 
                 if not para_data:
                     para_data = self._fuzzy_find(normalized_text, translation_map)
 
                 if not para_data:
-                    if tag_name == 'blockquote':
+                    if tag_name == "blockquote":
                         ns_matched = False
                         for child in list(tag.children):
                             if isinstance(child, NavigableString):
@@ -571,41 +609,41 @@ class EPUBGenerator:
                                             child_data = entry
                                             break
                                     if not child_data and agg_sigs:
-                                        sig = ''.join(ch.lower() for ch in child_text[:200] if ch.isalnum())
+                                        sig = "".join(ch.lower() for ch in child_text[:200] if ch.isalnum())
                                         child_data = agg_sigs.get(sig)
                                 if child_data:
-                                    child.replace_with(child_data['translated'])
+                                    child.replace_with(child_data["translated"])
                                     total_matched += 1
                                     ns_matched = True
                         if ns_matched:
-                            tag['data-original'] = text
+                            tag["data-original"] = text
                             continue
                     if len(unmatched_samples) < 10:
                         unmatched_samples.append(text[:100])
                     continue
 
-                translation = para_data['translated']
+                translation = para_data["translated"]
                 total_matched += 1
 
-                tag['data-original'] = text
+                tag["data-original"] = text
 
-                if mode == 'bilingual':
+                if mode == "bilingual":
                     # 不保留子标签: get_text() 已包含全部文本,子标签重加会导致英文重复
                     tag.clear()
                     tag.append(text)
-                    tag.append(soup.new_tag('br'))
-                    span = soup.new_tag('span')
-                    span['class'] = 'translated'
+                    tag.append(soup.new_tag("br"))
+                    span = soup.new_tag("span")
+                    span["class"] = "translated"
                     span.string = translation
                     tag.append(span)
                 else:  # chinese mode - 完全替换为中文
                     tag.clear()
                     tag.string = translation
-        for tag in soup.find_all('div'):
-            if tag.find(class_='translated'):
+        for tag in soup.find_all("div"):
+            if tag.find(class_="translated"):
                 continue
 
-            if any(hasattr(c, 'get') and c.get('data-original') for c in tag.children):
+            if any(hasattr(c, "get") and c.get("data-original") for c in tag.children):
                 continue
 
             text = tag.get_text(strip=True)
@@ -623,7 +661,7 @@ class EPUBGenerator:
                         para_data = entry
                         break
                 if not para_data and agg_sigs:
-                    sig = ''.join(ch.lower() for ch in text[:200] if ch.isalnum())
+                    sig = "".join(ch.lower() for ch in text[:200] if ch.isalnum())
                     para_data = agg_sigs.get(sig)
 
             if not para_data:
@@ -631,18 +669,18 @@ class EPUBGenerator:
                     unmatched_samples.append(text[:100])
                 continue
 
-            translation = para_data['translated']
+            translation = para_data["translated"]
             total_matched += 1
 
-            tag['data-original'] = text
+            tag["data-original"] = text
 
-            if mode == 'bilingual':
+            if mode == "bilingual":
                 # 不保留子标签: get_text() 已包含全部文本,子标签重加会导致英文重复
                 tag.clear()
                 tag.append(text)
-                tag.append(soup.new_tag('br'))
-                span = soup.new_tag('span')
-                span['class'] = 'translated'
+                tag.append(soup.new_tag("br"))
+                span = soup.new_tag("span")
+                span["class"] = "translated"
                 span.string = translation
                 tag.append(span)
             else:  # chinese mode - 完全替换为中文，不保留原文子标签
@@ -650,19 +688,16 @@ class EPUBGenerator:
                 tag.string = translation
 
         # 处理剩余的 inline 标签（不在已处理块级标签内的独立inline标签）
-        inline_tags = ['a', 'sup', 'sub', 'em', 'i', 'b', 'strong', 'code', 'span']
+        inline_tags = ["a", "sup", "sub", "em", "i", "b", "strong", "code", "span"]
 
         for tag_name in inline_tags:
             for tag in soup.find_all(tag_name):
-                if tag.find(class_='translated'):
+                if tag.find(class_="translated"):
                     continue
 
                 # 如果父级标签链上有已处理过的（有data-original），跳过
                 # 修复：沿父链向上检查，避免嵌套标签被重复翻译
-                has_processed_ancestor = any(
-                    p.get('data-original') for p in tag.parents
-                    if hasattr(p, 'get')
-                )
+                has_processed_ancestor = any(p.get("data-original") for p in tag.parents if hasattr(p, "get"))
                 if has_processed_ancestor:
                     continue
 
@@ -682,29 +717,29 @@ class EPUBGenerator:
                         unmatched_samples.append(text[:100])
                     continue
 
-                translation = para_data['translated']
+                translation = para_data["translated"]
                 total_matched += 1
 
-                tag['data-original'] = text
+                tag["data-original"] = text
 
-                if tag.name == 'a' and tag.has_attr('href'):
-                    if mode == 'bilingual':
+                if tag.name == "a" and tag.has_attr("href"):
+                    if mode == "bilingual":
                         tag.clear()
                         tag.append(text)
-                        tag.append(soup.new_tag('br'))
-                        span = soup.new_tag('span')
-                        span['class'] = 'translated'
+                        tag.append(soup.new_tag("br"))
+                        span = soup.new_tag("span")
+                        span["class"] = "translated"
                         span.string = translation
                         tag.append(span)
                     else:
                         tag.clear()
                         tag.string = translation
-                elif mode == 'bilingual':
+                elif mode == "bilingual":
                     tag.clear()
                     tag.append(text)
-                    tag.append(soup.new_tag('br'))
-                    span = soup.new_tag('span')
-                    span['class'] = 'translated'
+                    tag.append(soup.new_tag("br"))
+                    span = soup.new_tag("span")
+                    span["class"] = "translated"
                     span.string = translation
                     tag.append(span)
                 else:
@@ -713,105 +748,109 @@ class EPUBGenerator:
 
         # 统计日志
         if unmatched_samples:
-            logger.info(f"[{mode}] Total tags: {total_checked}, Matched: {total_matched}, "
-                  f"Unmatched: {total_checked - total_matched} "
-                  f"({(total_matched / total_checked * 100):.1f}%)")
+            logger.info(
+                f"[{mode}] Total tags: {total_checked}, Matched: {total_matched}, "
+                f"Unmatched: {total_checked - total_matched} "
+                f"({(total_matched / total_checked * 100):.1f}%)"
+            )
             logger.info(f"[{mode}] Unmatched samples: {unmatched_samples[:3]}")
 
         return str(soup)
 
     def _fuzzy_find(self, normalized_text, translation_map):
         """模糊查找翻译映射中的条目
-        
+
         由于解析器从 <p> 标签提取文本（带编号无空格），
         而导航标签 <a>/NCX <text> 文本可能不同（无编号或有空格），
         需要多种策略尝试匹配。
-        
+
         Args:
             normalized_text: 已标准化的查找文本
             translation_map: 翻译映射 {标准化原文: {original, translated, ...}}
-            
+
         Returns:
             匹配到的条目数据，或 None
         """
         # Strategy 1: Exact match
         if normalized_text in translation_map:
             return translation_map[normalized_text]
-        
+
         # Strategy 2: No-space comparison (handles "Part 1.Mindset" vs "Part 1. Mindset")
-        no_space = normalized_text.replace(' ', '')
+        no_space = normalized_text.replace(" ", "")
         for key, data in translation_map.items():
-            if key.replace(' ', '') == no_space:
+            if key.replace(" ", "") == no_space:
                 return data
-        
+
         # Strategy 3: Strip leading prefixes from map keys and compare
         # (handles A标签 "Mindset:..." vs 映射键 "Part 1.Mindset:...")
-        prefix_pattern = r'^(?:Part\s+\d+\.?\s*|Appendix\s+[A-Z]\.?\s*|\d+(?:\.\d+)*\s*)'
+        prefix_pattern = r"^(?:Part\s+\d+\.?\s*|Appendix\s+[A-Z]\.?\s*|\d+(?:\.\d+)*\s*)"
         for key, data in translation_map.items():
-            key_stripped = re.sub(prefix_pattern, '', key, flags=re.I).strip()
+            key_stripped = re.sub(prefix_pattern, "", key, flags=re.I).strip()
             if key_stripped == normalized_text:
                 return data
             # Also try no-space after stripping
-            key_stripped_no_space = key_stripped.replace(' ', '')
+            key_stripped_no_space = key_stripped.replace(" ", "")
             if key_stripped_no_space == no_space:
                 return data
-        
+
         return None
 
     def _process_ncx_content(self, content, translation_map, mode):
         """处理 NCX 导航文件内容
-        
+
         NCX 文件包含 EPUB 阅读器使用的目录导航文本，
         需要将 <navLabel><text> 和 <docTitle><text> 中的文本翻译。
-        
+
         Args:
             content: NCX XML 内容
             translation_map: 翻译映射
             mode: 翻译模式 ('bilingual' 或 'chinese')
         """
-        soup = BeautifulSoup(content, 'lxml-xml')
-        
+        soup = BeautifulSoup(content, "lxml-xml")
+
         total_matched = 0
         total_checked = 0
         unmatched_samples = []
-        
+
         # 处理所有 <text> 标签（包括 navLabel 和 docTitle 中的）
-        for text_tag in soup.find_all('text'):
+        for text_tag in soup.find_all("text"):
             text = text_tag.get_text(strip=True)
             normalized_text = normalize_text(text)
-            
+
             if not normalized_text or len(normalized_text) <= 1:
                 continue
-            
+
             total_checked += 1
             para_data = translation_map.get(normalized_text)
-            
+
             if not para_data:
                 para_data = self._fuzzy_find(normalized_text, translation_map)
-            
+
             if not para_data:
                 if len(unmatched_samples) < 10:
                     unmatched_samples.append(text[:100])
                 continue
-            
-            translation = para_data['translated']
+
+            translation = para_data["translated"]
             total_matched += 1
-            
+
             # NCX 是导航元数据，直接替换为翻译文本
-            if mode == 'bilingual':
+            if mode == "bilingual":
                 # 双语模式：保留原文并追加译文
                 text_tag.string = f"{text} / {translation}"
             else:
                 # 中文模式：直接替换为译文
                 text_tag.string = translation
-        
+
         # 统计日志
         if unmatched_samples:
-            logger.info(f"[{mode}] [NCX] Total tags: {total_checked}, Matched: {total_matched}, "
-                  f"Unmatched: {total_checked - total_matched} "
-                  f"({(total_matched / total_checked * 100):.1f}%)")
+            logger.info(
+                f"[{mode}] [NCX] Total tags: {total_checked}, Matched: {total_matched}, "
+                f"Unmatched: {total_checked - total_matched} "
+                f"({(total_matched / total_checked * 100):.1f}%)"
+            )
             logger.info(f"[{mode}] [NCX] Unmatched samples: {unmatched_samples[:3]}")
-        
+
         return str(soup)
 
     def generate_bilingual_epub(self, translated_paragraphs, output_path):
@@ -819,7 +858,7 @@ class EPUBGenerator:
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 # 提取原始 EPUB
-                with zipfile.ZipFile(self.original_book.epub_path, 'r') as zip_ref:
+                with zipfile.ZipFile(self.original_book.epub_path, "r") as zip_ref:
                     zip_ref.extractall(temp_dir)
 
                 # 创建翻译映射
@@ -829,37 +868,39 @@ class EPUBGenerator:
                 # 处理所有 HTML/XHTML 文件（包括导航文件和.htm文件）
                 for root, dirs, files in os.walk(temp_dir):
                     for file in files:
-                        if file.endswith(('.html', '.xhtml', '.htm')):
+                        if file.endswith((".html", ".xhtml", ".htm")):
                             file_path = os.path.join(root, file)
                             try:
-                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                     content = f.read()
-                                
+
                                 # 判断是否为导航文件（nav/toc文件使用简化处理）
-                                is_nav = 'nav' in file.lower() or 'toc' in file.lower()
-                                processed_content = self._process_html_content(content, translation_map, 'bilingual', is_nav)
-                                
-                                with open(file_path, 'w', encoding='utf-8') as f:
+                                is_nav = "nav" in file.lower() or "toc" in file.lower()
+                                processed_content = self._process_html_content(
+                                    content, translation_map, "bilingual", is_nav
+                                )
+
+                                with open(file_path, "w", encoding="utf-8") as f:
                                     f.write(processed_content)
                             except Exception as e:
                                 logger.warning(f"处理文件 {file} 时出错: {e}")
-                        elif file.endswith('.ncx'):
+                        elif file.endswith(".ncx"):
                             file_path = os.path.join(root, file)
                             try:
-                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                     content = f.read()
-                                processed_content = self._process_ncx_content(content, translation_map, 'bilingual')
-                                with open(file_path, 'w', encoding='utf-8') as f:
+                                processed_content = self._process_ncx_content(content, translation_map, "bilingual")
+                                with open(file_path, "w", encoding="utf-8") as f:
                                     f.write(processed_content)
                             except Exception as e:
                                 logger.warning(f"处理NCX文件 {file} 时出错: {e}")
 
                 # 添加 CSS
-                css_dir = os.path.join(temp_dir, 'styles')
+                css_dir = os.path.join(temp_dir, "styles")
                 os.makedirs(css_dir, exist_ok=True)
-                css_path = os.path.join(css_dir, 'translation.css')
+                css_path = os.path.join(css_dir, "translation.css")
 
-                css_config = self.config.get('css', {})
+                css_config = self.config.get("css", {})
 
                 bilingual_css = f"""/* 中英对照样式 - 从配置文件加载 */
 p {{
@@ -892,61 +933,61 @@ div {{
     margin-top: 0.3em !important;
 }}
 """
-                with open(css_path, 'w', encoding='utf-8') as f:
+                with open(css_path, "w", encoding="utf-8") as f:
                     f.write(bilingual_css)
 
                 # 更新 OPF 文件（递归搜索，部分 EPUB 的 OPF 在子目录如 OEBPS/）
                 opf_files = []
                 for opf_root, _, opf_fs in os.walk(temp_dir):
                     for opf_f in opf_fs:
-                        if opf_f.endswith('.opf'):
+                        if opf_f.endswith(".opf"):
                             opf_files.append(os.path.join(opf_root, opf_f))
                 if opf_files:
                     opf_path = opf_files[0]
                     try:
-                        with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        with open(opf_path, "r", encoding="utf-8", errors="ignore") as f:
                             content = f.read()
-                        
-                        soup = BeautifulSoup(content, 'lxml-xml')
-                        title_elem = soup.find('dc:title')
+
+                        soup = BeautifulSoup(content, "lxml-xml")
+                        title_elem = soup.find("dc:title")
                         if title_elem:
                             title_elem.string = f"双语-{title_elem.string}"
-                        
+
                         # 添加 CSS 引用
                         for root, dirs, files in os.walk(temp_dir):
                             for file in files:
-                                if file.endswith(('.html', '.xhtml', '.htm')):
+                                if file.endswith((".html", ".xhtml", ".htm")):
                                     file_path = os.path.join(root, file)
                                     try:
-                                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                             html_content = f.read()
-                                        
-                                        html_soup = BeautifulSoup(html_content, 'lxml')
-                                        head = html_soup.find('head')
+
+                                        html_soup = BeautifulSoup(html_content, "lxml")
+                                        head = html_soup.find("head")
                                         if head:
                                             # 计算 CSS 相对于当前 HTML 文件的路径
                                             html_dir = os.path.dirname(file_path)
-                                            css_rel_path = os.path.relpath(css_path, html_dir).replace('\\', '/')
-                                            css_link = html_soup.find('link', href=css_rel_path)
+                                            css_rel_path = os.path.relpath(css_path, html_dir).replace("\\", "/")
+                                            css_link = html_soup.find("link", href=css_rel_path)
                                             if not css_link:
-                                                new_link = html_soup.new_tag('link')
-                                                new_link['rel'] = 'stylesheet'
-                                                new_link['type'] = 'text/css'
-                                                new_link['href'] = css_rel_path
+                                                new_link = html_soup.new_tag("link")
+                                                new_link["rel"] = "stylesheet"
+                                                new_link["type"] = "text/css"
+                                                new_link["href"] = css_rel_path
                                                 head.append(new_link)
 
-                                        with open(file_path, 'w', encoding='utf-8') as f:
+                                        with open(file_path, "w", encoding="utf-8") as f:
                                             f.write(str(html_soup))
                                     except Exception as e:
                                         logger.warning(f"添加CSS到 {file} 时出错: {e}")
 
-                        with open(opf_path, 'w', encoding='utf-8') as f:
+                        with open(opf_path, "w", encoding="utf-8") as f:
                             f.write(str(soup))
                     except Exception as e:
                         logger.warning(f"更新 OPF 时出错: {e}")
 
                 # 重新打包
-                with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
+                with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zip_ref:
                     for root, dirs, files in os.walk(temp_dir):
                         for file in files:
                             file_path = os.path.join(root, file)
@@ -959,6 +1000,7 @@ div {{
         except Exception as e:
             logger.error(f"生成中英对照 EPUB 时出错: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -967,7 +1009,7 @@ div {{
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 # 提取原始 EPUB
-                with zipfile.ZipFile(self.original_book.epub_path, 'r') as zip_ref:
+                with zipfile.ZipFile(self.original_book.epub_path, "r") as zip_ref:
                     zip_ref.extractall(temp_dir)
 
                 # 创建翻译映射
@@ -976,39 +1018,41 @@ div {{
                 # 处理所有 HTML/XHTML 文件（包括导航文件和.htm文件）
                 for root, dirs, files in os.walk(temp_dir):
                     for file in files:
-                        if file.endswith(('.html', '.xhtml', '.htm')):
+                        if file.endswith((".html", ".xhtml", ".htm")):
                             file_path = os.path.join(root, file)
                             try:
-                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                     content = f.read()
-                                
+
                                 # 判断是否为导航文件（nav/toc文件使用简化处理）
-                                is_nav = 'nav' in file.lower() or 'toc' in file.lower()
-                                processed_content = self._process_html_content(content, translation_map, 'chinese', is_nav)
-                                
-                                with open(file_path, 'w', encoding='utf-8') as f:
+                                is_nav = "nav" in file.lower() or "toc" in file.lower()
+                                processed_content = self._process_html_content(
+                                    content, translation_map, "chinese", is_nav
+                                )
+
+                                with open(file_path, "w", encoding="utf-8") as f:
                                     f.write(processed_content)
                             except Exception as e:
                                 logger.warning(f"处理文件 {file} 时出错: {e}")
-                        elif file.endswith('.ncx'):
+                        elif file.endswith(".ncx"):
                             file_path = os.path.join(root, file)
                             try:
-                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                     content = f.read()
-                                processed_content = self._process_ncx_content(content, translation_map, 'chinese')
-                                with open(file_path, 'w', encoding='utf-8') as f:
+                                processed_content = self._process_ncx_content(content, translation_map, "chinese")
+                                with open(file_path, "w", encoding="utf-8") as f:
                                     f.write(processed_content)
                             except Exception as e:
                                 logger.warning(f"处理NCX文件 {file} 时出错: {e}")
 
                 # 添加 CSS
-                css_dir = os.path.join(temp_dir, 'styles')
+                css_dir = os.path.join(temp_dir, "styles")
                 os.makedirs(css_dir, exist_ok=True)
-                css_path = os.path.join(css_dir, 'chinese_style.css')
-                
+                css_path = os.path.join(css_dir, "chinese_style.css")
+
                 # 从配置读取CSS样式
-                css_config = self.config.get('css', {})
-                
+                css_config = self.config.get("css", {})
+
                 chinese_css = f"""/* 纯中文段落样式 - 优化阅读体验 */
 /* 从配置文件 pdf_config.json 加载 */
 
@@ -1048,61 +1092,61 @@ blockquote {{
     line-height: {css_config.get('paragraph_line_height', '1.8')} !important;
 }}
 """
-                with open(css_path, 'w', encoding='utf-8') as f:
+                with open(css_path, "w", encoding="utf-8") as f:
                     f.write(chinese_css)
 
                 # 更新 OPF 文件（递归搜索，部分 EPUB 的 OPF 在子目录如 OEBPS/）
                 opf_files = []
                 for opf_root, _, opf_fs in os.walk(temp_dir):
                     for opf_f in opf_fs:
-                        if opf_f.endswith('.opf'):
+                        if opf_f.endswith(".opf"):
                             opf_files.append(os.path.join(opf_root, opf_f))
                 if opf_files:
                     opf_path = opf_files[0]
                     try:
-                        with open(opf_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        with open(opf_path, "r", encoding="utf-8", errors="ignore") as f:
                             content = f.read()
-                        
-                        soup = BeautifulSoup(content, 'lxml-xml')
-                        title_elem = soup.find('dc:title')
+
+                        soup = BeautifulSoup(content, "lxml-xml")
+                        title_elem = soup.find("dc:title")
                         if title_elem:
                             title_elem.string = f"中文-{title_elem.string}"
-                        
+
                         # 添加 CSS 引用
                         for root, dirs, files in os.walk(temp_dir):
                             for file in files:
-                                if file.endswith(('.html', '.xhtml', '.htm')):
+                                if file.endswith((".html", ".xhtml", ".htm")):
                                     file_path = os.path.join(root, file)
                                     try:
-                                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                             html_content = f.read()
-                                        
-                                        html_soup = BeautifulSoup(html_content, 'lxml')
-                                        head = html_soup.find('head')
+
+                                        html_soup = BeautifulSoup(html_content, "lxml")
+                                        head = html_soup.find("head")
                                         if head:
                                             # 计算 CSS 相对于当前 HTML 文件的路径
                                             html_dir = os.path.dirname(file_path)
-                                            css_rel_path = os.path.relpath(css_path, html_dir).replace('\\', '/')
-                                            css_link = html_soup.find('link', href=css_rel_path)
+                                            css_rel_path = os.path.relpath(css_path, html_dir).replace("\\", "/")
+                                            css_link = html_soup.find("link", href=css_rel_path)
                                             if not css_link:
-                                                new_link = html_soup.new_tag('link')
-                                                new_link['rel'] = 'stylesheet'
-                                                new_link['type'] = 'text/css'
-                                                new_link['href'] = css_rel_path
+                                                new_link = html_soup.new_tag("link")
+                                                new_link["rel"] = "stylesheet"
+                                                new_link["type"] = "text/css"
+                                                new_link["href"] = css_rel_path
                                                 head.append(new_link)
-                                        
-                                        with open(file_path, 'w', encoding='utf-8') as f:
+
+                                        with open(file_path, "w", encoding="utf-8") as f:
                                             f.write(str(html_soup))
                                     except Exception as e:
                                         logger.warning(f"添加CSS到 {file} 时出错: {e}")
-                        
-                        with open(opf_path, 'w', encoding='utf-8') as f:
+
+                        with open(opf_path, "w", encoding="utf-8") as f:
                             f.write(str(soup))
                     except Exception as e:
                         logger.warning(f"更新 OPF 时出错: {e}")
 
                 # 重新打包
-                with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
+                with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zip_ref:
                     for root, dirs, files in os.walk(temp_dir):
                         for file in files:
                             file_path = os.path.join(root, file)
@@ -1115,5 +1159,6 @@ blockquote {{
         except Exception as e:
             logger.error(f"生成纯中文 EPUB 时出错: {e}")
             import traceback
+
             traceback.print_exc()
             return False

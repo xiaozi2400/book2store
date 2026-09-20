@@ -1,24 +1,29 @@
 """
 Pipeline/Stage 架构单元测试
 """
-import pytest
-from unittest.mock import patch, MagicMock, Mock
-from pathlib import Path
 
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
+
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _root)
 # 确保 ebook_translator 在 sys.path 中（translation 模块依赖 translator 子模块）
-_ebook_translator_path = os.path.join(_root, 'ebook_translator')
+_ebook_translator_path = os.path.join(_root, "ebook_translator")
 if _ebook_translator_path not in sys.path:
     sys.path.insert(0, _ebook_translator_path)
 
 from automation.pipeline import (
-    PipelineContext, Pipeline, Stage,
-    TranslationStage, SummaryStage, ImageGenerationStage,
-    CopywritingStage, PublishStage,
-    build_pipeline, run_pipeline
+    CopywritingStage,
+    ImageGenerationStage,
+    Pipeline,
+    PipelineContext,
+    PublishStage,
+    Stage,
+    SummaryStage,
+    TranslationStage,
+    build_pipeline,
+    run_pipeline,
 )
 
 
@@ -27,11 +32,7 @@ class TestPipelineContext:
 
     def test_create_context(self):
         ctx = PipelineContext(
-            book_id="test-123",
-            epub_path="test.epub",
-            filename="test.epub",
-            title="Test Book",
-            author="Test Author"
+            book_id="test-123", epub_path="test.epub", filename="test.epub", title="Test Book", author="Test Author"
         )
         assert ctx.book_id == "test-123"
         assert ctx.epub_path == "test.epub"
@@ -62,12 +63,7 @@ class TestBuildPipeline:
         assert len(pipeline.stages) == 5
 
     def test_build_pipeline_with_skip_flags(self):
-        pipeline = build_pipeline(
-            skip_translate=True,
-            skip_summarize=True,
-            skip_images=True,
-            skip_publish=True
-        )
+        pipeline = build_pipeline(skip_translate=True, skip_summarize=True, skip_images=True, skip_publish=True)
         assert isinstance(pipeline, Pipeline)
         # 所有阶段都应该存在，但运行时根据 ctx 决定是否跳过
 
@@ -80,12 +76,12 @@ class TestPipelineRun:
         ctx = PipelineContext(
             book_id="test-123",
             epub_path="test.epub",
-            skip_publish=True  # 跳过发布避免真实调用
+            skip_publish=True,  # 跳过发布避免真实调用
         )
 
         # Mock 所有阶段
         with patch.multiple(
-            'automation.pipeline',
+            "automation.pipeline",
             TranslationStage=MagicMock(),
             SummaryStage=MagicMock(),
             ImageGenerationStage=MagicMock(),
@@ -99,9 +95,11 @@ class TestPipelineRun:
             # 创建 pipeline（手动添加 mock 阶段）
             class MockStage(Stage):
                 name = "mock"
+
                 def __init__(self):
                     super().__init__()
                     self.executed = False
+
                 def execute(self, ctx):
                     self.executed = True
 
@@ -173,7 +171,7 @@ class TestStageExecution:
         mock_output.chinese_pdf = "/path/to/chinese.pdf"
         mock_output.english_pdf = "/path/to/english.pdf"
 
-        with patch('automation.pipeline.DatabaseManager') as MockDB:
+        with patch("automation.pipeline.DatabaseManager") as MockDB:
             mock_db = MockDB.return_value
             mock_db.get_book_output.return_value = mock_output
             mock_db.update_book_status.return_value = None
@@ -181,6 +179,7 @@ class TestStageExecution:
 
             # Patch where translate_book is imported (inside TranslationStage.execute)
             import automation.translation as translation_module
+
             original = translation_module.translate_book
             translation_module.translate_book = MagicMock(return_value=True)
 
@@ -203,6 +202,7 @@ class TestPipelineErrorHandling:
 
         class FailingStage(Stage):
             name = "failing"
+
             def execute(self, ctx):
                 raise RuntimeError("Test error")
 
@@ -218,20 +218,17 @@ class TestRunPipelineFunction:
 
     def test_run_pipeline_creates_correct_context(self):
         """测试 run_pipeline 创建正确的上下文"""
-        with patch('automation.pipeline.Pipeline') as MockPipeline:
+        with patch("automation.pipeline.Pipeline") as MockPipeline:
             mock_pipeline = MockPipeline.return_value
-            mock_pipeline.run.return_value = PipelineContext(
-                book_id="test-123",
-                epub_path="test.epub"
-            )
+            mock_pipeline.run.return_value = PipelineContext(book_id="test-123", epub_path="test.epub")
 
-            ctx = run_pipeline(
+            _ctx = run_pipeline(
                 book_id="test-123",
                 epub_path="test.epub",
                 filename="test.epub",
                 title="Test",
                 author="Author",
-                skip_publish=True
+                skip_publish=True,
             )
 
             MockPipeline.assert_called_once()

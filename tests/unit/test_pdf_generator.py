@@ -1,22 +1,21 @@
 """SummaryPDFGenerator 测试"""
-import pytest
-from unittest.mock import patch, MagicMock, Mock
+
 from pathlib import Path
-import os
-import tempfile
+from unittest.mock import patch
+
+import pytest
 
 from automation.summarizer.pdf_generator import SummaryPDFGenerator
-from automation.exceptions import PDFConvertError
-
 
 # =============================================================================
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def mock_config():
     """配置 mock"""
-    with patch('automation.summarizer.pdf_generator.config') as mock:
+    with patch("automation.summarizer.pdf_generator.config") as mock:
         mock.output_dir = Path("/tmp/output")
         mock.get.side_effect = lambda k, d=None: {
             "paths.output_dir": "/tmp/output",
@@ -28,7 +27,7 @@ def mock_config():
 @pytest.fixture
 def mock_logger():
     """logger mock"""
-    with patch('automation.summarizer.pdf_generator.logger') as mock:
+    with patch("automation.summarizer.pdf_generator.logger") as mock:
         yield mock
 
 
@@ -39,13 +38,14 @@ def sample_content():
         "title": "测试书籍",
         "author": "测试作者",
         "content": "## 第一章\n\n这是第一章的内容。\n\n### 第一节\n\n第一节的详细内容。\n\n## 第二章\n\n第二章内容。",
-        "book_type": "技术"
+        "book_type": "技术",
     }
 
 
 # =============================================================================
 # 测试 create 方法（主入口）
 # =============================================================================
+
 
 class TestCreateMethod:
     """SummaryPDFGenerator.create 方法的测试"""
@@ -54,7 +54,7 @@ class TestCreateMethod:
         """WeasyPrint 成功时生成 PDF"""
         output_path = tmp_path / "output.pdf"
 
-        with patch.object(SummaryPDFGenerator, '_create_pdf_weasyprint') as mock_weasy:
+        with patch.object(SummaryPDFGenerator, "_create_pdf_weasyprint") as mock_weasy:
             generator = SummaryPDFGenerator()
             generator.create(sample_content, str(output_path))
 
@@ -65,8 +65,10 @@ class TestCreateMethod:
         """WeasyPrint 失败时回退到 Playwright"""
         output_path = tmp_path / "output.pdf"
 
-        with patch.object(SummaryPDFGenerator, '_create_pdf_weasyprint') as mock_weasy, \
-             patch.object(SummaryPDFGenerator, '_create_pdf_playwright') as mock_pw:
+        with (
+            patch.object(SummaryPDFGenerator, "_create_pdf_weasyprint") as mock_weasy,
+            patch.object(SummaryPDFGenerator, "_create_pdf_playwright") as mock_pw,
+        ):
             mock_weasy.side_effect = Exception("WeasyPrint error")
             mock_pw.side_effect = None
 
@@ -77,13 +79,17 @@ class TestCreateMethod:
             mock_pw.assert_called_once()
             mock_logger.warning.assert_called()
 
-    def test_create_weasyprint_and_playwright_fails_then_reportlab(self, mock_config, mock_logger, sample_content, tmp_path):
+    def test_create_weasyprint_and_playwright_fails_then_reportlab(
+        self, mock_config, mock_logger, sample_content, tmp_path
+    ):
         """WeasyPrint 和 Playwright 都失败时回退到 ReportLab"""
         output_path = tmp_path / "output.pdf"
 
-        with patch.object(SummaryPDFGenerator, '_create_pdf_weasyprint') as mock_weasy, \
-             patch.object(SummaryPDFGenerator, '_create_pdf_playwright') as mock_pw, \
-             patch.object(SummaryPDFGenerator, '_create_pdf_reportlab') as mock_rl:
+        with (
+            patch.object(SummaryPDFGenerator, "_create_pdf_weasyprint") as mock_weasy,
+            patch.object(SummaryPDFGenerator, "_create_pdf_playwright") as mock_pw,
+            patch.object(SummaryPDFGenerator, "_create_pdf_reportlab") as mock_rl,
+        ):
             mock_weasy.side_effect = Exception("WeasyPrint error")
             mock_pw.side_effect = Exception("Playwright error")
             mock_rl.side_effect = None
@@ -103,19 +109,20 @@ class TestCreateMethod:
         cover_path = tmp_path / "cover.jpg"
         cover_path.write_bytes(b"fake image data")
 
-        with patch.object(SummaryPDFGenerator, '_create_pdf_weasyprint') as mock_weasy:
+        with patch.object(SummaryPDFGenerator, "_create_pdf_weasyprint") as mock_weasy:
             generator = SummaryPDFGenerator()
             generator.create(sample_content, str(output_path), str(cover_path))
 
             mock_weasy.assert_called_once()
             # 验证 cover_path 被传递
             call_args = mock_weasy.call_args
-            assert call_args[0][2] == str(cover_path) or call_args[1].get('cover_path') == str(cover_path)
+            assert call_args[0][2] == str(cover_path) or call_args[1].get("cover_path") == str(cover_path)
 
 
 # =============================================================================
 # 测试 _build_cover_html
 # =============================================================================
+
 
 class TestBuildCoverHtml:
     """_build_cover_html 方法的测试"""
@@ -159,8 +166,7 @@ class TestBuildCoverHtml:
         cover_file = tmp_path / "cover.jpg"
         cover_file.write_bytes(b"fake data")
         # patch os.path.exists 返回 True 让代码进入 try 块，然后 open 抛出异常
-        with patch('os.path.exists', return_value=True), \
-             patch('builtins.open', side_effect=IOError("Read error")):
+        with patch("os.path.exists", return_value=True), patch("builtins.open", side_effect=IOError("Read error")):
             generator = SummaryPDFGenerator()
             result = generator._build_cover_html(str(cover_file))
 
@@ -171,6 +177,7 @@ class TestBuildCoverHtml:
 # =============================================================================
 # 测试 _escape_html
 # =============================================================================
+
 
 class TestEscapeHtml:
     """_escape_html 方法的测试"""
@@ -197,7 +204,7 @@ class TestEscapeHtml:
         """转义双引号"""
         generator = SummaryPDFGenerator()
         result = generator._escape_html('say "hello"')
-        assert result == 'say &quot;hello&quot;'
+        assert result == "say &quot;hello&quot;"
 
     def test_escapes_single_quote(self):
         """转义单引号"""
@@ -208,7 +215,7 @@ class TestEscapeHtml:
     def test_escapes_all_special_chars(self):
         """转义所有特殊字符"""
         generator = SummaryPDFGenerator()
-        result = generator._escape_html('<tag attr="value">\'test\' & more</tag>')
+        result = generator._escape_html("<tag attr=\"value\">'test' & more</tag>")
         assert "&lt;" in result
         assert "&gt;" in result
         assert "&quot;" in result
@@ -219,6 +226,7 @@ class TestEscapeHtml:
 # =============================================================================
 # 测试 _markdown_to_html
 # =============================================================================
+
 
 class TestMarkdownToHtml:
     """_markdown_to_html 方法的测试"""
@@ -323,6 +331,7 @@ class TestMarkdownToHtml:
 # 测试 _parse_markdown_lines
 # =============================================================================
 
+
 class TestParseMarkdownLines:
     """_parse_markdown_lines 方法的测试"""
 
@@ -372,6 +381,7 @@ class TestParseMarkdownLines:
 # 测试 _extract_toc_from_markdown
 # =============================================================================
 
+
 class TestExtractTocFromMarkdown:
     """_extract_toc_from_markdown 方法的测试"""
 
@@ -379,19 +389,19 @@ class TestExtractTocFromMarkdown:
         """提取一级标题"""
         generator = SummaryPDFGenerator()
         result = generator._extract_toc_from_markdown("# 主标题")
-        assert ('h1', '主标题') in result
+        assert ("h1", "主标题") in result
 
     def test_extracts_h2(self):
         """提取二级标题"""
         generator = SummaryPDFGenerator()
         result = generator._extract_toc_from_markdown("## 第二章")
-        assert ('h2', '第二章') in result
+        assert ("h2", "第二章") in result
 
     def test_extracts_h3(self):
         """提取三级标题"""
         generator = SummaryPDFGenerator()
         result = generator._extract_toc_from_markdown("### 3.1 小节")
-        assert ('h3', '3.1 小节') in result
+        assert ("h3", "3.1 小节") in result
 
     def test_extracts_multiple_toc_items(self):
         """提取多个 TOC 项"""
@@ -399,8 +409,8 @@ class TestExtractTocFromMarkdown:
         md = "# 主标题\n## 章节一\n### 小节一\n## 章节二"
         result = generator._extract_toc_from_markdown(md)
         assert len(result) == 4
-        assert ('h1', '主标题') in result
-        assert ('h2', '章节一') in result
+        assert ("h1", "主标题") in result
+        assert ("h2", "章节一") in result
 
     def test_ignores_non_heading_lines(self):
         """忽略非标题行"""
@@ -413,45 +423,47 @@ class TestExtractTocFromMarkdown:
 # 测试 _build_toc_ncx
 # =============================================================================
 
+
 class TestBuildTocNcx:
     """_build_toc_ncx 方法的测试"""
 
     def test_builds_ncx_with_title(self):
         """构建包含标题的 NCX"""
         generator = SummaryPDFGenerator()
-        toc_items = [('h1', '主标题'), ('h2', '章节一')]
+        toc_items = [("h1", "主标题"), ("h2", "章节一")]
         result = generator._build_toc_ncx("书籍标题", toc_items)
 
-        assert '<?xml' in result
-        assert '<ncx' in result
-        assert '书籍标题' in result
-        assert '主标题' in result
-        assert '章节一' in result
+        assert "<?xml" in result
+        assert "<ncx" in result
+        assert "书籍标题" in result
+        assert "主标题" in result
+        assert "章节一" in result
 
     def test_ncx_escapes_html_special_chars(self):
         """NCX 转义 HTML 特殊字符"""
         generator = SummaryPDFGenerator()
-        toc_items = [('h1', '标题 <特殊> & "字符"')]
+        toc_items = [("h1", '标题 <特殊> & "字符"')]
         result = generator._build_toc_ncx("标题", toc_items)
         # 验证 HTML 特殊字符被正确转义
-        assert '&lt;' in result, "小于号应该被转义"
-        assert '&gt;' in result, "大于号应该被转义"
-        assert '&amp;' in result, "&符号应该被转义"
-        assert '&quot;' in result, "双引号应该被转义"
+        assert "&lt;" in result, "小于号应该被转义"
+        assert "&gt;" in result, "大于号应该被转义"
+        assert "&amp;" in result, "&符号应该被转义"
+        assert "&quot;" in result, "双引号应该被转义"
 
     def test_ncx_limits_to_20_items(self):
         """NCX 限制最多 20 个项目"""
         generator = SummaryPDFGenerator()
-        toc_items = [('h1', f'标题{i}') for i in range(30)]
+        toc_items = [("h1", f"标题{i}") for i in range(30)]
         result = generator._build_toc_ncx("书籍", toc_items)
 
         # 计算 navPoint- 开头的数量（每个 navPoint 有一个唯一的 id）
-        assert result.count('navPoint-') == 20
+        assert result.count("navPoint-") == 20
 
 
 # =============================================================================
 # 测试 _build_weasyprint_html
 # =============================================================================
+
 
 class TestBuildWeasyprintHtml:
     """_build_weasyprint_html 方法的测试"""
@@ -462,7 +474,7 @@ class TestBuildWeasyprintHtml:
         result = generator._build_weasyprint_html("测试标题", None, "<p>内容</p>", None)
 
         assert "<!DOCTYPE html>" in result
-        assert "<html lang=\"zh-CN\">" in result
+        assert '<html lang="zh-CN">' in result
         assert "<title>测试标题</title>" in result
         assert "<p>内容</p>" in result
 
@@ -499,6 +511,7 @@ class TestBuildWeasyprintHtml:
 # 测试 _build_playwright_html
 # =============================================================================
 
+
 class TestBuildPlaywrightHtml:
     """_build_playwright_html 方法的测试"""
 
@@ -508,7 +521,7 @@ class TestBuildPlaywrightHtml:
         result = generator._build_playwright_html("测试标题", None, "<p>内容</p>", None)
 
         assert "<!DOCTYPE html>" in result
-        assert "<html lang=\"zh-CN\">" in result
+        assert '<html lang="zh-CN">' in result
         assert "<title>测试标题</title>" in result
 
     def test_playwright_html_extracts_subtitle_from_body(self):
@@ -534,18 +547,20 @@ class TestBuildPlaywrightHtml:
 # 测试 _create_pdf_reportlab
 # =============================================================================
 
+
 class TestCreatePdfReportlab:
     """_create_pdf_reportlab 方法的测试"""
 
     def test_reportlab_method_exists(self):
         """验证 _create_pdf_reportlab 方法存在"""
         generator = SummaryPDFGenerator()
-        assert hasattr(generator, '_create_pdf_reportlab')
+        assert hasattr(generator, "_create_pdf_reportlab")
 
 
 # =============================================================================
 # 测试 _create_mini_epub
 # =============================================================================
+
 
 class TestCreateMiniEpub:
     """_create_mini_epub 方法的测试"""
@@ -560,11 +575,12 @@ class TestCreateMiniEpub:
         assert output_path.exists()
         # EPUB 是 ZIP 文件，可以被 zipfile 打开
         import zipfile
-        with zipfile.ZipFile(str(output_path), 'r') as epub:
+
+        with zipfile.ZipFile(str(output_path), "r") as epub:
             names = epub.namelist()
-            assert 'mimetype' in names
-            assert 'META-INF/container.xml' in names
-            assert 'OEBPS/package.opf' in names
+            assert "mimetype" in names
+            assert "META-INF/container.xml" in names
+            assert "OEBPS/package.opf" in names
 
     def test_epub_contains_content_xhtml(self, sample_content, tmp_path):
         """EPUB 包含内容文件"""
@@ -574,10 +590,11 @@ class TestCreateMiniEpub:
         generator._create_mini_epub(sample_content, str(output_path))
 
         import zipfile
-        with zipfile.ZipFile(str(output_path), 'r') as epub:
-            content = epub.read('OEBPS/Text/content.xhtml').decode('utf-8')
-            assert '测试书籍' in content
-            assert '测试作者' in content
+
+        with zipfile.ZipFile(str(output_path), "r") as epub:
+            content = epub.read("OEBPS/Text/content.xhtml").decode("utf-8")
+            assert "测试书籍" in content
+            assert "测试作者" in content
 
     def test_epub_contains_toc(self, sample_content, tmp_path):
         """EPUB 包含目录"""
@@ -587,8 +604,9 @@ class TestCreateMiniEpub:
         generator._create_mini_epub(sample_content, str(output_path))
 
         import zipfile
-        with zipfile.ZipFile(str(output_path), 'r') as epub:
-            assert 'OEBPS/toc.ncx' in epub.namelist()
+
+        with zipfile.ZipFile(str(output_path), "r") as epub:
+            assert "OEBPS/toc.ncx" in epub.namelist()
 
     def test_epub_contains_styles(self, sample_content, tmp_path):
         """EPUB 包含样式文件"""
@@ -598,24 +616,22 @@ class TestCreateMiniEpub:
         generator._create_mini_epub(sample_content, str(output_path))
 
         import zipfile
-        with zipfile.ZipFile(str(output_path), 'r') as epub:
-            assert 'OEBPS/Styles/style.css' in epub.namelist()
+
+        with zipfile.ZipFile(str(output_path), "r") as epub:
+            assert "OEBPS/Styles/style.css" in epub.namelist()
 
     def test_handles_html_body_content(self, tmp_path):
         """处理 html_body 内容"""
         output_path = tmp_path / "output.epub"
-        content = {
-            "title": "HTML 内容书籍",
-            "author": "作者",
-            "html_body": "<p>自定义 HTML 内容</p>"
-        }
+        content = {"title": "HTML 内容书籍", "author": "作者", "html_body": "<p>自定义 HTML 内容</p>"}
 
         generator = SummaryPDFGenerator()
         generator._create_mini_epub(content, str(output_path))
 
         import zipfile
-        with zipfile.ZipFile(str(output_path), 'r') as epub:
-            xhtml = epub.read('OEBPS/Text/content.xhtml').decode('utf-8')
+
+        with zipfile.ZipFile(str(output_path), "r") as epub:
+            xhtml = epub.read("OEBPS/Text/content.xhtml").decode("utf-8")
             assert "自定义 HTML 内容" in xhtml
 
 
@@ -623,25 +639,27 @@ class TestCreateMiniEpub:
 # 测试 _create_pdf_fallback
 # =============================================================================
 
+
 class TestCreatePdfFallback:
     """_create_pdf_fallback 方法的测试"""
 
     def test_fallback_method_exists(self):
         """验证 _create_pdf_fallback 方法存在"""
         generator = SummaryPDFGenerator()
-        assert hasattr(generator, '_create_pdf_fallback')
+        assert hasattr(generator, "_create_pdf_fallback")
 
     def test_fallback_calls_add_markdown_to_story(self, mock_logger, tmp_path):
         """验证 _create_pdf_fallback 调用 _add_markdown_to_story"""
         # 注意：由于 _create_pdf_fallback 内部有 getSampleStyleSheet 缺失导入的 bug，
         # 这里只验证方法存在，实际功能需要修复生产代码后测试
         generator = SummaryPDFGenerator()
-        assert hasattr(generator, '_add_markdown_to_story')
+        assert hasattr(generator, "_add_markdown_to_story")
 
 
 # =============================================================================
 # 测试 _create_pdf_weasyprint
 # =============================================================================
+
 
 class TestCreatePdfWeasyprint:
     """这些方法依赖外部系统（WeasyPrint/Playwright/ReportLab），需要集成测试环境"""
@@ -649,14 +667,14 @@ class TestCreatePdfWeasyprint:
     def test_weasyprint_method_exists(self):
         """验证 _create_pdf_weasyprint 方法存在"""
         generator = SummaryPDFGenerator()
-        assert hasattr(generator, '_create_pdf_weasyprint')
+        assert hasattr(generator, "_create_pdf_weasyprint")
 
     def test_playwright_method_exists(self):
         """验证 _create_pdf_playwright 方法存在"""
         generator = SummaryPDFGenerator()
-        assert hasattr(generator, '_create_pdf_playwright')
+        assert hasattr(generator, "_create_pdf_playwright")
 
     def test_reportlab_method_exists(self):
         """验证 _create_pdf_reportlab 方法存在"""
         generator = SummaryPDFGenerator()
-        assert hasattr(generator, '_create_pdf_reportlab')
+        assert hasattr(generator, "_create_pdf_reportlab")

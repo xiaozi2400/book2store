@@ -1,18 +1,19 @@
 """
 目录扫描器 - 扫描输入目录检测新书籍
 """
+
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Optional
-import ebooklib
+from typing import Dict, List, Optional
+
 from ebooklib import epub
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from .database import DatabaseManager
 from .config import config
-from .utils import logger, is_valid_epub, extract_title_from_filename
+from .database import DatabaseManager
+from .utils import extract_title_from_filename, is_valid_epub, logger
 
 
 class DirectoryScanner:
@@ -88,7 +89,7 @@ class DirectoryScanner:
         if existing_book:
             output_dir = Path(config.output_dir)
             base_name = Path(clean_name).stem.strip()
-            short_name = base_name.split('_')[0].strip()
+            short_name = base_name.split("_")[0].strip()
 
             output_patterns = [
                 output_dir / base_name / f"双语-{short_name}.epub",
@@ -125,8 +126,8 @@ class DirectoryScanner:
             else:
                 db_book = self.db.create_book(
                     filename=clean_name,
-                    title=metadata.get('title', extract_title_from_filename(clean_name)),
-                    author=metadata.get('author')
+                    title=metadata.get("title", extract_title_from_filename(clean_name)),
+                    author=metadata.get("author"),
                 )
                 self.db.create_book_output(db_book.id)
                 logger.info(f"书籍创建成功: {db_book.title}")
@@ -135,13 +136,13 @@ class DirectoryScanner:
             self.db.add_log(db_book.id, "scanning", "success", "书籍扫描完成")
 
             return {
-                'id': db_book.id,
-                'filename': db_book.filename,
-                'title': db_book.title,
-                'author': db_book.author,
-                'path': str(epub_path),
-                'language': metadata.get('language'),
-                'page_count': metadata.get('page_count')
+                "id": db_book.id,
+                "filename": db_book.filename,
+                "title": db_book.title,
+                "author": db_book.author,
+                "path": str(epub_path),
+                "language": metadata.get("language"),
+                "page_count": metadata.get("page_count"),
             }
 
         except Exception as e:
@@ -150,22 +151,17 @@ class DirectoryScanner:
 
     def _extract_metadata(self, book) -> Dict:
         """提取EPUB元数据"""
-        metadata = {
-            'title': None,
-            'author': None,
-            'language': 'en',
-            'page_count': None
-        }
+        metadata = {"title": None, "author": None, "language": "en", "page_count": None}
 
-        if book.get_metadata('DC', 'title'):
-            metadata['title'] = book.get_metadata('DC', 'title')[0][0]
+        if book.get_metadata("DC", "title"):
+            metadata["title"] = book.get_metadata("DC", "title")[0][0]
 
-        if book.get_metadata('DC', 'creator'):
-            metadata['author'] = book.get_metadata('DC', 'creator')[0][0]
+        if book.get_metadata("DC", "creator"):
+            metadata["author"] = book.get_metadata("DC", "creator")[0][0]
 
-        if book.get_metadata('DC', 'language'):
-            lang = book.get_metadata('DC', 'language')[0][0]
-            metadata['language'] = lang.lower()
+        if book.get_metadata("DC", "language"):
+            lang = book.get_metadata("DC", "language")[0][0]
+            metadata["language"] = lang.lower()
 
         return metadata
 

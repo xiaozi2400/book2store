@@ -1,6 +1,8 @@
 """测试 main.py 中 process/auto/test 命令的 summary 字段传递"""
+
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
 
 from automation.main import app
 
@@ -20,13 +22,11 @@ def test_process_command_passes_summary_to_copywriting():
     mock_ctx.status = "completed"
     mock_ctx.error = None
 
-    with patch('automation.main.DatabaseManager.get_all_books', return_value=[mock_book]):
-        with patch('automation.main.DatabaseManager.create_book_output'):
-            with patch('automation.main.DatabaseManager.get_token_summary', return_value=None):
-                with patch('automation.pipeline.run_pipeline', return_value=mock_ctx):
-                    with patch('automation.main.Path.exists', return_value=True):
+    with patch("automation.main.DatabaseManager.get_all_books", return_value=[mock_book]):
+        with patch("automation.main.DatabaseManager.create_book_output"):
+            with patch("automation.main.DatabaseManager.get_token_summary", return_value=None):
+                with patch("automation.pipeline.run_pipeline", return_value=mock_ctx):
+                    with patch("automation.main.Path.exists", return_value=True):
                         result = runner.invoke(app, ["process", "test-book-id-123"])
 
-                        assert result.exit_code == 0, (
-                            f"Exit code: {result.exit_code}, Output: {result.output}"
-                        )
+                        assert result.exit_code == 0, f"Exit code: {result.exit_code}, Output: {result.output}"

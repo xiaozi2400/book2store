@@ -1,16 +1,16 @@
 """
 AI文案生成器 - 生成闲鱼文案和小红书笔记
 """
+
 import os
 import sys
-from typing import Dict, Any, Optional
+from typing import Dict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from automation.ai_client import AIClient
-from automation.database import DatabaseManager
 from automation.config import config
-from automation.metadata_writer import MetadataWriter
+from automation.database import DatabaseManager
 from automation.utils import logger
 
 
@@ -25,6 +25,7 @@ class AICopywriter:
     def generate(self, book_id: str, book_info: Dict = None) -> bool:
         """生成文案"""
         from automation.progress import event
+
         logger.info(f"开始生成文案: {book_id}")
 
         try:
@@ -32,19 +33,16 @@ class AICopywriter:
             self.db.add_log(book_id, "copywriting", "start", "开始生成文案")
 
             if not book_info:
-                book_info = {
-                    'title': 'Unknown',
-                    'author': 'Unknown',
-                    'summary': ''
-                }
+                book_info = {"title": "Unknown", "author": "Unknown", "summary": ""}
 
             event("生成闲鱼文案")
             xianyu_result, xianyu_usage = self.ai.generate_xianyu_listing(book_info)
             if xianyu_usage:
                 self.db.record_token_usage(
-                    book_id, "copywriting_xianyu",
+                    book_id,
+                    "copywriting_xianyu",
                     input_tokens=xianyu_usage.get("prompt_tokens", 0),
-                    output_tokens=xianyu_usage.get("completion_tokens", 0)
+                    output_tokens=xianyu_usage.get("completion_tokens", 0),
                 )
             logger.info(f"闲鱼文案生成结果: {xianyu_result[:200] if xianyu_result else 'None'}...")
 
@@ -52,13 +50,15 @@ class AICopywriter:
             xiaohongshu_result, xiaohongshu_usage = self.ai.generate_xiaohongshu_note(book_info)
             if xiaohongshu_usage:
                 self.db.record_token_usage(
-                    book_id, "copywriting_xiaohongshu",
+                    book_id,
+                    "copywriting_xiaohongshu",
                     input_tokens=xiaohongshu_usage.get("prompt_tokens", 0),
-                    output_tokens=xiaohongshu_usage.get("completion_tokens", 0)
+                    output_tokens=xiaohongshu_usage.get("completion_tokens", 0),
                 )
             logger.info(f"小红书笔记生成结果: {xiaohongshu_result[:100] if xiaohongshu_result else 'None'}...")
 
             from automation.metadata_writer import MetadataWriter  # 测试通过 patch 此路径拦截
+
             MetadataWriter().write_copywriting(book_id, xianyu_result, xiaohongshu_result)
 
             self.db.add_log(book_id, "copywriting", "success", "文案生成完成")
@@ -74,11 +74,7 @@ class AICopywriter:
     def get_sku_info(self) -> list:
         """获取SKU信息"""
         return [
-            {
-                'name': sku.get('name'),
-                'price': sku.get('price'),
-                'includes': ', '.join(sku.get('includes', []))
-            }
+            {"name": sku.get("name"), "price": sku.get("price"), "includes": ", ".join(sku.get("includes", []))}
             for sku in self.sku_config
         ]
 

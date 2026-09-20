@@ -1,6 +1,7 @@
 """Test image_generator module"""
+
 import base64
-import pytest
+
 from automation.image.image_generator import ImageGenerator
 
 
@@ -100,10 +101,7 @@ class TestFormatHtmlPrompt:
         """Formatted prompt should contain the design_plan text"""
         gen = ImageGenerator()
         prompt = gen._format_html_prompt(
-            "Test Title", "Test Author",
-            "Test summary",
-            "封面配色方案: #ff0000",
-            "【设计方案】居中布局，蓝色渐变"
+            "Test Title", "Test Author", "Test summary", "封面配色方案: #ff0000", "【设计方案】居中布局，蓝色渐变"
         )
         assert "【设计方案】" in prompt
         assert len(prompt) < 10000
@@ -111,9 +109,6 @@ class TestFormatHtmlPrompt:
     def test_prompt_includes_book_info(self):
         """Should include title and author"""
         gen = ImageGenerator()
-        prompt = gen._format_html_prompt(
-            "My Book", "My Author",
-            "My summary", "", ""
-        )
+        prompt = gen._format_html_prompt("My Book", "My Author", "My summary", "", "")
         assert "My Book" in prompt
         assert "My Author" in prompt

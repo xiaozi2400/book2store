@@ -1,6 +1,8 @@
 """测试 main.py 中 process/auto/test 命令集成 generate_main_image"""
+
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
 
 from automation.main import app
 
@@ -20,14 +22,12 @@ def test_process_calls_generate_main_image():
     mock_ctx.status = "completed"
     mock_ctx.error = None
 
-    with patch('automation.main.DatabaseManager.get_all_books', return_value=[mock_book]):
-        with patch('automation.main.DatabaseManager.create_book_output'):
-            with patch('automation.main.DatabaseManager.get_token_summary', return_value=None):
-                with patch('automation.pipeline.run_pipeline', return_value=mock_ctx) as mock_pipeline:
-                    with patch('automation.main.Path.exists', return_value=True):
+    with patch("automation.main.DatabaseManager.get_all_books", return_value=[mock_book]):
+        with patch("automation.main.DatabaseManager.create_book_output"):
+            with patch("automation.main.DatabaseManager.get_token_summary", return_value=None):
+                with patch("automation.pipeline.run_pipeline", return_value=mock_ctx) as mock_pipeline:
+                    with patch("automation.main.Path.exists", return_value=True):
                         result = runner.invoke(app, ["process", "test-book-id-123"])
 
-                    assert result.exit_code == 0, (
-                        f"Exit code: {result.exit_code}, Output: {result.output}"
-                    )
+                    assert result.exit_code == 0, f"Exit code: {result.exit_code}, Output: {result.output}"
                     assert mock_pipeline.called, "run_pipeline was not called"

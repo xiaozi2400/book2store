@@ -1,0 +1,21 @@
+# Pre-commit hooks for bookfile-bat
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: unit-tests
+        name: Unit Tests
+        entry: python -m pytest tests/unit -v --tb=short
+        language: system
+        pass_filenames: false
+        types: [python]
+        stages: [pre-push]

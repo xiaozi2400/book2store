@@ -16,6 +16,7 @@ class MetadataWriter:
     def write_copywriting(self, book_id: str, xianyu_text: str, xiaohongshu_text: str) -> bool:
         """写入文案到 meta_dir 下的 txt 文件"""
         from automation.database import DatabaseManager
+
         db = DatabaseManager()
         book = db.get_book_by_id(book_id)
         if not book:

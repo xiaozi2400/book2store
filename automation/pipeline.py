@@ -1,20 +1,20 @@
 """
 Pipeline/Stage 架构 - 将线性流程拆分为独立、可测试的阶段
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from automation.config import config
 from automation.database import DatabaseManager
-from automation.exceptions import TranslationError, PublishError
+from automation.exceptions import PublishError, TranslationError
 from automation.utils import logger
 
 
 @dataclass
 class PipelineContext:
     """流水线上下文 - 所有阶段共享的数据容器"""
+
     book_id: str
     epub_path: str
     filename: str = ""
@@ -170,11 +170,7 @@ class CopywritingStage(Stage):
         self.db.update_book_status(ctx.book_id, "copywriting")
         self.db.add_log(ctx.book_id, "copywriting", "start", "开始生成文案")
 
-        generate_copywriting(ctx.book_id, {
-            'title': ctx.title,
-            'author': ctx.author,
-            'summary': ctx.summary_text or ''
-        })
+        generate_copywriting(ctx.book_id, {"title": ctx.title, "author": ctx.author, "summary": ctx.summary_text or ""})
 
         self.db.add_log(ctx.book_id, "copywriting", "success", "文案生成完成")
         logger.info(f"[{self.name}] 文案生成完成: {ctx.book_id}")

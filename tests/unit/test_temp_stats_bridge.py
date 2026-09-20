@@ -1,8 +1,8 @@
 """测试子进程临时 JSON 文件桥接逻辑"""
 
 import json
-import tempfile
 import os
+import tempfile
 
 
 class TestTempStatsBridge:
@@ -17,7 +17,7 @@ class TestTempStatsBridge:
             "total_tokens": 882456,
             "api_calls": 2554,
             "cache_hits": 100,
-            "translated_paragraphs": 9422
+            "translated_paragraphs": 9422,
         }
 
         stats_file = os.path.join(tempfile.gettempdir(), f"translation_stats_{book_id}.json")

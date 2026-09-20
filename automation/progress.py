@@ -4,15 +4,15 @@
 用于在耗时阶段开始/结束/关键事件输出信息到终端，
 避免用户误以为系统卡死。
 """
-import sys
-import time
-import threading
-from contextlib import contextmanager
 
+import sys
+import threading
+import time
+from contextlib import contextmanager
 
 # 确保 stdout 使用 UTF-8 编码，支持 emoji
 try:
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 except (AttributeError, OSError):
     pass  # Python < 3.7 或不支持 reconfigure
 
@@ -87,11 +87,14 @@ def phase_decorator(name: str):
         def translate_book(...):
             ...
     """
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             with phase(name):
                 return func(*args, **kwargs)
+
         wrapper.__name__ = func.__name__
         wrapper.__doc__ = func.__doc__
         return wrapper
+
     return decorator

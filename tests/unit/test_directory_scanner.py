@@ -1,4 +1,5 @@
 """测试文件名规范化功能 (_fix_filenames)"""
+
 import os
 import sys
 import tempfile
@@ -29,7 +30,7 @@ class TestFilenameNormalization(unittest.TestCase):
 
     def _run_fix_filenames(self):
         """创建 scanner 并运行 _fix_filenames"""
-        with patch('automation.directory_scanner.DatabaseManager'):
+        with patch("automation.directory_scanner.DatabaseManager"):
             scanner = DirectoryScanner()
             scanner.input_dir = self.input_dir
             scanner._fix_filenames()
@@ -62,10 +63,7 @@ class TestFilenameNormalization(unittest.TestCase):
         long_name = "This is a really long book title that goes well beyond 60--and extra.epub"
         self._create_test_file(long_name)
         self._run_fix_filenames()
-        self.assertEqual(
-            self._get_files(),
-            ["This is a really long book title that goes well beyond 60.epub"]
-        )
+        self.assertEqual(self._get_files(), ["This is a really long book title that goes well beyond 60.epub"])
 
     def test_double_dash_with_spaces(self):
         """-- 前后有空格"""
@@ -91,10 +89,7 @@ class TestFilenameNormalization(unittest.TestCase):
         self._create_test_file("Book2.epub")
         self._create_test_file("Book3  --  Extra.epub")
         self._run_fix_filenames()
-        self.assertEqual(
-            self._get_files(),
-            sorted(["Book1.epub", "Book2.epub", "Book3.epub"])
-        )
+        self.assertEqual(self._get_files(), sorted(["Book1.epub", "Book2.epub", "Book3.epub"]))
 
 
 if __name__ == "__main__":

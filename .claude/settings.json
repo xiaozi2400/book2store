@@ -4,7 +4,7 @@
       "matcher": "Edit|Write",
       "hooks": [{
         "type": "command",
-        "command": "jq -r '.tool_input.file_path' | { read -r f; if echo \"$f\" | grep -q '\\.py$'; then ruff check --fix \"$f\"; fi; } 2>/dev/null || true",
+        "command": "f=$(jq -r '.tool_input.file_path' 2>/dev/null); if echo \"$f\" | grep -q '\\.py$'; then ruff check --fix \"$f\"; fi",
         "timeout": 30
       }]
     }]

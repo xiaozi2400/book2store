@@ -1,7 +1,8 @@
 """根据书籍封面和摘要生成商品主图"""
-import logging
+
 import base64
 import json
+import logging
 import random
 import re
 import zipfile
@@ -10,9 +11,9 @@ from pathlib import Path
 from typing import Optional
 
 from automation.ai_client import AIClient
+from automation.config import config
 from automation.database import DatabaseManager, close_session, get_session
 from automation.models import BookOutput
-from automation.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,10 @@ logger = logging.getLogger(__name__)
 # 克制配色池 — 全 palette 共用 4 色
 # 深色主题: 4 张卡半透底色(在深色背景上)
 UNIVERSAL_ACCENTS_DARK = [
-    "rgba(254,243,199,0.40)",   # #FEF3C7 米白
-    "rgba(229,231,235,0.40)",   # #E5E7EB 银灰
-    "rgba(253,215,170,0.40)",   # #FED7AA 干桃
-    "rgba(196,181,253,0.40)",   # #C4B5FD 薰衣草紫
+    "rgba(254,243,199,0.40)",  # #FEF3C7 米白
+    "rgba(229,231,235,0.40)",  # #E5E7EB 银灰
+    "rgba(253,215,170,0.40)",  # #FED7AA 干桃
+    "rgba(196,181,253,0.40)",  # #C4B5FD 薰衣草紫
 ]
 UNIVERSAL_PILLS_DARK = [
     "rgba(254,243,199,0.40)",
@@ -34,10 +35,10 @@ UNIVERSAL_PILLS_DARK = [
 ]
 # 浅色主题: 不透明柔和色(在浅色背景上可见)
 UNIVERSAL_ACCENTS_LIGHT = [
-    "#FDEFC4",   # 米黄
-    "#E4E8ED",   # 浅灰
-    "#FDDCAB",   # 干桃
-    "#D4C8F5",   # 薰衣草紫
+    "#FDEFC4",  # 米黄
+    "#E4E8ED",  # 浅灰
+    "#FDDCAB",  # 干桃
+    "#D4C8F5",  # 薰衣草紫
 ]
 UNIVERSAL_PILLS_LIGHT = [
     "#FDEFC4",
@@ -144,9 +145,11 @@ body{background:#f2f4f8;display:flex;flex-direction:column;align-items:center;pa
 .page.light .dual-col-b{border-color:rgba(26,26,26,.1)}
 .page.light .dual-col-c{border-color:rgba(26,26,26,.1)}"""
 
-_FOOTER_TAGS = ('<div class="footer-tags">'
-                '<span class="tag tag-pdf">支持PDF+EPUB双格式</span>'
-                '<span class="tag tag-lang">英文+中译+双语+精简版</span></div>')
+_FOOTER_TAGS = (
+    '<div class="footer-tags">'
+    '<span class="tag tag-pdf">支持PDF+EPUB双格式</span>'
+    '<span class="tag tag-lang">英文+中译+双语+精简版</span></div>'
+)
 
 
 def _safe_format(template: str, **kwargs) -> str:
@@ -173,6 +176,7 @@ class ImageGenerator:
     def generate(self, book_id: str) -> bool:
         """生成商品主图"""
         from automation.progress import event
+
         img_cfg = config.image_generator_config
         if not img_cfg.get("enabled", True):
             logger.info("主图生成已禁用")
@@ -224,7 +228,7 @@ class ImageGenerator:
         cover_base64 = self._load_cover_base64(cover_path) if cover_path else None
         if cover_base64:
             html = self._inject_cover_image(html, cover_base64)
-            logger.info(f"封面图已注入 HTML")
+            logger.info("封面图已注入 HTML")
         else:
             logger.warning("未找到封面图，HTML中无封面")
 
@@ -237,7 +241,9 @@ class ImageGenerator:
             return True
         return False
 
-    def _format_prompt(self, title: str, author: str, summary: str, cover_colors: str = "", design_plan: str = "") -> str:
+    def _format_prompt(
+        self, title: str, author: str, summary: str, cover_colors: str = "", design_plan: str = ""
+    ) -> str:
         """格式化提示词（含封面主色调，不含 base64）"""
         img_cfg = config.image_generator_config
         prompt_template = img_cfg.get("html_prompt", "")
@@ -267,6 +273,7 @@ class ImageGenerator:
             return ""
         try:
             from PIL import Image
+
             img = Image.open(cover_path).convert("RGB")
             small = img.resize((100, 100))
             reduced = small.quantize(colors=12).convert("RGB")
@@ -384,7 +391,8 @@ class ImageGenerator:
                 r"acknowledg?ments?|notes?|about\s+the\s+author|index|bibliography|"
                 r"foreword|preface|part\s+[ivx0-9]+|page\s+mapping.*|"
                 r"目录|扉页|版权|献辞|致谢|注释|附录|参考文献|前言|序言|后记|作者简介)\s*$",
-                re.IGNORECASE)
+                re.IGNORECASE,
+            )
             book_title = (getattr(book, "title", "") or "").strip().lower()
             chapters = []
             for t in raw:
@@ -412,8 +420,9 @@ class ImageGenerator:
         candidates = list(content_dir.rglob("英文-*.epub")) + list(content_dir.rglob("*.epub"))
         return candidates[0] if candidates else None
 
-    def _design_analysis(self, title: str, author: str, summary: str, cover_colors: str,
-                         palette_name: str = "", palette_lines: str = "") -> str:
+    def _design_analysis(
+        self, title: str, author: str, summary: str, cover_colors: str, palette_name: str = "", palette_lines: str = ""
+    ) -> str:
         """AI 输出设计方案（布局/配色/风格定位），约200字"""
         img_cfg = config.image_generator_config
         prompt_template = img_cfg.get("design_prompt", "")
@@ -437,7 +446,9 @@ class ImageGenerator:
             logger.warning(f"设计分析失败，将跳过: {e}")
             return ""
 
-    def _format_html_prompt(self, title: str, author: str, summary: str, cover_colors: str, design_plan: str, full_toc: str = "") -> str:
+    def _format_html_prompt(
+        self, title: str, author: str, summary: str, cover_colors: str, design_plan: str, full_toc: str = ""
+    ) -> str:
         """格式化 HTML 生成提示词（含 design_plan + full_toc，不含 base64）"""
         img_cfg = config.image_generator_config
         prompt_template = img_cfg.get("html_prompt", "")
@@ -466,7 +477,7 @@ class ImageGenerator:
         start = text.find("{")
         end = text.rfind("}")
         if start >= 0 and end > start:
-            text = text[start:end + 1]
+            text = text[start : end + 1]
         try:
             data = json.loads(text)
         except json.JSONDecodeError as e:
@@ -521,7 +532,7 @@ class ImageGenerator:
             accent_rgba = [self._hex_to_rgba(c, 0.55) for c in colors[1:4]]
             for i, rgba in enumerate(accent_rgba[:3], 1):
                 css = css.replace(f"__TINT{i}__", rgba)
-            css = css.replace(f"__TINT4__", accent_rgba[2])
+            css = css.replace("__TINT4__", accent_rgba[2])
             pill_rgba = [self._hex_to_rgba(c, 0.50) for c in colors[1:4]]
             pills_order = [pill_rgba[0], pill_rgba[1], pill_rgba[2], pill_rgba[1], pill_rgba[0]]
             for i, rgba in enumerate(pills_order, 1):
@@ -539,18 +550,23 @@ class ImageGenerator:
 
         page1 = self._render_page1(content.get("page1", {}), light_cls)
         page2 = self._render_content_page(
-            "page-2" + light_cls, "能学到什么", content.get("page2", {}), self._render_layout_grid)
+            "page-2" + light_cls, "能学到什么", content.get("page2", {}), self._render_layout_grid
+        )
         page3 = self._render_content_page(
-            "page-3" + light_cls, "适合谁阅读", content.get("page3", {}), self._render_layout_pill)
+            "page-3" + light_cls, "适合谁阅读", content.get("page3", {}), self._render_layout_pill
+        )
         page4 = self._render_content_page(
-            "page-4" + light_cls, "目录内容",  content.get("page4", {}),
-            lambda items: self._render_layout_dual(items, chapter_count))
+            "page-4" + light_cls,
+            "目录内容",
+            content.get("page4", {}),
+            lambda items: self._render_layout_dual(items, chapter_count),
+        )
 
         return (
             f'<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">'
-            f'<title>主图</title><style>{css}</style></head><body>'
-            f'{page1}{page2}{page3}{page4}'
-            f'</body></html>'
+            f"<title>主图</title><style>{css}</style></head><body>"
+            f"{page1}{page2}{page3}{page4}"
+            f"</body></html>"
         )
 
     def _render_page1(self, p, light_cls: str = "") -> str:
@@ -586,7 +602,7 @@ class ImageGenerator:
         return (
             f'<div class="page {page_cls}"><div class="content">'
             f'<div class="section-title">{section}</div>{body}'
-            f'</div>{_FOOTER_TAGS}</div>'
+            f"</div>{_FOOTER_TAGS}</div>"
         )
 
     def _render_layout_grid(self, items: list) -> str:

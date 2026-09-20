@@ -1,17 +1,17 @@
 """E2E测试：完整流水线测试 (跳过发布)"""
-import sys
+
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from automation.database import get_session, close_session
-from automation.models import Book, BookOutput, ProcessingLog
 from automation.config import config
-
+from automation.database import close_session, get_session
+from automation.models import Book, BookOutput, ProcessingLog
 
 # 测试书籍标识
 BOOK_NAME = "little-prince"
@@ -36,10 +36,12 @@ def reset_database():
 
             # 4. 清理关联记录：TokenUsage
             from automation.models import TokenUsage
+
             session.query(TokenUsage).filter(TokenUsage.book_id == book_id).delete()
 
             # 5. 清理关联记录：ShareLink
             from automation.models import ShareLink
+
             session.query(ShareLink).filter(ShareLink.book_id == book_id).delete()
 
             # 6. 删除 Book 记录（TranslationCache 无外键关联 book，
@@ -121,19 +123,14 @@ class TestFullPipeline:
         # 切换到项目根目录执行命令
         project_root = Path(__file__).parent.parent.parent
 
-        cmd = [
-            sys.executable, "-m", "automation.main",
-            "auto",
-            "--skip-publish",
-            "--skip-cache"
-        ]
+        cmd = [sys.executable, "-m", "automation.main", "auto", "--skip-publish", "--skip-cache"]
 
         result = subprocess.run(
             cmd,
             cwd=str(project_root),
             capture_output=True,
             text=True,
-            timeout=600  # 10分钟超时
+            timeout=600,  # 10分钟超时
         )
 
         print("\n=== STDOUT ===")
@@ -153,8 +150,8 @@ class TestFullPipeline:
         assert len(main_images) > 0, f"未找到闲鱼主图文件: {metadata_dir}/main_image_*.jpg"
 
         # 检查是否有临时 HTML（主图生成过程中的中间产物）
-        temp_html = metadata_dir / "_main_image_temp.html"
-        # temp_html 不强制要求存在（可能已被清理）
+        _temp_html = metadata_dir / "_main_image_temp.html"
+        # _temp_html 不强制要求存在（可能已被清理）
 
         print(f"\n闲鱼主图: {[f.name for f in main_images]}")
 

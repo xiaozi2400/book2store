@@ -1,12 +1,10 @@
 """测试 Book.summary_text 字段与 update_book_summary 方法"""
 
-import pytest
+from automation.database import DatabaseManager, close_session, get_session
 from automation.models import Book
-from automation.database import DatabaseManager, get_session, close_session
 
 
 class TestSummaryTextField:
-
     def test_book_has_summary_text_field(self, in_memory_db, sample_book):
         """验证 Book 模型有 summary_text 字段，初始值为 None"""
         book = in_memory_db.query(Book).filter(Book.id == "test-book-001").first()

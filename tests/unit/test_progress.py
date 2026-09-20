@@ -1,12 +1,14 @@
 """测试 progress 模块的阶段输出"""
+
 import re
 import sys
 import time
+
 import pytest
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 
-from automation.progress import phase, event, phase_decorator
+from automation.progress import event, phase, phase_decorator
 
 
 def test_phase_normal_outputs_start_and_end(capsys):
@@ -26,12 +28,11 @@ def test_phase_outputs_duration_format_seconds(capsys):
     # 包含耗时数字，排除极端情况
     assert "s)" in captured.out or "ms)" in captured.out
     # 确保不出现异常耗时（如 1000s），排除极端慢的情况
-    import re
-    match = re.search(r'\d+\.?\d*\s*ms\)|(\d+\.?\d*)\s*s\)', captured.out)
+    match = re.search(r"\d+\.?\d*\s*ms\)|(\d+\.?\d*)\s*s\)", captured.out)
     if match:
-        value = float(match.group(1) or match.group().replace('ms)', '').replace('s)', ''))
-        unit = 'ms' if 'ms' in match.group() else 's'
-        if unit == 's':
+        value = float(match.group(1) or match.group().replace("ms)", "").replace("s)", ""))
+        unit = "ms" if "ms" in match.group() else "s"
+        if unit == "s":
             assert value < 60, f"耗时 {value}s 超过 60s，可能是 CI 慢导致的误报"
         else:
             assert value < 60000, f"耗时 {value}ms 超过 60s"
@@ -55,8 +56,8 @@ def test_phase_nested_indentation(capsys):
     captured = capsys.readouterr()
     # 内层应有更多缩进
     lines = captured.out.split("\n")
-    outer_start = next(l for l in lines if "⏳ 正在外层" in l)
-    inner_start = next(l for l in lines if "⏳ 正在内层" in l)
+    outer_start = next(line for line in lines if "⏳ 正在外层" in line)
+    inner_start = next(line for line in lines if "⏳ 正在内层" in line)
     assert outer_start.count("  ") < inner_start.count("  ")
 
 
@@ -70,6 +71,7 @@ def test_event_outputs_with_indicator(capsys):
 
 def test_decorator_form(capsys):
     """装饰器形式工作正常"""
+
     @phase_decorator("装饰任务")
     def do_work():
         return "完成"
@@ -83,6 +85,7 @@ def test_decorator_form(capsys):
 
 def test_decorator_with_exception(capsys):
     """装饰器形式异常处理"""
+
     @phase_decorator("失败装饰")
     def fail():
         raise RuntimeError("错误")
@@ -93,7 +96,7 @@ def test_decorator_with_exception(capsys):
     assert "✗ 失败装饰失败" in captured.out
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_phase_normal_outputs_start_and_end()
     test_phase_exception_outputs_failure()
     test_event_outputs_with_indicator()

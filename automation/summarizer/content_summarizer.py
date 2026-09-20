@@ -1,22 +1,23 @@
 """
 内容精简器 - 生成书籍核心内容精简版PDF（主编排器）
 """
+
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
-from automation.database import DatabaseManager
 from automation.config import config
-from automation.utils import logger, ensure_dir
-from automation.summarizer.suitability_evaluator import SuitabilityEvaluator
-from automation.summarizer.cover_extractor import extract_cover_from_epub
+from automation.database import DatabaseManager
+from automation.summarizer.ai_generator import SummaryAIGenerator
 from automation.summarizer.chapter_extractor import (
     extract_chapters,
     extract_chinese_title,
 )
-from automation.summarizer.ai_generator import SummaryAIGenerator
+from automation.summarizer.cover_extractor import extract_cover_from_epub
 from automation.summarizer.pdf_generator import SummaryPDFGenerator
+from automation.summarizer.suitability_evaluator import SuitabilityEvaluator
+from automation.utils import ensure_dir, logger
 
 
 class ContentSummarizer:
@@ -32,6 +33,7 @@ class ContentSummarizer:
     def summarize(self, book_id: str, epub_path: str) -> bool:
         """生成书籍精简版"""
         from automation.progress import event
+
         logger.info(f"开始生成精简版: {book_id}")
 
         try:
@@ -39,7 +41,7 @@ class ContentSummarizer:
             self.db.add_log(book_id, "summarizing", "start", "开始生成精简版")
 
             output_dir = ensure_dir(self.output_dir / Path(epub_path).stem.strip())
-            base_name = Path(epub_path).stem.strip()
+            _base_name = Path(epub_path).stem.strip()
             output_path = output_dir / "精简版.pdf"
 
             if output_path.exists():
@@ -56,14 +58,14 @@ class ContentSummarizer:
                 book.author = book.author or "Unknown"
 
             book_info = {
-                'title': book.title if book else '书籍',
-                'author': book.author if book else 'Unknown',
-                'summary': book.summary if book and hasattr(book, 'summary') else ''
+                "title": book.title if book else "书籍",
+                "author": book.author if book else "Unknown",
+                "summary": book.summary if book and hasattr(book, "summary") else "",
             }
 
             chinese_title = extract_chinese_title(book_id, epub_path)
             if chinese_title:
-                book_info['title'] = chinese_title
+                book_info["title"] = chinese_title
 
             if output_path.exists():
                 logger.info(f"精简版已存在，将重新生成: {output_path}")
@@ -71,14 +73,17 @@ class ContentSummarizer:
 
             event("评估书籍适合度")
             suitability_result = self._check_suitability(book_info)
-            self.db.add_log(book_id, "suitability", suitability_result.label,
-                          f"适合度: {suitability_result.score}分 - {suitability_result.recommendation}")
+            self.db.add_log(
+                book_id,
+                "suitability",
+                suitability_result.label,
+                f"适合度: {suitability_result.score}分 - {suitability_result.recommendation}",
+            )
 
             if not suitability_result.passed:
                 logger.info(f"书籍不适合生成精简版: {suitability_result.recommendation}")
                 self.db.update_book_status(book_id, "skipped", suitability_result.recommendation)
-                self.db.add_log(book_id, "summarizing", "skipped",
-                              f"不适合生成精简版: {suitability_result.label}")
+                self.db.add_log(book_id, "summarizing", "skipped", f"不适合生成精简版: {suitability_result.label}")
                 return False
 
             logger.info(f"书籍适合度评估通过: {suitability_result.label}({suitability_result.score}分)")
@@ -138,7 +143,7 @@ class ContentSummarizer:
 
             try:
                 os.unlink(extracted_cover_path)
-            except:
+            except Exception:
                 pass
 
             return str(meta_cover_path)
@@ -149,10 +154,10 @@ class ContentSummarizer:
     @staticmethod
     def _format_summary_to_text(summary_content: Dict[str, Any]) -> str:
         """将摘要字典格式化为结构化文本"""
-        title = summary_content.get('title', '')
-        author = summary_content.get('author', '')
-        book_type = summary_content.get('book_type', '')
-        content = summary_content.get('content', '')
+        title = summary_content.get("title", "")
+        author = summary_content.get("author", "")
+        book_type = summary_content.get("book_type", "")
+        content = summary_content.get("content", "")
         parts = [f"书名：{title}", f"作者：{author}", f"类型：{book_type}", "", content]
         return "\n".join(parts)
 

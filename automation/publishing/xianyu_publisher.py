@@ -1,25 +1,24 @@
-
 """
 闲鱼发布器 - 使用 Playwright 自动化发布商品
 """
-import json
+
 import os
 import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 # 使用系统默认Playwright浏览器目录(已安装chromium)
 # 之前尝试设置自定义路径到 .playwright-browsers/，但该路径缺失浏览器，导致启动失败
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from playwright.sync_api import sync_playwright, Browser, Page, BrowserContext
-from automation.database import DatabaseManager
+from playwright.sync_api import sync_playwright
+
 from automation.config import config
+from automation.database import DatabaseManager
 from automation.exceptions import PublishError
-from automation.utils import logger, ensure_dir
+from automation.utils import logger
 
 
 class XianyuPublisher:
@@ -65,7 +64,7 @@ class XianyuPublisher:
 
             self._setup_skus(self.sku_config)
 
-            #采用默认“包邮”和发布地址
+            # 采用默认“包邮”和发布地址
             #  self._fill_basic_info()
 
             listing_url = self._submit_and_get_url()
@@ -163,7 +162,7 @@ class XianyuPublisher:
                     saved_cookies = self.context.cookies()
                     logger.info("保存了 %d 个cookies" % len(saved_cookies))
                     return
-            except:
+            except Exception:
                 pass
 
         raise TimeoutError("登录超时，请重试")
@@ -182,8 +181,8 @@ class XianyuPublisher:
                     placeholder = inp.get_attribute("placeholder") or ""
                     typ = inp.get_attribute("type") or ""
                     value = inp.get_attribute("value") or ""
-                    logger.info("  Input %d: type=%s, placeholder='%s', value='%s'" % (i+1, typ, placeholder, value))
-                except:
+                    logger.info("  Input %d: type=%s, placeholder='%s', value='%s'" % (i + 1, typ, placeholder, value))
+                except Exception:
                     pass
 
             # 打印可见 textarea
@@ -202,6 +201,7 @@ class XianyuPublisher:
         """保存页面快照用于调试"""
         try:
             from pathlib import Path
+
             screenshot_dir = Path("logs")
             screenshot_dir.mkdir(parents=True, exist_ok=True)
             screenshot_path = screenshot_dir / f"debug_{label}_{int(time.time())}.png"
@@ -214,11 +214,14 @@ class XianyuPublisher:
         """将元素滚动到浏览器可见区域中心"""
         try:
             locator.scroll_into_view_if_needed()
-            self.page.evaluate("""
+            self.page.evaluate(
+                """
                 (el) => {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
-            """, locator.element_handle())
+            """,
+                locator.element_handle(),
+            )
             time.sleep(0.3)
         except Exception as e:
             logger.warning("滚动到元素中心失败: %s" % str(e))
@@ -263,7 +266,8 @@ class XianyuPublisher:
 
         is_contenteditable = desc_input.get_attribute("contenteditable") == "true"
         if is_contenteditable:
-            desc_input.evaluate("""
+            desc_input.evaluate(
+                """
                 (el, text) => {
                     el.focus();
                     document.execCommand('selectAll');
@@ -281,7 +285,9 @@ class XianyuPublisher:
                     el.appendChild(fragment);
                     el.dispatchEvent(new Event('input', { bubbles: true }));
                 }
-            """, description)
+            """,
+                description,
+            )
             logger.info("宝贝描述已填写 (contenteditable)")
         else:
             desc_input.fill(description)
@@ -346,8 +352,7 @@ class XianyuPublisher:
         """方法2_补充：用 placeholder 匹配"""
         try:
             category_trigger = (
-                self.page.locator("input[placeholder*='分类']").first
-                or self.page.locator("div:has-text('分类')").last
+                self.page.locator("input[placeholder*='分类']").first or self.page.locator("div:has-text('分类')").last
             )
             if category_trigger.is_visible(timeout=2000):
                 category_trigger.click()
@@ -390,8 +395,7 @@ class XianyuPublisher:
             for scroll_idx in range(8):
                 try:
                     target_option = (
-                        self.page.locator("text=%s" % target_text).first
-                        or self.page.get_by_text(target_text).first
+                        self.page.locator("text=%s" % target_text).first or self.page.get_by_text(target_text).first
                     )
                     if target_option.is_visible(timeout=1500):
                         target_option.click()
@@ -420,10 +424,7 @@ class XianyuPublisher:
     def _is_dropdown_open(self):
         """检查下拉框是否已打开"""
         try:
-            dropdown = (
-                self.page.locator(".ant-select-dropdown").first
-                or self.page.locator("[class*='dropdown']").first
-            )
+            dropdown = self.page.locator(".ant-select-dropdown").first or self.page.locator("[class*='dropdown']").first
             return dropdown.is_visible(timeout=1000)
         except Exception:
             return False
@@ -483,9 +484,11 @@ class XianyuPublisher:
 
         # ========== 第一阶段：添加规格类型 ==========
         try:
-            add_spec_btn = self.page.get_by_role("button", name="添加规格类型（0/2）").or_(
-                self.page.locator("text=添加规格类型")
-            ).first
+            add_spec_btn = (
+                self.page.get_by_role("button", name="添加规格类型（0/2）")
+                .or_(self.page.locator("text=添加规格类型"))
+                .first
+            )
             if add_spec_btn.is_visible(timeout=5000):
                 self._scroll_to_element_center(add_spec_btn)
                 add_spec_btn.click()
@@ -516,7 +519,7 @@ class XianyuPublisher:
                 custom_option = self.page.locator("text=输入自定义类型").first
                 if custom_option.is_visible(timeout=1000):
                     break
-            except:
+            except Exception:
                 pass
             try:
                 spec_dropdown = self.page.locator(".ant-select-dropdown").first
@@ -525,7 +528,7 @@ class XianyuPublisher:
                 else:
                     self.page.mouse.wheel(0, 300)
                     time.sleep(0.3)
-            except:
+            except Exception:
                 self.page.mouse.wheel(0, 300)
                 time.sleep(0.3)
 
@@ -555,7 +558,7 @@ class XianyuPublisher:
             if not type_input.is_visible(timeout=2000):
                 # 方法3：查找所有可见 text input，取最后一个
                 type_input = self.page.locator("input[type='text']:visible").last
-            
+
             if type_input.is_visible(timeout=3000):
                 type_input.click()
                 time.sleep(0.3)
@@ -574,7 +577,7 @@ class XianyuPublisher:
 
         # ========== 第三阶段：添加各个具体版本 ==========
         for i, sku in enumerate(sku_list):
-            version_name = sku.get("name", "版本%d" % (i+1))
+            version_name = sku.get("name", "版本%d" % (i + 1))
 
             try:
                 # 使用录制代码中的 placeholder 定位
@@ -582,21 +585,21 @@ class XianyuPublisher:
                 if not version_input.is_visible(timeout=2000):
                     # 备用：使用通配符
                     version_input = self.page.locator("input[placeholder*='请输入具体的版本']").nth(i)
-                
+
                 if version_input.is_visible(timeout=3000):
                     version_input.click()
                     time.sleep(0.3)
                     version_input.fill(version_name)
                     time.sleep(0.5)
-                    logger.info("  已添加版本 %d: %s" % (i+1, version_name))
+                    logger.info("  已添加版本 %d: %s" % (i + 1, version_name))
                 else:
-                    raise PublishError("未找到版本 %d 的输入框" % (i+1))
+                    raise PublishError("未找到版本 %d 的输入框" % (i + 1))
             except Exception as e:
-                logger.error("  添加版本 %d 失败: %s" % (i+1, str(e)))
+                logger.error("  添加版本 %d 失败: %s" % (i + 1, str(e)))
                 raise
 
             # 如果不是最后一个，添加新版本
-            is_last = (i == len(sku_list) - 1)
+            is_last = i == len(sku_list) - 1
             if not is_last:
                 try:
                     add_version_btn = self.page.locator("text=+").first
@@ -617,11 +620,13 @@ class XianyuPublisher:
 
         time.sleep(1)
         for i, sku in enumerate(sku_list):
-            version_name = sku.get("name", "版本%d" % (i+1))
+            version_name = sku.get("name", "版本%d" % (i + 1))
             sku_price = sku.get("price", 0)
-            price_row = self.page.get_by_role("row", name="%s ￥" % version_name).or_(
-                self.page.get_by_role("row", name=version_name)
-            ).first
+            price_row = (
+                self.page.get_by_role("row", name="%s ￥" % version_name)
+                .or_(self.page.get_by_role("row", name=version_name))
+                .first
+            )
 
             if not price_row.is_visible(timeout=3000):
                 logger.error("  %s: 未找到价格行" % version_name)
@@ -629,9 +634,9 @@ class XianyuPublisher:
 
             # 填写价格
             try:
-                price_input = price_row.get_by_placeholder("0.00").or_(
-                    price_row.locator("input[placeholder*='价格']")
-                ).first
+                price_input = (
+                    price_row.get_by_placeholder("0.00").or_(price_row.locator("input[placeholder*='价格']")).first
+                )
                 price_input.wait_for(timeout=2000)
                 price_input.click()
                 time.sleep(0.2)
@@ -643,11 +648,15 @@ class XianyuPublisher:
 
             # 填写库存
             try:
-                stock_input = price_row.get_by_placeholder("0", exact=True).or_(
-                    price_row.locator("input[placeholder*='库存']").or_(
-                        price_row.locator("input[placeholder*='数量']")
+                stock_input = (
+                    price_row.get_by_placeholder("0", exact=True)
+                    .or_(
+                        price_row.locator("input[placeholder*='库存']").or_(
+                            price_row.locator("input[placeholder*='数量']")
+                        )
                     )
-                ).first
+                    .first
+                )
                 stock_input.wait_for(timeout=2000)
                 stock_input.click()
                 time.sleep(0.2)
@@ -674,9 +683,11 @@ class XianyuPublisher:
 
         # 只填写发货方式（宝贝所在地使用默认）
         try:
-            shipping_input = self.page.locator("input[placeholder*='发货']").or_(
-                self.page.locator("input[placeholder*='运费']")
-            ).first
+            shipping_input = (
+                self.page.locator("input[placeholder*='发货']")
+                .or_(self.page.locator("input[placeholder*='运费']"))
+                .first
+            )
             if shipping_input.is_visible(timeout=3000):
                 shipping_input.fill(config.xianyu_shipping)
                 logger.info("  发货方式已填: %s" % config.xianyu_shipping)
@@ -690,9 +701,7 @@ class XianyuPublisher:
         """点击发布并获取商品链接"""
         logger.info("点击发布...")
 
-        publish_btn = self.page.locator("button:has-text('发布')").or_(
-            self.page.locator("text=立即发布")
-        ).first
+        publish_btn = self.page.locator("button:has-text('发布')").or_(self.page.locator("text=立即发布")).first
 
         publish_btn.wait_for(state="visible", timeout=30000)
         logger.info("发布按钮可见，等待可用...")
@@ -701,8 +710,8 @@ class XianyuPublisher:
             if not publish_btn.is_disabled():
                 break
             time.sleep(0.5)
-            if (i+1) % 10 == 0:
-                logger.info("已等待 %d * 0.5s，按钮仍禁用..." % (i+1))
+            if (i + 1) % 10 == 0:
+                logger.info("已等待 %d * 0.5s，按钮仍禁用..." % (i + 1))
 
         publish_btn.click()
         logger.info("已点击发布按钮")
@@ -760,4 +769,3 @@ def publish_to_xianyu(book_id):
     """便捷函数：发布到闲鱼"""
     publisher = XianyuPublisher()
     return publisher.publish(book_id)
-

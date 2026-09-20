@@ -5,6 +5,7 @@ import pytest
 
 class MockResponse:
     """模拟 API 响应"""
+
     def __init__(self, prompt_tokens=100, completion_tokens=50):
         self.status_code = 200
         self._json = {
@@ -12,8 +13,8 @@ class MockResponse:
             "usage": {
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens
-            }
+                "total_tokens": prompt_tokens + completion_tokens,
+            },
         }
 
     def json(self):
@@ -32,12 +33,13 @@ class TestTranslatorStats:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         monkeypatch.setenv("DEEPSEEK_API_URL", "https://test.api.com/v1/chat/completions")
         # 需要重载配置模块
-        import importlib
         import ebook_translator.config as config
+
         config.DEEPSEEK_API_KEY = "test-key"
         config.DEEPSEEK_API_URL = "https://test.api.com/v1/chat/completions"
 
         from ebook_translator.translator.translator import Translator
+
         t = Translator(provider="deepseek")
         return t
 
@@ -50,6 +52,7 @@ class TestTranslatorStats:
 
     def test_translate_tracks_token_breakdown(self, translator, monkeypatch):
         """验证 translate() 方法分别跟踪 prompt_tokens, completion_tokens, total_tokens"""
+
         def mock_post(*args, **kwargs):
             return MockResponse(prompt_tokens=200, completion_tokens=80)
 
@@ -64,6 +67,7 @@ class TestTranslatorStats:
 
     def test_chat_tracks_token_breakdown(self, translator, monkeypatch):
         """验证 chat() 方法分别跟踪 prompt_tokens, completion_tokens, total_tokens"""
+
         def mock_post(*args, **kwargs):
             return MockResponse(prompt_tokens=150, completion_tokens=60)
 

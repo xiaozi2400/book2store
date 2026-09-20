@@ -18,11 +18,7 @@ class TestAIClientChatReturnsTuple:
             def chat_raw(self, prompt, **kwargs):
                 return {
                     "choices": [{"message": {"content": "模拟回复"}}],
-                    "usage": {
-                        "prompt_tokens": 100,
-                        "completion_tokens": 50,
-                        "total_tokens": 150
-                    }
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
                 }
 
         monkeypatch.setattr(ai_client_module, "Translator", MockTranslator)
