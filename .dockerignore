@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.egg-info
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+.trae/
+
+# Test
+tests/
+pytest_cache/
+.coverage
+htmlcov/
+*.tmp
+*.temp
+
+# Documentation
+docs/
+README.md
+CLAUDE.md
+PRD.md
+TECH_SPEC.md
+
+# Logs
+logs/
+*.log
+
+# Local data
+data/
+output/
+test_input_dir/
+test_output_dir/
+
+# Playwright browsers
+.playwright-browsers/
+
+# HTML/debug
+*.html
+项目日志.md
+项目经验.md
+
+# CI/CD
+.github/
+Dockerfile
+.dockerignore
+
+# Scripts
+scripts/
+
+# Tools
+tools/

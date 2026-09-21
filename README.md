@@ -46,50 +46,32 @@ playwright install chromium
 
 ---
 
-## 命令参考
+## 常见使用场景
 
-### 查看帮助
-
-```bash
-# 查看所有可用命令
-python -m automation.main --help
-
-# 查看单个命令详情
-python -m automation.main publish --help
-python -m automation.main auto --help
-python -m automation.main process --help
-```
-
-### 完整处理流程
-
-#### 一键处理所有新书籍（推荐）
-
-扫描 `input_dir` 目录，自动翻译、生成精简版、生成图片和文案、发布到闲鱼：
+### 场景一：首次使用全自动处理
 
 ```bash
+# 扫描 input_dir，自动处理所有新书（翻译→精简版→图片→文案→发布）
 python -m automation.main auto
 ```
 
-各步骤可通过 `--skip-*` 参数灵活控制：
+### 场景二：调试/开发（跳过发布）
 
 ```bash
-# 跳过发布步骤（只完成翻译+精简版+图片+文案）
+# 处理到发布前各步骤，方便调试
 python -m automation.main auto --skip-publish
 
-# 只翻译，跳过精简版/图片/文案/发布
+# 只翻译，跳过后续所有步骤
 python -m automation.main auto --skip-summarize --skip-images --skip-copywriting --skip-publish
 
-# 跳过翻译，只用已有翻译结果重新生成后续内容
-python -m automation.main auto --skip-translate
-
-# 跳过翻译缓存，强制重新翻译所有内容
+# 强制重新翻译（跳过缓存）
 python -m automation.main auto --skip-cache
 ```
 
-#### 处理指定书籍
+### 场景三：处理指定书籍
 
 ```bash
-# 完整处理：翻译 -> 精简版 -> 主图 -> 提取图片 -> 文案 -> 发布
+# 完整处理指定书籍
 python -m automation.main process <book_id>
 
 # 处理指定书籍，跳过发布
@@ -98,133 +80,50 @@ python -m automation.main process <book_id> --skip-publish
 
 `book_id` 支持前缀匹配，只需输入前几位即可。
 
-#### 测试模式
-
-从 `test_input_dir` 目录读取文件处理（自动跳过闲鱼发布）：
+### 场景四：发布失败重试
 
 ```bash
-# 完整测试（翻译+精简版+图片+文案）
-python -m automation.main test
-
-# 跳过某些步骤
-python -m automation.main test --skip-translate --skip-summarize
-```
-
----
-
-### 分步骤操作
-
-#### 扫描与查询
-
-```bash
-# 扫描输入目录，检测新书籍
-python -m automation.main scan
-
-# 查看处理状态统计
-python -m automation.main status
-
-# 列出书籍（默认显示最近10本）
-python -m automation.main list
-
-# 按状态筛选（pending/completed/failed/published）
-python -m automation.main list --status-filter failed
-
-# 指定显示数量
-python -m automation.main list --limit 20
-
-# 初始化数据库（创建表结构）
-python -m automation.main init
-```
-
-#### 发布相关
-
-```bash
-# 发布到闲鱼（有确认提示）
-python -m automation.main publish <book_id>
-
-# 自动发布（跳过手动确认）
-python -m automation.main publish <book_id> --auto
-
-# 重新发布失败书籍（metadata目录未删除时可直接重试）
-python -m automation.main publish <book_id>
-
-# 生成闲鱼发布清单（备用方案）
-python -m automation.main generate_list <book_id>
-```
-
-#### 查看与重试发布失败
-
-```bash
-# 列出所有发布失败的书籍（完整 ID + 失败原因 + 失败时间）
+# 查看所有发布失败的书籍
 python -m automation.main list-failed
 
-# 重新发布所有失败的书籍（带确认提示）
-python -m automation.main republish-failed --all
-
-# 重新发布指定 ID（可多次）
-python -m automation.main republish-failed --book-id <id1> --book-id <id2>
-
-# 跳过确认提示
+# 重新发布所有失败的书籍
 python -m automation.main republish-failed --all --auto
-
-# 回填历史发布失败状态（幂等；启动时若有未回填会自动提示）
-python -m automation.main backfill-publish-status
 ```
 
-发布失败的书籍在数据库中由 `BookOutput.publish_status='failed'` 标识。`list-failed` 输出完整 UUID,`republish-failed` 接受完整 ID 作为参数。
+### 场景五：测试模式
 
-#### 分享链接导入
-
-```bash
-# 从Excel导入分享链接（匹配数据库中的书籍）
-python -m automation.main import_links <excel_path>
-
-# 生成Excel导入模板
-python -m automation.main generate_template
-```
-
-#### Token统计
+从 `test_input_dir` 目录读取文件（自动跳过闲鱼发布）：
 
 ```bash
-# 查看指定书籍的Token消耗明细
-python -m automation.main stats <book_id>
-```
-
-#### 重新生成主图
-
-修改主图提示词后，复用已有摘要重新生成主图：
-
-```bash
-# 按书籍标题关键词匹配
-python -m automation.main regenerate-images "书名关键词"
-
-# 按书籍ID精确指定
-python -m automation.main regenerate-images --book-id <book_id>
+python -m automation.main test
 ```
 
 ---
 
-### standalone EPU B 翻译工具 
+## 命令速查
 
-独立翻译工具，不依赖自动化数据库：
-
-```bash
-# 基本用法
-python -m ebook_translator.main <input.epub> -o <output_dir>
-
-# 测试模式（只翻译前50个段落）
-python -m ebook_translator.main <input.epub> -o <output_dir> --test-mode
-
-# 跳过缓存，强制重新翻译
-python -m ebook_translator.main <input.epub> -o <output_dir> --skip-cache
-
-# 指定API Key
-python -m ebook_translator.main <input.epub> -o <output_dir> -k <api_key>
-```
+| 用途 | 命令 |
+|------|------|
+| **一键处理新书** | `python -m automation.main auto` |
+| **处理指定书籍** | `python -m automation.main process <book_id>` |
+| **测试模式** | `python -m automation.main test` |
+| **发布到闲鱼** | `python -m automation.main publish <book_id> --auto` |
+| **重试发布失败** | `python -m automation.main republish-failed --all --auto` |
+| **查看处理状态** | `python -m automation.main list --status-filter failed` |
+| **查看Token消耗** | `python -m automation.main stats <book_id>` |
+| **初始化数据库** | `python -m automation.main init` |
 
 ---
 
-### auto 命令完整参数一览
+## 完整命令参考
+
+### auto 命令
+
+核心一键处理命令，扫描 `input_dir` 自动处理所有新书籍。
+
+```bash
+python -m automation.main auto [选项]
+```
 
 | 参数 | 说明 |
 |------|------|
@@ -235,95 +134,77 @@ python -m ebook_translator.main <input.epub> -o <output_dir> -k <api_key>
 | `--skip-copywriting` | 跳过文案生成 |
 | `--skip-cache` | 跳过翻译缓存，强制重新翻译 |
 
-`process` 命令支持 `--skip-publish`，`test` 命令支持除 `--skip-publish` 外的所有参数。
+### process 命令
 
----
-
-## CI/CD
-
-本项目使用 GitHub Actions 进行持续集成，并配置了 Dependabot 自动更新依赖。
-
-### GitHub Actions 流水线
-
-| Job | 说明 |
-|-----|------|
-| `ruff` | 代码风格检查 (ruff lint) |
-| `pytest` | 测试 (unit + integration) |
-
-### pre-commit 钩子
+处理指定书籍，支持前缀匹配。
 
 ```bash
-pip install pre-commit
-pre-commit install
+python -m automation.main process <book_id> [选项]
 ```
 
-自动在提交前运行 ruff 格式化和测试。
+支持 `--skip-publish` 参数。
 
-### Dependabot
+### test 命令
 
-- **Python 依赖**: 每周一 09:00 (Asia/Shanghai) 自动创建 PR
-- **GitHub Actions**: 每周一 09:00 (Asia/Shanghai) 自动创建 PR
+从 `test_input_dir` 读取文件，自动跳过发布。
 
----
-
-## 项目结构
-
+```bash
+python -m automation.main test [选项]
 ```
-bookfile_bat/
-├── automation/                    # 自动化处理核心模块
-│   ├── main.py                    # CLI入口（Typer）
-│   ├── config.py                  # 配置加载
-│   ├── database.py                # SQLite数据库管理
-│   ├── models.py                  # ORM模型定义
-│   ├── pipeline.py                # 流水线编排（Stage模式）
-│   ├── progress.py                # 阶段进度输出
-│   ├── utils.py                   # 工具函数
-│   ├── exceptions.py              # 自定义异常
-│   ├── quality_checker.py         # 翻译质量检查（8维度）
-│   │
-│   ├── publishing/                # 发布相关
-│   │   ├── __init__.py
-│   │   ├── ai_copywriter.py       # AI文案生成
-│   │   └── xianyu_publisher.py    # 闲鱼Playwright发布
-│   │
-│   ├── summarizer/                # 精简版生成
-│   │   ├── content_summarizer.py  # 精简版主逻辑
-│   │   ├── suitability_evaluator.py # 适合度评估
-│   │   ├── template_generator.py  # 动态模板
-│   │   ├── pdf_generator.py       # PDF生成
-│   │   ├── chapter_extractor.py   # 章节提取
-│   │   ├── cover_extractor.py     # 封面提取
-│   │   └── fonts.py               # 字体处理
-│   │
-│   ├── translation/               # 翻译处理
-│   │   ├── translation_processor.py # 翻译处理器
-│   │   └── translation_cache.py   # SQLite翻译缓存
-│   │
-│   └── image/                     # 图片处理
-│       └── image_generator.py     # AI主图生成
-│
-├── ebook_translator/              # EPUB翻译子项目（可独立运行）
-│   ├── main.py                    # 独立翻译主程序
-│   ├── library.py                 # 库函数接口
-│   ├── config.py                  # 翻译配置
-│   └── translator/
-│       ├── epub_parser.py         # EPUB解析
-│       ├── epub_generator.py      # EPUB生成
-│       ├── pdf_converter.py       # EPUB转PDF
-│       ├── translator.py          # 翻译器
-│       └── deepseek_api.py        # DeepSeek API
-│
-├── tests/                         # 测试
-│   ├── unit/                      # 单元测试
-│   └── integration/                # 集成测试
-│
-├── config.yaml                    # 主配置文件
-├── pdf_config.json                # PDF排版配置
-├── requirements.txt              # 项目依赖
-├── ruff.toml                     # Ruff配置
-├── .pre-commit-config.yaml       # pre-commit配置
-├── PRD.md                        # 产品需求文档
-└── README.md                     # 本文件
+
+支持除 `--skip-publish` 外的所有参数。
+
+### publish 命令
+
+```bash
+# 发布到闲鱼（有确认提示）
+python -m automation.main publish <book_id>
+
+# 自动发布（跳过确认）
+python -m automation.main publish <book_id> --auto
+```
+
+### 辅助命令
+
+```bash
+# 扫描输入目录，检测新书籍
+python -m automation.main scan
+
+# 查看处理状态统计
+python -m automation.main status
+
+# 列出书籍（默认最近10本）
+python -m automation.main list
+
+# 按状态筛选
+python -m automation.main list --status-filter failed
+
+# 重新生成主图
+python -m automation.main regenerate-images --book-id <book_id>
+
+# 从Excel导入分享链接
+python -m automation.main import_links <excel_path>
+
+# 生成Excel导入模板
+python -m automation.main generate_template
+```
+
+### standalone EPUB 翻译工具
+
+独立翻译工具，不依赖自动化数据库：
+
+```bash
+# 方式一：在项目根目录
+python -m ebook_translator.main <input.epub> -o <output_dir>
+
+# 方式二：进入子目录直接运行
+cd ebook_translator && python main.py <input.epub> -o <output_dir>
+
+# 测试模式（只翻译前50个段落）
+python -m ebook_translator.main <input.epub> -o <output_dir> --test-mode
+
+# 指定API Key
+python -m ebook_translator.main <input.epub> -o <output_dir> -k <api_key>
 ```
 
 ---
@@ -347,10 +228,6 @@ suitability_eval:
     min_pages: 50                   # 最少页数
     max_pages: 2000                 # 最大页数
 
-summarizer:
-  core_insight_length: "300-500"
-  chapter_summary_length: "150-200"
-
 xianyu:
   cookie: "your-xianyu-cookie"
   inventory: 999
@@ -365,13 +242,7 @@ xianyu:
   "css": {
     "paragraph_text_indent": "2em",
     "paragraph_margin_bottom": "1.5em",
-    "paragraph_line_height": "1.8",
-    "heading_margin_top": "1.5em",
-    "heading_margin_bottom": "1em",
-    "list_item_margin_bottom": "0.8em",
-    "blockquote_margin": "1.5em",
-    "blockquote_padding_left": "1.5em",
-    "blockquote_border_left": "3px solid #ccc"
+    "paragraph_line_height": "1.8"
   }
 }
 ```
@@ -393,56 +264,11 @@ output/<书名>/
 ├── 英文-<书名>/            # 英文原版（仅PDF）
 │   └── 英文-<书名>.pdf
 ├── <书名>_metadata/       # 元数据（发布用）
-│   ├── metadata.json      # 书籍元数据
 │   ├── cover.*            # 封面图片
-│   ├── xianyu_listing.txt # 闲鱼文案
-│   └── *_metadata/        # 主图等资源
+│   └── xianyu_listing.txt # 闲鱼文案
 ├── <书名>_精.pdf          # 精简版PDF
 └── <书名>_metadata/       # 精简版元数据
 ```
-
----
-
-## 核心功能详解
-
-### 1. 翻译流程
-
-- **智能分层翻译**：按段落复杂度（标题/正文/代码/引用）分层翻译，平衡速度和准确度
-- **缓存机制**：使用 SQLite 数据库缓存翻译结果，下次处理自动跳过已翻译内容
-- **原版保留**：保留英文原版 EPUB/PDF 不变
-
-### 2. 适合度评估
-
-系统在生成精简版前会自动使用 **AI 评估** 书籍是否适合：
-
-- **AI 评估**（主）：使用 DeepSeek API 智能判断
-- **规则评估**（备）：关键词匹配规则
-- 返回详细的通过/不适合原因
-
-### 3. 精简版生成
-
-采用动态模板系统，根据书籍类型选择不同策略：
-
-| 书籍类型 | 策略 | 模板 |
-|----------|------|------|
-| 技能型 | 强化操作步骤 | 步骤+练习+检查清单 |
-| 概念型 | 精确定义概念 | 概念+关系+应用场景 |
-| 案例型 | 保留核心案例 | 案例+规律+框架 |
-| 理论型 | 保留理论框架 | 假设+命题+应用 |
-| 叙事型 | 保留故事线 | 经历+洞见+原则 |
-| 混合型 | 识别主导类型 | 综合策略 |
-
-### 4. 闲鱼发布流程
-
-通过 Playwright 自动化浏览器操作：
-
-1. 打开闲鱼商家后台
-2. 自动登录（支持Cookie持久化）
-3. 上传商品图片（主图+目录预览图）
-4. 填写商品描述（AI生成的文案）
-5. 设置分类和SKU
-6. 提交发布，记录商品链接
-7. 发布成功后自动清理临时文件
 
 ---
 
@@ -460,17 +286,11 @@ A: 该书籍可能被判定为不适合生成精简版（如内容过于简单�
 ### Q: 发布到闲鱼失败怎么办？
 A: 运行 `python -m automation.main publish <book_id>` 重新发布。如果多次失败，检查 `logs/publish_error_*.png` 截图查看错误原因。
 
-### Q: 如何跳过某些步骤？
-A: `auto` 命令支持 `--skip-publish`、`--skip-translate`、`--skip-summarize`、`--skip-images`、`--skip-copywriting` 参数。
-
-### Q: 如何查看Token消耗？
-A: 运行 `python -m automation.main stats <book_id>` 查看各步骤的 Token 消耗明细和费用。
+### Q: 精简版生成如何工作？
+A: 系统会根据书籍类型（技能型/概念型/案例型/理论型/叙事型）自动选择最优模板，确保精简版保留核心内容。
 
 ### Q: 如何查看详细日志？
 A: 日志文件位于 `logs/automation_YYYYMMDD.log`
-
-### Q: 修改了主图提示词后如何重新生成？
-A: 运行 `python -m automation.main regenerate-images <书名关键词>` 或 `--book-id <book_id>`。
 
 ---
 
@@ -498,6 +318,29 @@ A: 运行 `python -m automation.main regenerate-images <书名关键词>` 或 `-
 
 ---
 
+## CI/CD
+
+### GitHub Actions
+
+| Job | 说明 |
+|-----|------|
+| `ruff` | 代码风格检查 (ruff lint) |
+| `pytest` | 测试 (unit + integration) |
+
+### pre-commit 钩子
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+### Dependabot
+
+- **Python 依赖**: 每周一 09:00 (Asia/Shanghai) 自动创建 PR
+- **GitHub Actions**: 每周一 09:00 (Asia/Shanghai) 自动创建 PR
+
+---
+
 ## 技术栈
 
 - **Python 3.9+** - 主语言
@@ -508,13 +351,11 @@ A: 运行 `python -m automation.main regenerate-images <书名关键词>` 或 `-
 - **Typer** - CLI框架
 - **Rich** - 终端美化
 - **Ruff** - 代码风格检查（lint + format）
-- **pre-commit** - Git钩子自动化
 
 ---
 
 ## 详细文档
 
-- `README.md` — 完整命令参考 + 配置 + 输出结构 + FAQ
 - `PRD.md` / `TECH_SPEC.md` — 产品需求与技术方案
 - `PDF排版配置说明.md` — PDF 排版字段说明
 - `ebook_translator/README.md` — standalone 翻译器
