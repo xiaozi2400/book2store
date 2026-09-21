@@ -88,7 +88,7 @@ class SummaryAIGenerator:
 
     def _build_summary_prompt(self, book_info: Dict, content: str, template_prompt: str) -> str:
         """构建摘要生成提示词 - 替换所有占位符"""
-        summarizer_cfg = config.summarizer_config()
+        summarizer_cfg = config.get("summarizer", {})
 
         try:
             return template_prompt.format(

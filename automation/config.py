@@ -36,71 +36,26 @@ class Config:
             "paths": {
                 "input_dir": "E:\\ebooks\\input",
                 "output_dir": "./output",
-                "data_dir": "./data",
                 "log_dir": "./logs",
             },
             "sku": [
-                {"name": "纯英文原版", "price": 3.99, "includes": ["english_pdf"]},
-                {
-                    "name": "完整套装",
-                    "price": 8.99,
-                    "includes": ["english_pdf", "chinese_pdf", "bilingual_pdf", "summary_pdf"],
-                },
+                {"name": "纯英文原版", "price": 3.99},
+                {"name": "完整套装", "price": 8.99},
             ],
             "ai": {
                 "provider": "deepseek",
-                "model": "deepseek-chat",
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "retry_times": 3,
-                "retry_delay": 5,
-            },
-            "minimax": {
-                "enabled": True,
-                "provider": "minimax",
-                "model": "MiniMax-2.7-Globe",
-                "api_key": "",
-                "api_url": "https://api.minimax.chat/v1/chat/completions",
-                "max_tokens": 4096,
-                "temperature": 0.7,
                 "retry_times": 3,
             },
-            "image": {"max_width": 1200, "max_height": 1600, "quality": 85, "format": "jpg"},
             "xianyu": {
-                "login_method": "qr_code",
                 "base_url": "https://www.xianyu.com",
                 "timeout": 30,
-                "auto_retry": True,
-            },
-            "error_handling": {
-                "api_error": "retry",
-                "file_error": "skip",
-                "parse_error": "skip",
-                "publish_error": "manual",
-            },
-            "summarizer": {
-                "core_insight_length": "300-500",
-                "chapter_summary_length": "150-200",
-                "max_quotes": 15,
-                "max_content_length": 10000,
-                "prompt": "你是一位专业的书籍摘要专家...",
             },
             "quality_check": {
-                "enabled": True,  # 纯程序化检查，零 API 成本
+                "enabled": True,
                 "thresholds": {
-                    "excellent": 90,  # 优秀
-                    "good": 75,  # 良好
-                    "pass": 60,  # 合格
-                },
-                "dimensions": {
-                    "fidelity": True,
-                    "fluency": True,
-                    "consistency": True,
-                    "format": True,
-                    "terminology": True,
-                    "cultural": True,
-                    "completeness": True,
-                    "pdf_toc_links": True,
+                    "excellent": 90,
+                    "good": 75,
+                    "pass": 60,
                 },
             },
         }
@@ -154,16 +109,6 @@ class Config:
         return self.get("ai", {})
 
     @property
-    def minimax_config(self) -> Dict:
-        """MiniMax AI配置"""
-        return self.get("minimax", {})
-
-    @property
-    def image_config(self) -> Dict:
-        """图片配置"""
-        return self.get("image", {})
-
-    @property
     def image_generator_config(self) -> Dict:
         """图片生成器配置"""
         return self.get("image_generator", {})
@@ -177,11 +122,6 @@ class Config:
     def xianyu_inventory(self) -> int:
         """闲鱼库存"""
         return self.get("xianyu.inventory", 1)
-
-    @property
-    def xianyu_location(self) -> str:
-        """闲鱼所在地"""
-        return self.get("xianyu.location", "深圳北站")
 
     @property
     def xianyu_shipping(self) -> str:
@@ -203,11 +143,6 @@ class Config:
         """闲鱼重试间隔(秒)"""
         return self.get("xianyu.retry_interval", 2)
 
-    @property
-    def error_handling_config(self) -> Dict:
-        """错误处理配置"""
-        return self.get("error_handling", {})
-
     def get_sku_price(self, sku_name: str) -> float:
         """获取SKU价格"""
         for sku in self.sku_config:
@@ -215,25 +150,10 @@ class Config:
                 return sku.get("price", 0)
         return 0
 
-    def summarizer_config(self) -> Dict:
-        """精简版生成配置"""
-        return self.get("summarizer", {})
-
     @property
     def copywriting_config(self) -> Dict:
         """文案生成配置"""
         return self.get("copywriting", {})
-
-    def suitability_eval_config(self) -> Dict:
-        """精简版适合度评估配置"""
-        return self.get("suitability_eval", {})
-
-    def get_sku_includes(self, sku_name: str) -> List[str]:
-        """获取SKU包含内容"""
-        for sku in self.sku_config:
-            if sku.get("name") == sku_name:
-                return sku.get("includes", [])
-        return []
 
     def get_quality_check_enabled(self) -> bool:
         """获取质量检查是否启用"""

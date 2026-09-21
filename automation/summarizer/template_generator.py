@@ -29,7 +29,7 @@ class TemplateGenerator:
 
     def _get_default_template(self) -> str:
         # 从配置文件读取提示词
-        summarizer_cfg = config.summarizer_config()
+        summarizer_cfg = config.get("summarizer", {})
         if "prompt" in summarizer_cfg and summarizer_cfg["prompt"]:
             return summarizer_cfg["prompt"]
 

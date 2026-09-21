@@ -562,8 +562,6 @@ def test_quality_check_default_config():
     assert isinstance(qc_config, dict)
     assert "enabled" in qc_config
     assert "thresholds" in qc_config
-    assert "dimensions" in qc_config
-    assert "model" not in qc_config  # 纯程序化检查，无模型配置
 
 
 def test_quality_check_enabled_by_default():
