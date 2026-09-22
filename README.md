@@ -37,11 +37,11 @@ playwright install chromium
 ### 基础配置
 
 1. 复制并配置 `pdf_config.json`（PDF排版配置）
-2. 在 `config.yaml` 中配置 API Key：
+2. 在 `config.yaml` 中配置 API Key（留空则通过环境变量 `DEEPSEEK_API_KEY` 注入）：
    ```yaml
    ai:
-     api_key: "your-deepseek-api-key"
-     base_url: "https://api.deepseek.com"
+     provider: "deepseek"
+     api_key: ""
    ```
 
 ---
@@ -214,25 +214,74 @@ python -m ebook_translator.main <input.epub> -o <output_dir> -k <api_key>
 ### config.yaml 主要配置项
 
 ```yaml
+# 路径配置
 paths:
-  input_dir: "./input"              # 输入目录（放EPUB文件）
-  output_dir: "./output"            # 输出目录
-  test_input_dir: "./test_input"    # 测试输入目录
+  input_dir: "./data/input"          # 输入目录（放EPUB文件）
+  output_dir: "./data/output"        # 输出目录
+  log_dir: "./logs"                  # 日志目录
 
+# SKU配置
+sku:
+  - name: "英文原版"
+    price: 1.99
+  - name: "英文+双语+中译"
+    price: 5.99
+
+# AI配置
+# 注意：api_key 留空，生产环境通过环境变量 DEEPSEEK_API_KEY 注入
 ai:
-  api_key: "your-api-key"           # DeepSeek API Key
-  base_url: "https://api.deepseek.com"
+  provider: "deepseek"              # AI provider
+  api_key: ""                        # DeepSeek API Key（生产环境用环境变量）
+  retry_times: 3                     # API 重试次数
 
-suitability_eval:
-  precheck:
-    min_pages: 50                   # 最少页数
-    max_pages: 2000                 # 最大页数
+# 文案生成配置
+copywriting:
+  xianyu_listing_prompt: |           # 闲鱼文案生成 prompt
+    ...
+  xiaohongshu_note_prompt: |         # 小红书笔记生成 prompt
+    ...
 
+# 闲管家配置
 xianyu:
-  cookie: "your-xianyu-cookie"
-  inventory: 999
-  location: "上海"
+  base_url: "https://seller.goofish.com"
+  timeout: 30
+  inventory: 100
   shipping: "包邮"
+  cookie_path: "data/xianyu_cookie.json"
+  max_retries: 3
+  retry_interval: 2
+  headless: true
+
+# 精简版生成配置
+summarizer:
+  core_insight_length: "300-500"    # 核心观点字数
+  chapter_summary_length: "150-200"  # 章节摘要字数
+  max_quotes: 10                     # 金句数量
+  prompt: |                          # 摘要生成 prompt
+    ...
+
+# 质量检查配置
+quality_check:
+  enabled: true
+  thresholds:
+    excellent: 90
+    good: 75
+    pass: 60
+
+# 图片生成器配置
+image_generator:
+  enabled: true
+  width: 800
+  height: 800
+  device_scale_factor: 2
+  screenshot_quality: 92
+  color_theme: light
+  palettes:                          # 配色方案（深色系+浅色系）
+    ...
+  design_prompt: |                    # 主图设计 prompt
+    ...
+  html_prompt: |                     # 主图HTML生成 prompt
+    ...
 ```
 
 ### pdf_config.json 排版配置
@@ -251,10 +300,10 @@ xianyu:
 
 ## 输出文件结构
 
-每本书籍在 `output_dir` 下会生成以下目录结构：
+每本书籍在 `data/output` 下会生成以下目录结构：
 
 ```
-output/<书名>/
+data/output/<书名>/
 ├── 双语-<书名>/           # 中英对照版
 │   ├── 双语-<书名>.epub
 │   └── 双语-<书名>.pdf
@@ -324,8 +373,10 @@ A: 日志文件位于 `logs/automation_YYYYMMDD.log`
 
 | Job | 说明 |
 |-----|------|
-| `ruff` | 代码风格检查 (ruff lint) |
-| `pytest` | 测试 (unit + integration) |
+| `ruff` | 代码风格检查 (ruff lint + format) |
+| `pytest` | 测试 (unit + integration)，覆盖率阈值 35% |
+| `pip-audit` | Python 依赖安全漏洞扫描 |
+| `trivy` | 文件系统安全扫描 (SARIF 格式) |
 
 ### pre-commit 钩子
 
@@ -354,9 +405,3 @@ pre-commit install
 
 ---
 
-## 详细文档
-
-- `PRD.md` / `TECH_SPEC.md` — 产品需求与技术方案
-- `PDF排版配置说明.md` — PDF 排版字段说明
-- `ebook_translator/README.md` — standalone 翻译器
-- `docs/superpowers/plans/` — 历史规划文档
