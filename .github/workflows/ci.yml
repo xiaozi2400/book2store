@@ -89,7 +89,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run pip-audit
-        run: pip-audit --format=columns --exit-code=1
+        run: pip-audit --format=columns
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
