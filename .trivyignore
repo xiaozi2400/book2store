@@ -1,0 +1,7 @@
+# Trivy 忽略目录
+# 不扫描这些目录
+.github
+.git
+docs
+*.md
+.env
