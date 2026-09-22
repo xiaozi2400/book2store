@@ -42,6 +42,8 @@ description: use when user explicitly asks to commit code like "提交git", "提
   1. `git add .`
   2. `git commit -m "<Step 2 生成的日志>"`
 - **Output**: 成功消息 + commit hash
+- **Constraint**: 
+  - **禁止**在 Step 5 中执行 `git push`
 
 ### Step 6: 显示结果
 - **Prerequisite**: Step 5 完成
