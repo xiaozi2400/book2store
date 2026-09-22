@@ -1,0 +1,1 @@
+ERROR    automation.utils:pipeline.py:66 [summarize] 阶段失败: 摘要生成失败

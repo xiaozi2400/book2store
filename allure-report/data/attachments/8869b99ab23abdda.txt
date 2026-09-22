@@ -1,0 +1,26 @@
+ERROR    translator.pdf_converter:pdf_converter.py:207 PDF 转换失败: Traceback (most recent call last):
+  File "calibre\ebooks\conversion\plugins\epub_input.py", line 266, in convert
+  File "calibre\utils\zipfile.py", line 813, in __init__
+  File "calibre\utils\zipfile.py", line 848, in _GetContents
+  File "calibre\utils\zipfile.py", line 863, in _RealGetContents
+calibre.utils.zipfile.BadZipfile: File is not a zip file
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "runpy.py", line 198, in _run_module_as_main
+  File "runpy.py", line 88, in _run_code
+  File "site.py", line 83, in <module>
+  File "site.py", line 78, in main
+  File "site.py", line 50, in run_entry_point
+  File "calibre\ebooks\conversion\cli.py", line 427, in main
+  File "calibre\ebooks\conversion\plumber.py", line 1088, in run
+  File "calibre\customize\conversion.py", line 242, in __call__
+  File "calibre\ebooks\conversion\plugins\epub_input.py", line 273, in convert
+  File "calibre\utils\localunzip.py", line 253, in extractall
+  File "calibre\utils\localunzip.py", line 240, in _extractall
+ValueError: Not a ZIP file
+
+WARNING  translator.pdf_converter:pdf_converter.py:231 以管理员身份运行后文件仍未生成: D:\project\bookfile_bat\data\output\dummy\英文-dummy\英文-dummy.pdf
+WARNING  translator.pdf_converter:pdf_converter.py:233 PowerShell 错误: 
+ERROR    automation.utils:translation_processor.py:72 翻译失败

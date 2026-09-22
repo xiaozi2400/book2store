@@ -1,0 +1,2 @@
+WARNING  automation.utils:ai_generator.py:34 章节内容过少: 第1章:
+内容。

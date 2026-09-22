@@ -1,0 +1,1 @@
+ERROR    automation.utils:pipeline.py:66 [copywriting] 阶段失败: AI 文案生成失败

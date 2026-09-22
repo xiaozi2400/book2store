@@ -1,0 +1,1 @@
+ERROR    automation.utils:xianyu_publisher.py:84 发布失败: book-001, 错误: 浏览器启动失败：playwright 未安装

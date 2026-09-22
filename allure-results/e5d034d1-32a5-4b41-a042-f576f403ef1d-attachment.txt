@@ -1,0 +1,1 @@
+WARNING  automation.utils:content_summarizer.py:133 未能提取到封面

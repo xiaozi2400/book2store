@@ -1,0 +1,6 @@
+[AI Client] 使用 DEEPSEEK 模型
+[AI Client] 使用 DEEPSEEK 模型
+  └─ 封面配色提取完成
+  └─ AI 设计分析
+  └─ 调用 AI 生成主图内容 JSON
+  └─ 截图生成主图

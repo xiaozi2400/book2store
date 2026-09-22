@@ -1,0 +1,29 @@
+# book2store Docker Compose 配置
+# 使用方法: docker-compose up
+
+version: "3.8"
+
+services:
+  book2store:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: book2store:latest
+    container_name: book2store
+    volumes:
+      # 数据目录（包含 input/output/ebooks.db）
+      - ./data:/app/data
+    environment:
+      # API Key 从 .env 文件读取
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    working_dir: /app
+    # 默认命令：处理 input 目录新书
+    command: python -m automation.main auto --skip-publish --skip-cache
+    # 交互模式
+    stdin_open: true
+    tty: true
+    # 资源限制（可选）
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 4G

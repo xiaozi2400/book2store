@@ -1,0 +1,2 @@
+WARNING  automation.image.image_generator:image_generator.py:240 未能读取原书 EPUB 目录,图 4 将依赖 summary 中的章节
+WARNING  automation.image.image_generator:image_generator.py:259 未找到封面图，HTML中无封面

@@ -1,0 +1,2 @@
+[AI Client] 使用 DEEPSEEK 模型
+  └─ 调用 DeepSeek Chat (9 字符)

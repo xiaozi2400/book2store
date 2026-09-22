@@ -1,0 +1,1 @@
+WARNING  automation.image.image_generator:image_generator.py:213 书籍 test-book-001 无摘要，跳过主图生成

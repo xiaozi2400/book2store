@@ -1,0 +1,1 @@
+ERROR    automation.utils:pipeline.py:66 [translation] 阶段失败: [test-err-book-001] 翻译失败

@@ -1,0 +1,1 @@
+ERROR    automation.utils:pipeline.py:66 [failing] 阶段失败: Test error
