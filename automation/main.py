@@ -468,6 +468,7 @@ def auto(
         console.print(f"\n[bold cyan]处理第 {i}/{len(books)} 本: {title}[/bold cyan]")
 
         book_id = db.create_book(filename, title, book.get("author", "")).id
+        db.create_book_output(book_id)
         start_time = time.time()
 
         try:

@@ -17,6 +17,7 @@ pymupdf>=1.23.0
 
 # PDF生成（精简版）
 reportlab>=4.0.0
+markdown>=3.5.0
 
 # CLI框架
 typer>=0.9.0

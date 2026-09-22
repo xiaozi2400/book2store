@@ -14,6 +14,7 @@ sku:
     price: 5.99
 
 # AI配置
+# 注意：api_key 留空，生产环境通过环境变量 DEEPSEEK_API_KEY 注入
 ai:
   provider: "deepseek"
   api_key: ""
@@ -98,6 +99,7 @@ xianyu:
   cookie_path: "data/xianyu_cookie.json"
   max_retries: 3
   retry_interval: 2
+  headless: true
 
 # 精简版生成配置
 summarizer:

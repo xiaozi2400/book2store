@@ -1,20 +1,18 @@
+---
+name: auto-commit
+description: use when user explicitly asks to commit code like "提交git", "提交", "提交代码"  or similar phrases indicating a commit request
+---
+
 # Auto Commit Skill
 
-## Triggers
 
-- User manually invokes `/auto-commit`
-- User requests "提交代码", "提交git", "提交", "commit code", "commit git"
-
-## Description
-
-Automatically check code changes, generate commit message, execute after user approval.
 
 ## Execution Protocol (Strict Order)
 
 ### Step 1: 检查改动
 - **Action**: Run `git status` and `git diff --stat`
 - **Output**: 显示改动文件列表和统计
-- **Checkpoint**: 必须看到改动内容才能继续
+- **Checkpoint**: 必须看到`git status` and `git diff --stat`的输出才能继续，**禁止仅凭记忆或假设继续**
 
 ### Step 2: 生成提交日志
 - **Prerequisite**: Step 1 完成
@@ -60,4 +58,4 @@ Automatically check code changes, generate commit message, execute after user ap
 ## Notes
 
 - Commit message type options: feat, fix, chore, refactor, docs, test, style, perf, ci
-- 提交日志应简洁，格式：`type: description`
+- 提交日志应简洁，格式：`type: description`，日志内容使用中文

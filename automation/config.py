@@ -7,6 +7,8 @@ from typing import Any, Dict, List
 
 import yaml
 
+x = 1
+
 
 class Config:
     """配置类"""

@@ -712,7 +712,7 @@ class ImageGenerator:
                 f.write(html)
 
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
                 page = browser.new_page(
                     viewport={"width": width, "height": height},
                     device_scale_factor=device_scale_factor,

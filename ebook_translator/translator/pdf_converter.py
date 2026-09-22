@@ -18,12 +18,17 @@ class PDFConverter:
 
     def _find_ebook_convert(self):
         """查找 ebook-convert 工具"""
+        import sys
+
         if CALIBRE_PATH:
             return os.path.join(CALIBRE_PATH, "ebook-convert")
 
         # 尝试在 PATH 中查找
         try:
-            result = subprocess.run(["where", "ebook-convert"], capture_output=True, text=True, shell=True)
+            if sys.platform == "win32":
+                result = subprocess.run(["where", "ebook-convert"], capture_output=True, text=True, shell=True)
+            else:
+                result = subprocess.run(["which", "ebook-convert"], capture_output=True, text=True)
             if result.returncode == 0:
                 return result.stdout.strip().split("\n")[0]
         except Exception:
@@ -33,6 +38,8 @@ class PDFConverter:
         common_paths = [
             r"C:\Program Files\Calibre2\ebook-convert.exe",
             r"C:\Program Files (x86)\Calibre2\ebook-convert.exe",
+            "/usr/bin/ebook-convert",
+            "/opt/calibre/ebook-convert",
         ]
 
         for path in common_paths:

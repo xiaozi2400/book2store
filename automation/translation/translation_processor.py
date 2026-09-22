@@ -168,7 +168,7 @@ class TranslationProcessor:
 
     def _run_quality_check(self, book_id, base_name, translation_result, output_root):
         """执行翻译质量检查"""
-        from .quality_checker import QualityChecker
+        from automation.quality_checker import QualityChecker
 
         checker = QualityChecker()
         if not checker.enabled:

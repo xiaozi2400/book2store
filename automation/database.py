@@ -195,14 +195,16 @@ class DatabaseManager:
             )
 
             if not output:
-                logger.warning(f"未找到书籍输出记录: {book_id}")
-                return
-
-            if output:
-                for key, value in kwargs.items():
-                    if hasattr(output, key):
-                        setattr(output, key, value)
+                # 自动创建记录
+                output = BookOutput(book_id=book_id)
+                session.add(output)
                 session.commit()
+                session.refresh(output)
+
+            for key, value in kwargs.items():
+                if hasattr(output, key):
+                    setattr(output, key, value)
+            session.commit()
         finally:
             close_session(session)
 

@@ -115,7 +115,7 @@ class XianyuPublisher:
         try:
             self.playwright = sync_playwright().start()
             headless = config.get("xianyu.headless", False)
-            self.browser = self.playwright.chromium.launch(headless=headless)
+            self.browser = self.playwright.chromium.launch(headless=headless, args=["--no-sandbox"])
             cookie_path = Path(config.xianyu_cookie_path)
 
             if cookie_path.exists():

@@ -213,9 +213,7 @@ pre {{
         full_html = self._build_playwright_html(title, subtitle, body_html, cover_path)
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(
-                executable_path="C:/Program Files/Google/Chrome/Application/chrome.exe", headless=True
-            )
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
             page = browser.new_page()
             page.set_content(full_html, wait_until="networkidle")
 
