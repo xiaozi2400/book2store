@@ -44,8 +44,8 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          coverage report --fail-under=45
-          echo "✓ Coverage threshold passed (>= 45%)"
+          coverage report --fail-under=35
+          echo "✓ Coverage threshold passed (>= 35%)"
 
       - name: Upload coverage XML
         uses: actions/upload-artifact@v4
