@@ -28,7 +28,7 @@ rich>=13.0.0
 streamlit>=1.28.0
 
 # 配置管理
-pyyaml>=6.0.0
+pyyaml>=6.0.3
 
 # 工具
 python-dotenv>=1.0.0
